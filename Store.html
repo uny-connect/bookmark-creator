@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root { --brand-navy: #1A2B49; --sub-gold: #C5A358; --bg: #f4f6f8; --card-bg: #ffffff; }
+    body { background: var(--bg); font-family: 'Pretendard', 'Noto Sans JP', sans-serif; color: #333; }
+    .navbar-custom { background: var(--brand-navy); padding: 18px 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .navbar-custom h5 { color: #fff; font-weight: 800; letter-spacing: -0.5px; margin: 0; }
+    .live-badge { background-color: #2D6A4F; color: white; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 800; box-shadow: 0 2px 8px rgba(45, 106, 79, 0.3); }
+    
+    .btn-config-top { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; color: #fff; font-weight: 600; padding: 6px 14px; font-size: 13.5px; transition: 0.2s; margin-right: 10px; white-space: nowrap; flex-shrink: 0; }
+    .btn-config-top:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    
+    .btn-logout-top { background: transparent; border: 1px solid rgba(255,255,255,0.3); border-radius: 12px; color: rgba(255,255,255,0.8); font-weight: 600; padding: 6px 14px; font-size: 13.5px; transition: 0.2s; margin-right: 10px; white-space: nowrap; flex-shrink: 0; }
+    .btn-logout-top:hover { background: rgba(220, 53, 69, 0.2); border-color: #dc3545; color: #ff8787; }
+
+    .stat-card { border-radius: 20px; box-shadow: 0 6px 24px rgba(0,0,0,0.03); padding: 24px 16px; text-align: center; background: var(--card-bg); transition: transform 0.2s; border: 1px solid #f1f3f5; }
+    .stat-card:hover { transform: translateY(-3px); }
+    .stat-title { font-size: 13px; color: #8b95a1; font-weight: 700; margin-bottom: 8px; }
+    .stat-number { font-size: 28px; font-weight: 900; color: var(--brand-navy); letter-spacing: -0.5px; }
+    .table-container { background: var(--card-bg); border-radius: 24px; padding: 24px; box-shadow: 0 8px 30px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; overflow-x: auto; min-height: 400px; }
+    
+    table.main-table { width: 100%; min-width: 900px; table-layout: fixed; margin: 0; }
+    .col-s-tier { width: 6%; } .col-s-creator { width: 13%; } .col-s-date { width: 12%; } .col-s-status { width: 22%; } .col-s-subdate { width: 11%; } .col-s-link { width: 11%; } .col-s-comment { width: 25%; }
+    table.main-table th { color: #8b95a1; font-size: 13px; font-weight: 700; padding-bottom: 16px; border-bottom: 2px solid #f1f3f5; text-align: center; }
+    table.main-table td { padding: 16px 8px; font-size: 14px; vertical-align: middle; border-bottom: 1px solid #f8f9fa; white-space: nowrap; font-weight: 500; text-align: center; }
+    table.main-table tbody tr:hover { background-color: #fcfcfd; }
+    
+    /* 🎯 [초정밀 가운데 정렬 패치 공역] */
+    .badge-custom { 
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 0 12px !important; 
+      height: 28px !important;         /* 고정 높이 바인딩 */
+      line-height: 1 !important;       /* 글자 튕김 차단 */
+      border-radius: 20px; 
+      font-size: 12.5px; 
+      font-weight: 700; 
+      white-space: nowrap; 
+      letter-spacing: -0.3px; 
+    }
+    .b-pending { background: #f1f3f5; color: #495057; } 
+    .b-verified { background: var(--sub-gold); color: #fff; } 
+    .b-submitted { background: #2D6A4F; color: #fff; } 
+    .b-noshow { background: #343a40; color: #fff; opacity: 0.9; }
+    .b-waiting { background: #ff6b6b; color: #fff; animation: pulse 2s infinite; }
+    
+    .link-badge-container { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+    .btn-link-badge { display: inline-flex; align-items: center; justify-content: center; padding: 5px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; text-align: center; text-decoration: none !important; background: #f1f3f4; border: 1px solid #e0e0e0; white-space: nowrap !important; transition: all 0.15s ease; }
+    .btn-link-badge:hover { background: #e8eaed; transform: scale(1.03); }
+    .link-contents { color: #1a73e8; } .link-google { color: #188038; }
+
+    .dashboard-action-container { display: inline-flex !important; gap: 6px; margin-left: 8px; vertical-align: middle; }
+    .btn-dash-action { 
+      text-decoration: none !important; 
+      display: inline-flex !important; 
+      align-items: center !important;
+      justify-content: center !important;
+      height: 28px !important;         /* 뱃지 서식과 균형 일치화 */
+      padding: 0 12px !important; 
+      line-height: 1 !important;
+      border-radius: 8px; 
+      font-size: 11.5px; 
+      font-weight: 700; 
+      transition: all 0.15s; 
+      border: none; 
+      box-sizing: border-box !important;
+    }
+    .btn-dash-ok { background-color: #1A2B49; color: #ffffff !important; }
+    .btn-dash-ok:hover { opacity: 0.9; transform: scale(1.02); }
+    .btn-dash-msg { background-color: #f1f3f5; color: #495057 !important; border: 1px solid #dee2e6; }
+    .btn-dash-msg:hover { background-color: #e9ecef; transform: scale(1.02); }
+
+    .modal-content { border-radius: 24px !important; border: none !important; box-shadow: 0 16px 50px rgba(0,0,0,0.1) !important; overflow: hidden; }
+    .modal-header { border-bottom: 1px solid #f1f3f5; padding: 20px 24px; background: #fff; }
+    .modal-title { font-weight: 800; color: var(--brand-navy); font-size: 16px; }
+    .modal-body { padding: 24px; background: #fff; }
+    .config-label { font-size: 12.5px; font-weight: 700; color: #495057; margin-bottom: 6px; padding-left: 2px; }
+    .form-control-custom, .form-select-custom { border-radius: 12px; border: 1.5px solid #eceef1; padding: 10px 14px; font-size: 13.5px; background: #fafbfc; font-weight: 500; width:100%; }
+    .form-control-custom:focus, .form-select-custom:focus { border-color: var(--brand-navy); box-shadow: 0 0 0 3px rgba(26,43,73,0.1); background-color: #fff; outline: none; }
+    .btn-brand-solid { background: var(--brand-navy); color: #fff; border-radius: 14px; font-weight: 700; padding: 12px; font-size: 14px; border: none; transition: 0.2s; }
+    .btn-brand-solid:hover { opacity: 0.9; }
+
+    #partnerPin::placeholder {
+      color: #adb5bd !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      letter-spacing: 0px !important;
+    }
+
+    @media (max-width: 768px) {
+      .navbar-custom { padding: 14px 16px; flex-wrap: nowrap; } .navbar-custom h5 { font-size: 14px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
+      #statsArea .col-6 { padding: 3px; } .stat-card { padding: 14px 8px; border-radius: 16px; } .stat-title { font-size: 11px; margin-bottom: 4px; } .stat-number { font-size: 22px; }
+      .table-container { background: transparent; padding: 0; box-shadow: none; border: none; }
+      table.main-table { min-width: 100% !important; display: block; } table.main-table thead { display: none !important; } table.main-table tbody { display: block; width: 100%; }
+      table.main-table tbody tr { display: block; background: #fff; border-radius: 20px; padding: 16px 20px; margin-bottom: 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; }
+      table.main-table tbody tr td { display: flex !important; justify-content: space-between !important; align-items: center !important; padding: 10px 0 !important; border-bottom: 1px solid #fcfcfd !important; white-space: normal !important; text-align: right !important; width: 100% !important; overflow: visible !important; }
+      table.main-table tbody tr td:last-child { border-bottom: none !important; }
+      table.main-table tbody tr td::before { content: attr(data-label); font-weight: 700; color: #8b95a1; font-size: 12.5px; text-align: left; margin-right: 15px; white-space: nowrap; }
+      .ps-3 { padding-left: 0 !important; } .link-badge-container { justify-content: flex-end; max-width: 65%; }
+      .dashboard-action-container { display: flex !important; width: 100% !important; gap: 6px !important; margin-left: 0 !important; margin-top: 5px !important; justify-content: flex-end; }
+      .filter-header-area { flex-direction: column !important; align-items: flex-start !important; gap: 12px; } .filter-header-area select { width: 100% !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="storeLoginSection" class="container text-center" style="max-width: 380px; padding: 40px 20px; margin: auto; display: none;">
+    <div style="margin-bottom: 10px; margin-top: 10px;">
+      <span class="badge mb-2" style="font-size: 10px; letter-spacing: 0.8px; padding: 5px 10px; border-radius: 6px; background-color: #1A2B49 !important; color: #fff; display: inline-block; font-weight: 700;">PARTNER CENTER</span>
+      <h2 class="brand-title" style="color: #1A2B49; font-weight: 700; margin-top: 10px; margin-bottom: 20px; font-size: 22px; letter-spacing: -0.5px;">BOOKMARK CREATOR</h2>
+    </div>
+    
+    <div class="card" style="border-radius: 18px; border: none; box-shadow: 0 8px 24px rgba(0,0,0,0.02); background: #fff; padding: 24px 20px; margin-top: 5px;">
+      <p class="mb-4" style="color: #495057; font-size: 12.5px; line-height: 1.6; margin: 0; margin-bottom: 16px; font-weight: 500; text-align: center;">
+        発行されたパートナーコードを<br>入力してください。
+      </p>
+      
+      <input type="text" id="partnerPin" class="form-control text-center fw-bold" 
+             placeholder="例) OSK5V1" maxlength="10" autocapitalize="characters"
+             style="border-radius: 12px; border: 1.5px solid #eceef1; padding: 14px; font-size: 16px; letter-spacing: 2px; background: #fafbfc; color: var(--brand-navy); outline: none;">
+      
+      <button type="button" class="btn w-100" id="storeLoginBtn" onclick="executeStoreLogin()"
+             style="border-radius: 14px; padding: 14px; font-weight: 700; font-size: 14px; background-color: var(--brand-navy); color: #ffffff; transition: 0.2s; border: none; margin-top: 16px;">
+        レポートを確認する
+      </button>
+    </div>
+  </div>
+
+  <div id="storeDashboardSection" style="display: none;">
+    <nav class="navbar-custom d-flex justify-content-between align-items-center mb-4">
+      <h5 id="storeTitleHeader">BOOKMARK CREATOR | パートナーレポート</h5>
+      <div class="d-flex align-items-center">
+        <button class="btn-logout-top" onclick="executeStoreLogout()">ログアウト</button>
+        <button class="btn-config-top" onclick="openConfigModal()">⚙️ 店舗設定</button>
+        <span class="live-badge">Live</span>
+      </div>
+    </nav>
+
+    <div class="container-fluid px-4 pb-5">
+      <div class="row g-3 mb-4" id="statsArea">
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-title">総割当クリエイター</div><div class="stat-number" id="s-total">-</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-title">訪問予定</div><div class="stat-number text-secondary" id="s-pending">-</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-title">訪問完了</div><div class="stat-number" style="color: var(--sub-gold);" id="s-verified">-</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-title">レビュー投稿</div><div class="stat-number" style="color: #2D6A4F;" id="s-submitted">-</div></div></div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mb-3 ms-2 me-2 filter-header-area">
+        <h6 class="fw-bold m-0" style="color: var(--brand-navy); font-size: 15px;">📋 クリエイター情報＆レニュー履歴</h6>
+        <select id="monthFilter" class="form-select form-select-sm" style="width: auto; min-width: 150px; border-radius: 10px; font-size: 12.5px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid #e9ecef;" onchange="applyFilters()">
+          <option value="ALL">🗓 訪問月 すべて</option>
+        </select>
+      </div>
+
+      <div class="table-container">
+        <table class="table table-borderless main-table">
+          <thead>
+            <tr>
+              <th class="col-s-tier text-center">ランク</th>
+              <th class="col-s-creator text-center">クリエイター</th>
+              <th class="col-s-date text-center">訪問日</th>
+              <th class="col-s-status text-center">ステータス</th>
+              <th class="col-s-subdate text-center">レビュー登録日</th>
+              <th class="col-s-link text-center">レビュー</th>
+              <th class="col-s-comment text-center">クリエイター一言</th> 
+            </tr>
+          </thead>
+          <tbody id="storeMissionTbody">
+            <tr><td colspan="7" class="text-center py-5 text-muted fw-bold"><span class="spinner-border spinner-border-sm me-2"></span>店舗レポートを読み込んでいます...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal fade" id="configModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered modal-md">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h6 class="modal-title">⚙️ 店舗予約システム設定</h6>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="cfgRow">
+            <input type="hidden" id="cfgStoreType"> 
+            
+            <div class="mb-3 text-start">
+              <label class="config-label">📧 通知用メールアドレス</label>
+              <input type="email" id="cfgEmail" class="form-control-custom" placeholder="example@gmail.com">
+            </div>
+            
+            <div class="row mb-3">
+              <div class="col-6 text-start">
+                <label class="config-label">👥 回別チーム数</label>
+                <input type="number" id="cfgMaxPerSlot" class="form-control-custom" placeholder="例: 1" min="1">
+              </div>
+              <div class="col-6 text-start">
+                <label class="config-label">🚫 1日上限チーム数</label>
+                <input type="number" id="cfgDailyCap" class="form-control-custom" placeholder="例: 2" min="1">
+              </div>
+            </div>
+            
+            <div class="row mb-3">
+              <div class="col-6 text-start">
+                <label class="config-label">🕒 営業時間</label>
+                <input type="text" id="cfgBizHours" class="form-control-custom" placeholder="例:10:00-22:00">
+              </div>
+              <div class="col-6 text-start">
+                <label class="config-label">⏰ 予約間隔</label>
+                <select id="cfgInterval" class="form-select-custom">
+                  <option value="30">30分</option>
+                  <option value="60">60分</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="mb-3 text-start">
+              <label class="config-label">📅 定休日</label>
+              <input type="text" id="cfgBlackouts" class="form-control-custom" placeholder="例: 月、毎週火曜日、第2月曜日、2026-08-15">
+            </div>
+            
+            <div class="mb-4 text-start">
+              <label class="config-label">❌ 予約不可時間帯</label>
+              <input type="text" id="cfgBlockedTimes" class="form-control-custom" placeholder="例: 14:00、18:00-20:00">
+            </div>
+            
+            <button class="btn btn-brand-solid w-100" id="saveCfgBtn" onclick="submitConfig()">設定を保存する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    let globalStoreId = "<?= storeId ?>"; 
+    let globalStoreMissions = [];
+    let configModalObj = null;
+    let preloadedConfig = null; 
+    let webAppUrl = ""; 
+
+    window.onload = function() {
+      configModalObj = new bootstrap.Modal(document.getElementById('configModal'));
+      
+      try {
+        google.script.url.get(function(urlObj) {
+          webAppUrl = urlObj.url;
+        });
+      } catch(urlErr){}
+
+      const savedStoreId = localStorage.getItem('partnerStoreId');
+      if (savedStoreId) {
+        document.getElementById('storeLoginSection').style.display = 'none';
+        document.getElementById('storeDashboardSection').style.display = 'block';
+        loadDashboardData(savedStoreId);
+      } else {
+        document.getElementById('storeLoginSection').style.display = 'block';
+        document.getElementById('storeDashboardSection').style.display = 'none';
+      }
+    };
+
+    function onLoginSuccess(storeId) {
+      localStorage.setItem('partnerStoreId', storeId);
+      document.getElementById('storeLoginSection').style.display = 'none';
+      document.getElementById('storeDashboardSection').style.display = 'block';
+      loadDashboardData(storeId);
+    }
+
+    function logoutPartner() {
+      localStorage.removeItem('partnerStoreId');
+      location.reload();
+    }
+
+    function executeStoreLogin() {
+      var pin = document.getElementById('partnerPin').value.trim().toUpperCase();
+      if (!pin) {
+        alert("パートナーコードを入力してください。");
+        return;
+      }
+      
+      var btn = document.getElementById('storeLoginBtn');
+      btn.disabled = true;
+      btn.innerText = "認証中...";
+      
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.success) {
+            globalStoreId = res.storeId;
+            localStorage.setItem('partnerStoreId', res.storeId); 
+            document.getElementById('storeLoginSection').style.display = 'none';
+            document.getElementById('storeDashboardSection').style.display = 'block';
+            loadDashboardData(globalStoreId);
+          } else {
+            alert(res.error);
+            btn.disabled = false;
+            btn.innerText = "レポートを確認する";
+          }
+        })
+        .withFailureHandler(function(err) {
+          alert("Base通報エラー: " + err.message);
+          btn.disabled = false;
+          btn.innerText = "レポートを確認する";
+        })
+        .loginStoreByPin(pin);
+    }
+
+    function executeStoreLogout() {
+      globalStoreId = "";
+      globalStoreMissions = [];
+      preloadedConfig = null;
+      localStorage.removeItem('partnerStoreId'); 
+      
+      const inputPin = document.getElementById('partnerPin');
+      if(inputPin) { inputPin.value = ""; }
+      const loginBtn = document.getElementById('storeLoginBtn');
+      if(loginBtn) {
+        loginBtn.disabled = false;
+        loginBtn.innerText = "レポートを確認する";
+      }
+      
+      document.getElementById('storeMissionTbody').innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted fw-bold"><span class="spinner-border spinner-border-sm me-2"></span>店舗レポートを読み込んでいます...</td></tr>';
+      document.getElementById('storeDashboardSection').style.display = 'none';
+      document.getElementById('storeLoginSection').style.display = 'block';
+    }
+
+    function loadDashboardData(id) {
+      globalStoreId = id; 
+      google.script.run.withSuccessHandler(function(data) {
+          document.getElementById('storeTitleHeader').innerText = data.storeName + " | パートナーレポート";
+          document.getElementById('s-total').innerText = data.stats.total; 
+          document.getElementById('s-pending').innerText = data.stats.pending; 
+          document.getElementById('s-verified').innerText = data.stats.verified; 
+          document.getElementById('s-submitted').innerText = data.stats.submitted;
+          
+          google.script.run.withSuccessHandler(function(res) { if(res.success) preloadedConfig = res; }).getStoreConfig(id);
+
+          if (data.missions.length === 0) { 
+            document.getElementById('storeMissionTbody').innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted fw-bold">割当されたクリエイターの履歴がありません。</td></tr>'; 
+            return; 
+          }
+          globalStoreMissions = data.missions.sort((a, b) => {
+            let da = a.visitDate || '-'; let db = b.visitDate || '-';
+            if (da === db) return 0; if (da === '-') return 1; if (db === '-') return -1; return da < db ? 1 : -1;
+          });
+          initMonthFilter(); applyFilters();
+      }).getStoreData(id);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      const targetInputs = ['cfgBizHours', 'cfgBlackouts', 'cfgBlockedTimes'];
+      targetInputs.forEach(id => {
+        const inputEl = document.getElementById(id);
+        if (inputEl) {
+          inputEl.addEventListener('blur', function() {
+            this.value = String(this.value || '')
+              .replace(/[－─〜~ー━]/g, '-')
+              .replace(/：/g, ':')
+              .replace(/[！-～]/g, function(s) { return String.fromCharCode(s.charCodeAt(0) - 0xFEE0); })
+              .replace(/[，、]/g, ',')
+              .replace(/[\s\u3000]+/g, '');
+          });
+        }
+      });
+      
+      document.getElementById('partnerPin').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') executeStoreLogin();
+      });
+    });
+
+    function initMonthFilter() { const months = new Set(); globalStoreMissions.forEach(m => { if (m.visitDate && m.visitDate !== '-') months.add(m.visitDate.substring(0, 7)); }); const select = document.getElementById('monthFilter'); select.innerHTML = '<option value="ALL">🗓 訪問月 すべて</option>'; Array.from(months).sort().reverse().forEach(month => { let opt = document.createElement('option'); opt.value = month; opt.innerText = month.replace('-', '年 ') + '月'; select.appendChild(opt); }); }
+    function applyFilters() { const monthVal = document.getElementById('monthFilter').value; const filteredMissions = globalStoreMissions.filter(m => { if (monthVal !== 'ALL' && !String(m.visitDate).startsWith(monthVal)) return false; return true; }); renderTable(filteredMissions); }
+
+// 🎯 [정밀 싱크 완료] 전 시스템 뱃지 톤앤매너 완벽 통일 렌더링 엔진
+    function renderTable(missions) {
+      const tbody = document.getElementById('storeMissionTbody');
+      if (missions.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted fw-bold">該当する履歴がありません。</td></tr>'; return; }
+
+      tbody.innerHTML = missions.map(m => {
+        let sHtml = "";
+        
+        if (m.status === '예약확인중') {
+          sHtml = `
+            <span class="badge-custom b-waiting">予約確認中</span>
+            <div class="dashboard-action-container">
+              <a href="${m.confirmUrl}" target="_blank" class="btn-dash-action btn-dash-ok">✓ 確定</a>
+              <a href="${m.feedbackUrl}" target="_blank" class="btn-dash-action btn-dash-msg">🔄 変更</a>
+            </div>
+          `;
+        } 
+        else if (m.status === '예약대기') {
+          sHtml = `<span class="badge-custom b-pending" style="background:#fff3cd; color:#856404;">📅 予約待機</span>`;
+        }
+        else {
+          let transStatus = m.status; let bgClass = "b-pending";
+          if (m.status === '방문전') { transStatus = "訪問前"; bgClass = "b-pending"; }
+          // 🎯 보정부: 일정조율필요 상태 진입 시, 어드민과 동일한 트렌디 보라색(b-adjust) 레이아웃 적용
+          else if (m.status === '일정조율필요') { transStatus = "調整必要"; bgClass = "b-adjust"; }
+          else if (m.status === '방문완료') { transStatus = "訪問完了"; bgClass = "b-verified"; }
+          else if (m.status === '제출완료') { transStatus = "投稿完了"; bgClass = "b-submitted"; }
+          else if (m.status === '노쇼') { transStatus = "ノーショー"; bgClass = "b-noshow"; }
+          sHtml = `<span class="badge-custom ${bgClass}">${transStatus}</span>`;
+        }
+
+        let displayDate = '<span class="text-muted">-</span>';
+        if (m.visitDate && m.visitDate !== '-') {
+          let parts = m.visitDate.split(' ');
+          let pCount = m.peopleCount ? m.peopleCount : '1'; 
+          
+          if (parts.length > 1) {
+            displayDate = `${parts[0]}<br><span style="font-size:11.5px; color:#8b95a1; font-weight:600;">${parts[1]} / ${pCount} 名</span>`;
+          } else {
+            displayDate = `${parts[0]}<br><span style="font-size:11.5px; color:#8b95a1; font-weight:600;">${pCount}名</span>`;
+          }
+        }
+
+        let displaySubmitDate = m.submitDate && m.submitDate !== '-' ? `<span class="fw-bold text-dark">${m.submitDate}</span>` : '<span class="text-muted">-</span>';
+        let linkHtmlArr = [];
+        if(m.reviewUrl) linkHtmlArr.push(`<a href="${m.reviewUrl}" target="_blank" class="btn-link-badge link-contents">🔗 コンテンツ</a>`);
+        if(m.googleMapUrl) linkHtmlArr.push(`<a href="${m.googleMapUrl}" target="_blank" class="btn-link-badge link-google">G Google</a>`);
+        let lHtml = linkHtmlArr.length > 0 ? `<div class="link-badge-container">${linkHtmlArr.join('')}</div>` : `<span class="text-muted">-</span>`;
+        
+        let commentHtml = '<span class="text-muted">-</span>';
+        if (m.status === '제출완료' && m.shortReview) {
+          commentHtml = `<div style="font-size: 13px; color: #495057; white-space: normal; line-height: 1.5; text-align: center; letter-spacing: -0.3px;">"${m.shortReview}"</div>`;
+        }
+        
+        return `
+          <tr>
+            <td data-label="ランク" class="text-center" style="font-size: 16px;">${m.tierEmoji}</td>
+            <td data-label="クリエイター" class="fw-bold text-center" style="color: var(--brand-navy);">${m.member}</td>
+            <td data-label="訪問日" class="text-center">${displayDate}</td>
+            <td data-label="ステータス" class="text-center">${sHtml}</td>
+            <td data-label="レビュー登録日" class="text-center">${displaySubmitDate}</td>
+            <td data-label="レビュー" class="text-center">${lHtml}</td>
+            <td data-label="一言" class="text-center">${commentHtml}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openConfigModal() {
+      if (preloadedConfig) {
+        fillConfigAndShow(preloadedConfig);
+      } else {
+        const btn = document.querySelector('.btn-config-top');
+        btn.disabled = true; btn.innerText = "⏳ 読み込み중...";
+        google.script.run
+          .withSuccessHandler(function(res) {
+            btn.disabled = false; btn.innerText = "⚙️ 店舗設定";
+            if (res.success) { preloadedConfig = res; fillConfigAndShow(res); } 
+            else { alert('エラー: ' + res.error); }
+          }).getStoreConfig(globalStoreId);
+      }
+    }
+
+    function fillConfigAndShow(res) {
+      document.getElementById('cfgRow').value = res.row;
+      document.getElementById('cfgEmail').value = res.email;
+      document.getElementById('cfgStoreType').value = res.storeType;
+      document.getElementById('cfgMaxPerSlot').value = res.maxPerSlot;
+      document.getElementById('cfgDailyCap').value = res.dailyCap;
+      document.getElementById('cfgBizHours').value = res.bizHours;
+      document.getElementById('cfgInterval').value = res.intervalMin || "30";
+      document.getElementById('cfgBlockedTimes').value = res.blockedTimes;
+      
+      let rawBlackouts = res.blackouts || '';
+      
+      if(typeof rawBlackouts === 'string' && (rawBlackouts.includes('GMT') || rawBlackouts.includes('Standard Time'))) {
+          let d = new Date(rawBlackouts);
+          if (!isNaN(d.getTime())) {
+            rawBlackouts = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,'0') + "-" + String(d.getDate()).padStart(2,'0');
+          }
+      } else if (rawBlackouts instanceof Date) {
+          let d = rawBlackouts;
+          rawBlackouts = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,'0') + "-" + String(d.getDate()).padStart(2,'0');
+      }
+      
+      document.getElementById('cfgBlackouts').value = rawBlackouts;
+      configModalObj.show();
+    }
+
+    function submitConfig() {
+      const rawBizHours = document.getElementById('cfgBizHours').value;
+      const rawBlackouts = document.getElementById('cfgBlackouts').value;
+      const rawBlockedTimes = document.getElementById('cfgBlockedTimes').value;
+      
+      const cleanFn = function(str) { return String(str || '').replace(/[－─〜~ー━]/g, '-').replace(/：/g, ':').replace(/[！-～]/g, function(s) { return String.fromCharCode(s.charCodeAt(0) - 0xFEE0); }).replace(/[\s\u3000]+/g, ''); };
+      
+      document.getElementById('cfgBizHours').value = cleanFn(rawBizHours);
+      document.getElementById('cfgBlackouts').value = cleanFn(rawBlackouts);
+      document.getElementById('cfgBlockedTimes').value = cleanFn(rawBlockedTimes);
+
+      const row = document.getElementById('cfgRow').value;
+      const email = document.getElementById('cfgEmail').value;
+      const storeType = document.getElementById('cfgStoreType').value;
+      const maxPerSlot = document.getElementById('cfgMaxPerSlot').value;
+      const dailyCap = document.getElementById('cfgDailyCap').value;
+      const blackouts = document.getElementById('cfgBlackouts').value; 
+      const bizHours = document.getElementById('cfgBizHours').value;
+      const intervalMin = document.getElementById('cfgInterval').value;
+      const blockedTimes = document.getElementById('cfgBlockedTimes').value;
+      
+      const btn = document.getElementById('saveCfgBtn');
+      btn.disabled = true;
+      btn.innerText = "保存中...";
+      
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.disabled = false;
+          btn.innerText = "設定を保存する";
+          if (res.success) {
+            configModalObj.hide();
+            google.script.run.withSuccessHandler(function(data) { if(data.success) preloadedConfig = data; }).getStoreConfig(globalStoreId);
+          } else { 
+            alert('保存に失敗しました: ' + res.error); 
+          }
+        })
+        .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = "設定を保存する"; alert('サーバーエラーが発生しました。'); })
+        .updateStoreConfig(row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  
+  <style>
+    /* 🚨 [초기 진입 화면 방어] 첫 진입 시 흰 화면이나 번쩍거림을 차단하는 풀화면 로딩 레이아웃 */
+    #globalInitialLoading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: #f4f5f7;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      align-items: center;
+      padding-top: 15vh;
+      z-index: 10000;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    #globalInitialLoading .spinner-border {
+      width: 2.8rem;
+      height: 2.8rem;
+      color: #1A2B49;
+      margin-bottom: 20px;
+    }
+
+    /* 🚨 [정밀 정렬 패치] 다른 로딩창(globalInitialLoading)과 스핀 상단 위치를 100% 일치화 */
+    #globalActionLoading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(2px);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      padding-top: 15vh;
+      align-items: center;
+      z-index: 11000; 
+    }
+
+    #globalActionLoading .spinner-border {
+      width: 3rem;
+      height: 3rem;
+      color: #1A2B49;
+      border-width: 4px;
+    }
+
+    #loginSection { display: none; }
+
+    :root { --brand-navy: #1A2B49; --action-charcoal: #343a40; --sub-gold: #C5A358; --status-green: #2D6A4F; --status-gray: #8E949E; }
+    
+    html, body { 
+      overflow-y: scroll !important;
+      height: 100% !important;
+      -webkit-overflow-scrolling: touch !important; 
+      overscroll-behavior-y: auto !important; 
+    }
+    
+    body { background: #f4f5f7; font-family: 'Pretendard', 'Noto Sans JP', sans-serif; overflow-x: hidden; color: #333; margin: 0; padding: 0 !important; }
+    body::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent !important; }
+    body { -ms-overflow-style: none !important; scrollbar-width: none !important; }
+    
+    body.modal-open, .modal { padding-right: 0 !important; overflow-y: auto !important; }
+    .modal-dialog { margin: 0 !important; padding: 0 !important; transform: none !important; width: 100% !important; height: 100% !important; }
+    
+    .modal-content { 
+      position: fixed !important; 
+      top: 35% !important; 
+      left: 50% !important; 
+      transform: translate(-50%, -35%) !important; 
+      width: 90% !important; 
+      max-width: 320px !important; 
+      margin: 0 !important; 
+      box-shadow: 0 10px 40px rgba(0,0,0,0.15) !important; 
+    }
+    
+    .container { max-width: 480px; padding: 40px 20px 24px; margin: auto; }
+    .card { border-radius: 20px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.03); }
+    .mission-card { background: #fff; margin-bottom: 20px; width: 100%; transition: 0.3s; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.03); }
+    .btn-custom { border-radius: 14px; padding: 14px; font-weight: 700; width: 100%; transition: all 0.2s; font-size: 15px; display: block; text-align: center; text-decoration: none;}
+    .btn-custom:active { transform: scale(0.97); }
+    .btn-visit { background-color: var(--action-charcoal); color: #ffffff; }
+    .btn-brand { background-color: var(--brand-navy); color: #ffffff; }
+    .form-control, .form-select { border-radius: 12px; border: 1.5px solid #eceef1; padding: 14px; font-size: 14px; background: #fafbfc; width: 100%; }
+    .form-control:focus, .form-select:focus { border-color: var(--brand-navy); box-shadow: 0 0 0 4px rgba(26,43,73,0.15); background: #fff; outline: none; }
+    .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; width: 100%; }
+    .badge { display: inline-flex; align-items: center; justify-content: center; height: 26px; padding: 0 8px; border-radius: 6px; font-weight: 700; font-size: 11px; }
+    
+    /* 🚨 [신규 추가] 어드민 대시보드와 정밀 동기화한 보라색 일정조율필요 뱃지 스타일 */
+    .status-adjustment { background-color: #7048e8 !important; color: #ffffff !important; }
+    
+    .status-pending { background-color: #e9ecef; color: #495057; }
+    .status-waiting { background-color: #dc3545; color: #fff; } 
+    .status-verified { background-color: var(--sub-gold); color: #fff; }
+    .status-submitted { background-color: var(--status-green); color: #fff; }
+    .top-link { font-size: 12px; font-weight: 600; text-decoration: none; color: var(--status-gray); white-space: nowrap; margin-left: 8px;}
+    .restaurant-name { font-size: 1.15rem; letter-spacing: -0.03em; font-weight: 700; margin-bottom: 12px; }
+    .upload-box { border: 2px dashed #dee2e6; border-radius: 14px; padding: 20px; text-align: center; background: #f8f9fa; pointer-events: auto; cursor: pointer; transition: 0.2s; margin-bottom: 10px;}
+    .upload-box:hover { border-color: var(--brand-navy); background: #f0f4f8; }
+    .upload-text { font-size: 13px; color: #6c757d; font-weight: 600; margin: 0; }
+    input[type="file"] { display: none; }
+    
+    /* 🎯 [달력 그리드 찌그러짐 방지 완벽 패치 고정부] */
+    .calendar-container {
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box;
+    }
+    .flatpickr-calendar { 
+      font-family: 'Pretendard', 'Noto Sans JP', sans-serif !important; 
+      border-radius: 16px !important; 
+      border: none !important; 
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08) !important; 
+      padding: 10px !important; 
+      margin: 0 auto !important;
+      width: 308px !important;
+      max-width: 308px !important;
+      min-width: 308px !important;
+      box-sizing: border-box !important;
+    }
+    .flatpickr-innerContainer, .flatpickr-rsv {
+      width: 100% !important;
+    }
+    .flatpickr-days {
+      width: 288px !important;
+    }
+    .dayContainer {
+      width: 288px !important;
+      min-width: 288px !important;
+      max-width: 288px !important;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="globalInitialLoading">
+    <div class="spinner-border" role="status"></div>
+    <h6 class="fw-bold m-0" style="color: var(--brand-navy); font-size: 14.5px; letter-spacing: -0.4px;">데이터를 안전하게 불러오는 중입니다...</h6>
+    <p class="text-muted mt-2 m-0" style="font-size: 12px; font-weight: 500;">잠시만 기다려주세요.</p>
+  </div>
+
+  <div id="globalActionLoading" style="display: none;">
+    <div class="spinner-border" role="status"></div>
+    <h6 class="fw-bold m-0 mt-3" style="color: var(--brand-navy); font-size: 14px; letter-spacing: -0.3px;">가예약 전송 중입니다...</h6>
+    <p class="text-muted mt-2 m-0" style="font-size: 11.5px;">화면이 업데이트될 때까지 잠시만 기다려주세요.</p>
+  </div>
+
+  <div class="container">
+    <div id="loginSection" class="text-center py-5">
+      <h2 class="fw-bold mb-4" style="color: var(--brand-navy); letter-spacing: -0.5px;">BOOKMARK CREATOR</h2>
+      <div class="card p-4">
+        <input type="text" id="orderNo" class="form-control mb-2" placeholder="주문번호" value="<?= orderNo ?>">
+        <input type="tel" id="phoneLast4" class="form-control mb-4" placeholder="휴대폰 뒷자리 4자리" maxlength="4" value="<?= phoneLast4 ?>">
+        <button type="button" class="btn btn-brand btn-custom" id="loginBtn" onclick="window.executeLogin()">내 미션 확인하기</button>
+      </div>
+    </div>
+
+    <div id="loading" style="display:none;" class="text-center py-5 mt-5">
+      <div class="spinner-border text-primary mb-4" style="color: var(--brand-navy) !important;"></div>
+      <h6 class="fw-bold mb-2" style="color: var(--brand-navy);">데이터를 불러오는 중입니다...</h6>
+    </div>
+
+    <div id="missionSection" style="display:none">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h5 class="fw-bold m-0">📍 미션 현황</h5>
+        <button class="btn btn-sm" style="background:#e9ecef; color:#495057; font-weight:700; border-radius:8px; padding: 5px 12px; font-size: 12px;" onclick="window.logout()">로그아웃</button>
+      </div>
+      <div id="missionList"></div>
+    </div>
+  </div>
+
+  <!-- 🎯 [네이티브 규격 패치] 제이쿼리 의존성을 제거하고 부트스트랩 5 표준 스펙으로 모달 마감 처리 완료 -->
+  <div class="modal fade" id="customAlert" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content p-3 text-center border-0" style="border-radius:20px;">
+        <div class="modal-body">
+          <p class="fw-bold mb-4 mt-2" id="alertMessage" style="font-size:15px;"></p>
+          <button type="button" class="btn btn-brand btn-custom py-2" data-bs-dismiss="modal">확인</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="staffModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content p-4 text-center border-0" style="border-radius:25px;">
+        <div class="modal-body p-0">
+          <div class="mb-4 mt-2">
+            <span class="badge bg-dark mb-2" style="font-size: 10px; letter-spacing: 1px;">PREMIUM SERVICE</span>
+            <h4 class="fw-extrabold m-0" style="color: var(--brand-navy); font-weight: 900; letter-spacing: -0.3px;">BOOKMARK CREATOR</h4>
+            <div style="width: 40px; height: 3px; background: var(--sub-gold); margin: 10px auto;"></div>
+          </div>
+          <h6 class="fw-bold mb-3" style="font-size: 17px;">店舗確認 (매장 확인)</h6>
+          <div class="p-3 mb-4" style="background: #f8f9fa; border-radius: 15px; border: 1px solid #eee;">
+            <p class="m-0 fw-bold" style="font-size: 14px; color: #d63384; line-height: 1.6;">
+              직원에게 이 화면을 보여주세요.<br>
+              <span style="color: #333; font-size: 13px;">매장 확인 없이는 모든 서비스가 제한됩니다.</span>
+            </p>
+          </div>
+          <p class="text-muted mb-4" style="font-size: 12px; line-height: 1.5;">スタッフの方へ<br>お客様のご来店を確認後<br>下の【確認完了】ボタンを押してください。</p>
+          <input type="hidden" id="targetRow">
+          <button type="button" id="confirmBtn" class="btn btn-brand btn-custom mb-2" onclick="window.processVisit()">確認完了</button>
+          <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none" data-bs-dismiss="modal">閉じる(닫기)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+  
+  <script>
+    var el = function(id) { return document.getElementById(id); };
+    var staffModal = null; var alertModal = null; var alertCallback = null; 
+    var receiptData = {}; var editReceiptData = {}; window.selectedBooking = {}; 
+
+    function showAlert(msg, callback) {
+      try {
+        el('alertMessage').innerHTML = msg; 
+        alertCallback = callback || null; 
+        if(!alertModal) {
+          alertModal = new bootstrap.Modal(el('customAlert'));
+        }
+        alertModal.show();
+      } catch(e) {
+        alert(msg.replace(/<br>/g, '\n')); if(callback) callback();
+      }
+    }
+
+    function saveDraft(row, field, value) { localStorage.setItem('tyche_draft_' + field + '_' + row, value); }
+
+    function hideGlobalInitialLoading() {
+      var loader = el('globalInitialLoading');
+      if (loader) { 
+        loader.style.opacity = '0';
+        loader.style.visibility = 'hidden';
+        setTimeout(function() { loader.style.display = 'none'; }, 300);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', function() {
+      try { 
+        staffModal = new bootstrap.Modal(el('staffModal')); 
+        el('customAlert').addEventListener('hidden.bs.modal', function () {
+          if (alertCallback) { var tempCb = alertCallback; alertCallback = null; tempCb(); }
+        });
+      } catch(e) {}
+      
+      var savedOrderNo = localStorage.getItem('tycheOrderNo'); var savedPhone = localStorage.getItem('tychePhone');
+      if (savedOrderNo && savedPhone) {
+        el('orderNo').value = savedOrderNo; el('phoneLast4').value = savedPhone; executeLogin();
+      } else if (el('orderNo').value && el('phoneLast4').value) {
+        executeLogin();
+      } else {
+        setTimeout(hideGlobalInitialLoading, 400);
+        el('loginSection').style.display = 'block';
+      }
+    });
+
+    function executeLogin() {
+      try {
+        var o = el('orderNo').value.trim(); var p = el('phoneLast4').value.trim();
+        if (!o || p.length < 4) { 
+          hideGlobalInitialLoading(); 
+          showAlert('주문번호와 휴대폰 뒷자리 4자리를 정확히 입력해주세요.'); 
+          return; 
+        }
+        
+        receiptData = {}; editReceiptData = {}; window.selectedBooking = {};
+        el('loginSection').style.display = 'none'; el('missionSection').style.display = 'none'; 
+        el('loading').style.display = 'block';
+        
+        google.script.run
+          .withSuccessHandler(function(data) {
+            el('loading').style.display = 'none';
+            hideGlobalInitialLoading(); 
+            el('globalActionLoading').style.display = 'none'; 
+            
+            if (!data || data.length === 0) { 
+              showAlert('일치하는 미션 정보가 없습니다.'); el('loginSection').style.display = 'block'; 
+              localStorage.removeItem('tycheOrderNo'); localStorage.removeItem('tychePhone'); return; 
+            }
+            localStorage.setItem('tycheOrderNo', o); localStorage.setItem('tychePhone', p);
+            el('missionSection').style.display = 'block';
+            
+            var htmlArray = [];
+            for (var i = 0; i < data.length; i++) { htmlArray.push(buildCard(data[i])); }
+            el('missionList').innerHTML = htmlArray.join('');
+            
+            initCalendars(data); 
+            for (var i = 0; i < data.length; i++) { if(data[i].status === '방문완료') { checkSubmitReady(data[i].row); } }
+          })
+          .withFailureHandler(function(err) {
+            el('loading').style.display = 'none'; 
+            hideGlobalInitialLoading();
+            el('globalActionLoading').style.display = 'none'; 
+            el('loginSection').style.display = 'block'; 
+            showAlert('서버 통신 오류: ' + err.message);
+          })
+          .getMissions(o, p);
+      } catch (fatalError) { hideGlobalInitialLoading(); el('globalActionLoading').style.display = 'none'; alert("실행 중 오류 발생: " + fatalError.message); }
+    }
+
+    function logout() {
+      localStorage.removeItem('tycheOrderNo'); localStorage.removeItem('tychePhone');
+      el('orderNo').value = ''; el('phoneLast4').value = ''; el('missionSection').style.display = 'none'; el('loginSection').style.display = 'block';
+    }
+
+    function buildCard(m) {
+      var status = m.status || ''; var hasVisitDate = m.visitDate && m.visitDate.length > 5;
+      var st = '예약대기', cl = 'status-pending';
+      
+      if (status === '일정조율필요') {
+        st = '일정조율필요'; 
+        cl = 'status-adjustment'; 
+      }
+      else if(status === '예약확인중') { st = '예약확인중'; cl = 'status-waiting'; }
+      else if(status === '제출완료') { st = '제출완료'; cl = 'status-submitted'; }
+      else if(status === '방문완료') { st = '방문완료'; cl = 'status-verified'; }
+      else if(status === '방문전' && hasVisitDate) { st = '방문전'; cl = 'status-pending'; }
+      else if(status === '노쇼') { st = '노쇼'; cl = 'status-pending'; }
+      else { st = '예약대기'; cl = 'status-waiting'; }
+
+      var action = '';
+      
+      if ((status === '예약대기' || status === '일정조율필요' || st === '예약대기') && !hasVisitDate) {
+        var externalBookingBtn = '';
+        if (m.info && m.info.bookingUrl && m.info.bookingUrl.length > 5) {
+          externalBookingBtn = '<div class="mt-2 mb-3">' +
+            '<a href="' + m.info.bookingUrl + '" target="_blank" ' +
+            'style="background: #fff5f2; border: 1px solid #ffded9; border-radius: 12px; font-weight: 700; font-size: 13.5px; color: #ff5a36; display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; text-decoration: none; transition: all 0.2s;" ' +
+            'onmouseover="this.style.background=\'#ffebe5\'" onmouseout="this.style.background=\'#fff5f2\'">' +
+            '<span>🔥 실시간 빈자리 확인하기</span>' +
+            '<span style="color: #ff5a36; font-size: 11px;">예약 링크 ❯</span>' +
+            '</a></div>';
+        }
+
+        var isRestaurant = (m.info && m.info.storeType !== 'RETAIL'); 
+        var peopleSelectorHtml = '';
+        if (isRestaurant) {
+          var optionsHtml = '';
+          for(var i = 1; i <= 4; i++) { optionsHtml += '<option value="' + i + '">' + i + ' 명</option>'; }
+          peopleSelectorHtml = '<div class="d-flex justify-content-center align-items-center gap-2"><span style="font-size:13px; font-weight:700; color:#495057;">방문 인원</span><select id="peopleCount_' + m.row + '" class="form-select form-select-sm" style="width: 80px; text-align: center; border-radius: 8px; font-weight: 700; padding: 6px;">' + optionsHtml + '</select></div><p style="font-size:11px; color:#e03131; font-weight:700; margin-top:8px; margin-bottom:0; letter-spacing:-0.3px;">⚠️크리에이터 동반 방문 희망 시, 각자 예약 후 필수 문의.</p>';
+        } else { peopleSelectorHtml = '<input type="hidden" id="peopleCount_' + m.row + '" value="1">'; }
+
+        var adjustNotice = (status === '일정조율필요') 
+          ? '<div class="p-3 mb-3 text-start" style="background:#fff0f0; border:1px solid #ffc9c9; border-radius:12px;"><p class="m-0 fw-bold" style="font-size:13px; color:#d93025;">🔄 매장 사정으로 일정 조율이 필요합니다.</p><p class="m-0 mt-1 text-muted" style="font-size:12px;">담당자가 연락 예정이며, 이후 변경된 일정으로 재예약 부탁드립니다.</p></div>'
+          : '';
+
+        action = externalBookingBtn + '<div class="calendar-container mt-2 p-3" style="background:#fdfdfd; border:1px solid #eee; border-radius:14px;">' + adjustNotice + '<p class="fw-bold mb-3 text-center" style="font-size:13.5px; color:var(--brand-navy);">📅 방문하실 날짜와 시간을 선택하세요</p><div class="d-flex justify-content-center"><input type="text" id="cal_' + m.row + '" class="form-control d-none"></div><div id="timeSlots_' + m.row + '" class="mt-3 d-flex flex-wrap gap-2 justify-content-center"></div><div id="bookConfirm_' + m.row + '" class="mt-3 text-center d-none p-3" style="background:#f1f3f5; border-radius:12px;"><p style="font-size:12px; color:#495057; margin-bottom:4px;">선택된 일정</p><p id="selectedDateTimeText_' + m.row + '" class="fw-bold text-primary mb-3" style="font-size:15px;"></p>' + peopleSelectorHtml + '<button class="btn btn-brand btn-custom" style="font-size:13.5px;" onclick="window.submitBooking(' + m.row + ', \'' + m.restId + '\')">이 시간으로 방문 확정</button></div></div>';
+      } 
+      else if (status === '예약확인중') {
+        action = `
+    <div class="d-flex align-items-center gap-2 mt-2 px-3 py-2.5" 
+         style="background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; min-height: 44px;">
+      <span class="spinner-border spinner-border-sm text-primary" 
+            style="width: 14px; height: 14px; border-width: 2px; color: var(--brand-navy) !important;"></span>
+      <div class="d-flex flex-wrap align-items-center gap-1" style="font-size: 13px; letter-spacing: -0.3px;">
+        <span class="fw-bold" style="color: var(--brand-navy);">매장 승인 대기 중</span>
+        <span class="text-muted" style="font-size: 12.5px;">· 현지 점포에서 예약을 확인 중입니다.</span>
+      </div>
+    </div>
+  `;
+}
+      else if (status === '방문전' && hasVisitDate) {
+        action = '<div class="text-center p-3 mt-2" style="background:#f8f9fa; border:1px solid #e9ecef; border-radius:12px; margin-bottom:12px;"><p style="font-size:12px; color:#8b95a1; margin-bottom:4px;">확정된 방문 일정</p><p class="fw-bold m-0" style="color:var(--brand-navy); font-size:15px;">📅 ' + m.visitDate + '</p></div><button class="btn btn-visit btn-custom" onclick="window.openStaffModal(' + m.row + ')">직원에게 확인받기 (방문인증)</button>';
+      } 
+      else if (status === '방문완료') {
+        var savedUrl = localStorage.getItem('tyche_draft_url_' + m.row) || ''; var savedGoogle = localStorage.getItem('tyche_draft_google_' + m.row) || ''; var savedReview = localStorage.getItem('tyche_draft_review_' + m.row) || '';
+        action = '<div class="mt-3 p-3" style="background: #fdfdfd; border: 1px solid #eee; border-radius: 14px;"><div class="d-flex justify-content-between align-items-center mb-2"><p class="fw-bold m-0" style="font-size:13px; color: #1A2B49;">미션 제출(모두 필수)</p><span style="font-size:10px; color:#8b95a1; background:#f1f3f5; padding:3px 6px; border-radius:4px; font-weight:bold;">💾 자동 임시저장</span></div><label for="receipt_' + m.row + '" class="upload-box w-100 py-2 mb-2" style="border-style: dashed; border-width: 1.5px; background: #fff;"><p class="upload-text" id="receiptName_' + m.row + '">📸 인증샷 (영수증 또는 매장 내부)</p></label><input type="file" id="receipt_' + m.row + '" accept="image/*" onchange="window.previewReceipt(' + m.row + ')"><input type="text" id="url_' + m.row + '" class="form-control mb-2 py-2" style="font-size: 12.5px;" placeholder="🔗 콘텐츠 리뷰 링크 (인스타/유튜브 등)" value="' + savedUrl + '" oninput="window.saveDraft(' + m.row + ', \'url\', this.value); window.checkSubmitReady(' + m.row + ')"><input type="text" id="google_' + m.row + '" class="form-control mb-2 py-2" style="font-size: 12.5px;" placeholder="📍 구글맵 리뷰 링크" value="' + savedGoogle + '" oninput="window.saveDraft(' + m.row + ', \'google\', this.value); window.checkSubmitReady(' + m.row + ')"><input type="text" id="shortReview_' + m.row + '" class="form-control mb-3 py-2" style="font-size: 12.5px;" placeholder="✍️ 매장 솔직 한 줄 후기(피드백)" value="' + savedReview + '" oninput="window.saveDraft(' + m.row + ', \'review\', this.value); window.checkSubmitReady(' + m.row + ')"><button id="finalBtn_' + m.row + '" class="btn btn-brand btn-custom py-2" onclick="window.submitFinal(' + m.row + ')" disabled>제출하기</button></div>';
+      } 
+      else if (status === '제출완료') {
+        var safeUrl = m.reviewUrl ? m.reviewUrl : ''; var safeGoogleUrl = m.googleMapUrl ? m.googleMapUrl : ''; var safeReceiptUrl = m.receiptUrl ? m.receiptUrl : ''; var safeShortReview = m.shortReview ? m.shortReview : ''; 
+        var linkHtml = '';
+        if(safeUrl) { linkHtml += '<a href="' + safeUrl + '" target="_blank" style="background: #fff; border: 1px solid #dee2e6; border-radius: 10px; font-weight: 600; font-size: 12px; color: #495057; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 6px; text-decoration: none;">🔗 콘텐츠 리뷰 <span style="color: #adb5bd; font-size: 10px;">이동 ❯</span></a>'; }
+        if(safeGoogleUrl) { linkHtml += '<a href="' + safeGoogleUrl + '" target="_blank" style="background: #fff; border: 1px solid #dee2e6; border-radius: 10px; font-weight: 600; font-size: 12px; color: #495057; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 6px; text-decoration: none;">📍 구글맵 리뷰 <span style="color: #adb5bd; font-size: 10px;">이동 ❯</span></a>'; }
+        if(safeReceiptUrl) { linkHtml += '<a href="' + safeReceiptUrl + '" target="_blank" style="background: #fff; border: 1px solid #dee2e6; border-radius: 10px; font-weight: 600; font-size: 12px; color: #495057; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 6px; text-decoration: none;">📸 인증샷 <span style="color: #adb5bd; font-size: 10px;">보기 ❯</span></a>'; }
+        if(safeShortReview) { linkHtml += '<div style="background: #fff; border: 1px solid #dee2e6; border-radius: 10px; font-size: 12px; color: #495057; display: flex; align-items: center; padding: 8px 12px; margin-bottom: 6px; font-weight: 500;"><span style="margin-right:6px;">💬</span> <span style="flex:1;">' + safeShortReview + '</span></div>'; }
+
+        action = '<div id="viewMode_' + m.row + '" class="mt-3 p-3" style="background: #f8f9fa; border: none; border-radius: 14px; text-align: center;"><div class="d-flex justify-content-center align-items-center mb-2"><span style="font-size: 14px; margin-right: 6px;">🎉</span><p class="fw-bold m-0" style="font-size: 13.5px; color: #1A2B49;">제출이 완료되었습니다</p></div><div style="display: flex; flex-direction: column; margin-bottom: 8px; text-align: left;">' + linkHtml + '</div><button class="btn btn-custom" style="background: #e9ecef; color: #495057; padding: 10px; font-size: 12px;" onclick="window.toggleEdit(' + m.row + ', true)">✏️ 제출 내용 수정하기</button></div>' + '<div id="editMode_' + m.row + '" class="mt-2 p-3" style="background: #fff; border: 1px solid #dee2e6; border-radius: 14px; display: none;"><div class="d-flex justify-content-between align-items-center mb-2"><p class="fw-bold m-0" style="font-size: 13px; color: #d63384;">제출 내용 수정</p><button class="btn-close" style="font-size: 10px;" onclick="window.toggleEdit(' + m.row + ', false)"></button></div><div class="mb-2 text-start"><input type="text" id="editUrl_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeUrl + '" placeholder="🔗 콘텐츠 리뷰 링크"></div><div class="mb-2 text-start"><input type="text" id="editGoogle_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeGoogleUrl + '" placeholder="📍 구글맵 링크"></div><div class="mb-2 text-start"><input type="text" id="editShortReview_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeShortReview + '" placeholder="✍️ 한 줄 후기"></div><div class="mb-3 text-start"><label for="editReceipt_' + m.row + '" class="d-block text-center" style="background: #f8f9fa; border: 1px dashed #dee2e6; border-radius: 10px; padding: 8px; cursor: pointer; margin: 0;"><p class="m-0" id="editReceiptName_' + m.row + '" style="font-size: 11.5px; color: #339af0; font-weight: 700;">🔄 인증샷 재업로드</p></label><input type="file" id="editReceipt_' + m.row + '" accept="image/*" onchange="window.previewEditReceipt(' + m.row + ')" style="display:none;"></div><div class="d-flex gap-2"><button id="editBtn_' + m.row + '" class="btn btn-visit btn-custom py-2 flex-grow-1" style="font-size: 13px;" onclick="window.submitEdit(' + m.row + ')">수정 내용 저장</button></div></div>';
+      }
+      return '<div class="mission-card"><div class="top-row"><span class="badge ' + cl + '">' + st + '</span><div><a href="' + m.info.guide + '" target="_blank" class="top-link">가이드</a><a href="' + m.info.map + '" target="_blank" class="top-link text-primary">지도</a></div></div><h6 class="restaurant-name m-0">' + m.restaurant + '</h6><div id="action_' + m.row + '">' + action + '</div></div>';
+    }
+
+    function initCalendars(missions) {
+      var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+      missions.forEach(function(m) {
+        var hasVisitDate = m.visitDate && m.visitDate.length > 5;
+        
+        if ((m.status === '예약대기' || m.status === '일정조율필요' || !m.status) && !hasVisitDate) {
+          var rawBlackouts = (m.info && m.info.blackouts) ? m.info.blackouts : [];
+          var staticDates = rawBlackouts.filter(function(item) { return /^\d{4}-\d{2}-\d{2}$/.test(item); });
+          var dayMap = { 0: '日', 1: '月', 2: '火', 3: '水', 4: '木', 5: '金', 6: '土' };
+
+          flatpickr("#cal_" + m.row, {
+            inline: true, minDate: tomorrow, locale: "ko",
+            disable: [
+              function(date) {
+                var currentDayString = dayMap[date.getDay()]; var dateNum = date.getDate(); var weekNum = Math.ceil(dateNum / 7);
+                for (var i = 0; i < rawBlackouts.length; i++) {
+                  var rule = rawBlackouts[i];
+                  if (rule.indexOf('第') !== -1) {
+                    var match = rule.match(/第([1-5])/);
+                    if (match && parseInt(match[1], 10) === weekNum && rule.indexOf(currentDayString) !== -1) { return true; }
+                  } 
+                  else if (rule.indexOf(currentDayString) !== -1 && rule.length <= 5) { return true; }
+                }
+                return false;
+              },
+              ...staticDates
+            ],
+            onChange: function(selectedDates, dateStr) { fetchAvailableTimes(m.row, m.restId, dateStr); }
+          });
+        }
+      });
+    }
+
+    function fetchAvailableTimes(row, storeId, dateStr) {
+      var container = el('timeSlots_' + row); var confirmDiv = el('bookConfirm_' + row);
+      confirmDiv.classList.add('d-none');
+      container.innerHTML = '<span class="spinner-border spinner-border-sm text-primary"></span><span style="font-size:13px; font-weight:600; margin-left:8px; color:#8b95a1;">빈자리를 찾고 있습니다...</span>';
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.error) { container.innerHTML = '<p class="text-danger fw-bold" style="font-size:13px;">' + res.error + '</p>'; return; }
+          if (!res.isAvailable) { container.innerHTML = '<p class="text-muted fw-bold" style="font-size:13.5px; margin:20px 0;">🚫 ' + res.reason + '</p>'; return; }
+          var html = res.availableSlots.map(function(t) {
+            return '<button class="btn btn-outline-dark btn-sm" style="border-radius:8px; font-weight:700; padding:6px 16px; font-size:14px;" onclick="window.selectTime('+row+', \''+dateStr+'\', \''+t+'\')">'+t+'</button>';
+          }).join('');
+          container.innerHTML = html;
+        })
+        .withFailureHandler(function() { container.innerHTML = '<p class="text-danger fw-bold" style="font-size:13px;">조회 실패. 다시 시도해주세요.</p>'; })
+        .checkAvailability(storeId, dateStr);
+    }
+
+    function selectTime(row, dateStr, timeStr) {
+       window.selectedBooking[row] = { date: dateStr, time: timeStr };
+       var container = el('timeSlots_' + row); var btns = container.getElementsByTagName('button');
+       for(var i=0; i<btns.length; i++){
+          if(btns[i].innerText === timeStr) {
+             btns[i].classList.remove('btn-outline-dark'); btns[i].classList.add('btn-primary');
+             btns[i].style.backgroundColor = 'var(--brand-navy)'; btns[i].style.borderColor = 'var(--brand-navy)'; btns[i].style.color = '#fff';
+          } else {
+             btns[i].classList.add('btn-outline-dark'); btns[i].classList.remove('btn-primary');
+             btns[i].style.backgroundColor = ''; btns[i].style.borderColor = ''; btns[i].style.color = '';
+          }
+       }
+       var confirmDiv = el('bookConfirm_' + row); confirmDiv.classList.remove('d-none');
+       el('selectedDateTimeText_' + row).innerText = dateStr + ' ' + timeStr;
+    }
+
+    function submitBooking(row) {
+      var booking = window.selectedBooking[row]; 
+      if(!booking) return;
+      
+      var peopleCount = document.getElementById('peopleCount_' + row).value; 
+      var btn = document.querySelector('#bookConfirm_' + row + ' button');
+      
+      btn.disabled = true; 
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 처리중...';
+
+      var actionLoader = el('globalActionLoading');
+      if (actionLoader) {
+        actionLoader.style.zIndex = '11000'; 
+        actionLoader.style.display = 'flex';
+        var loadingText = actionLoader.querySelector('h6');
+        if(loadingText) loadingText.innerText = "가예약 전송 중입니다...";
+      }
+
+      google.script.run
+        .withSuccessHandler(function(res){
+          if(res.success) {
+            if (actionLoader) actionLoader.style.display = 'none';
+
+            var guideMsg = "⏳ <b>예약 신청 완료 (확인 대기)</b><br>" +
+                          "현재 단계는 '가예약' 상태이며, 매장에서 확인 후 최종 승인해야 예약이 확정됩니다.<br><br>" +
+                          "<span style='color: #e03131; font-weight: 800;'>⚠️ 매장 조율 안내</span><br>" +
+                          "선택하신 일정이 현지 매장 사정으로 불가할 경우, 운영진이 별도 연락드리겠습니다.";
+            
+            showAlert(guideMsg, function(){ 
+              if (actionLoader) {
+                actionLoader.style.display = 'none'; 
+              }
+
+              var initialLoader = el('globalInitialLoading');
+              if (initialLoader) {
+                initialLoader.style.opacity = '1';
+                initialLoader.style.visibility = 'visible';
+                initialLoader.style.display = 'flex';
+                var initText = initialLoader.querySelector('h6');
+                if(initText) initText.innerText = "미션 현황을 새로 불러오는 중입니다...";
+              }
+              
+              var missionSec = el('missionSection');
+              if(missionSec) missionSec.style.display = 'none'; 
+              
+              executeLogin(); 
+            });
+          } else {
+            if (actionLoader) actionLoader.style.display = 'none'; 
+            showAlert('예약 실패: ' + res.error); 
+            btn.disabled = false; 
+            btn.innerText = '이 시간으로 방문 확정';
+          }
+        })
+        .withFailureHandler(function(err){
+          if (actionLoader) actionLoader.style.display = 'none'; 
+          showAlert('서버 통신 에러가 발생했습니다.');
+          btn.disabled = false; 
+          btn.innerText = '이 시간으로 방문 확정';
+        })
+        .bookTimeSlot(row, booking.date, booking.time, peopleCount); 
+    }
+
+    function toggleEdit(row, showEdit) {
+      if (showEdit) { el('viewMode_' + row).style.display = 'none'; el('editMode_' + row).style.display = 'block'; } 
+      else { el('viewMode_' + row).style.display = 'block'; el('editMode_' + row).style.display = 'none'; }
+    }
+
+    function compressImage(dataUrl, fileName, row, targetObj, callback) {
+      var img = new Image();
+      img.onload = function() {
+        var canvas = document.createElement('canvas'); var width = img.width; var height = img.height; var MAX_WIDTH = 800; 
+        if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
+        canvas.width = width; canvas.height = height; var ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+        targetObj[row] = { data: canvas.toDataURL('image/jpeg', 0.6), name: fileName.split('.')[0] + '.jpg' };
+        if(callback) callback();
+      }
+      img.src = dataUrl;
+    }
+
+    function openStaffModal(row) { el('targetRow').value = row; staffModal.show(); }
+    
+    function processVisit() {
+      var row = el('targetRow').value; var btn = el('confirmBtn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.disabled = false; btn.innerText = '確認完了 (확인 완료)';
+          if (res.success) { staffModal.hide(); executeLogin(); } else { showAlert('오류가 발생했습니다.'); }
+        })
+        .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = '確認完了 (확인 완료)'; showAlert('서버 오류: ' + err.message); })
+        .confirmVisit(row);
+    }
+
+    function previewReceipt(row) {
+      var file = el('receipt_'+row).files[0]; if(!file) { delete receiptData[row]; checkSubmitReady(row); return; }
+      var label = el('receiptName_'+row); label.innerText = "📸 인증샷 선택됨: " + file.name;
+      label.style.color = 'var(--brand-navy)'; label.style.fontWeight = 'bold';
+      var reader = new FileReader();
+      reader.onload = function(e) { compressImage(e.target.result, file.name, row, receiptData, function() { checkSubmitReady(row); }); }
+      reader.readAsDataURL(file);
+    }
+
+    function checkSubmitReady(row) {
+      var hasFile = (receiptData[row] !== undefined && receiptData[row] !== null && receiptData[row].data);
+      var blogUrl = el('url_'+row).value.trim(); var googleUrl = el('google_'+row).value.trim(); var shortRev = el('shortReview_'+row).value.trim();
+      var hasAllText = blogUrl.length > 5 && googleUrl.length > 5 && shortRev.length > 1;
+      el('finalBtn_'+row).disabled = !(hasFile && hasAllText);
+    }
+
+    function submitFinal(row) {
+      var url = el('url_'+row).value.trim(); var googleUrl = el('google_'+row).value.trim(); var shortRev = el('shortReview_'+row).value.trim();
+      if(!url || !googleUrl) return showAlert('콘텐츠 리뷰와 구글 리뷰 링크를 모두 입력해주세요.');
+      if(!shortRev) return showAlert('솔직한 한 줄 후기를 입력해주세요.');
+      if(!receiptData[row] || !receiptData[row].data) return showAlert('인증샷(영수증 또는 매장사진)을 올려주세요.');
+      
+      var btn = el('finalBtn_'+row); btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 제출 중...';
+      
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.innerHTML = '제출 완료';
+          if(res.success) {
+            localStorage.removeItem('tyche_draft_url_' + row); localStorage.removeItem('tyche_draft_google_' + row); localStorage.removeItem('tyche_draft_review_' + row);
+            showAlert('완료되었습니다!<br>검수 후 보증금이 환급됩니다.', function() { executeLogin(); }); 
+          } 
+          else { showAlert('실패: ' + (res.error || '알 수 없는 오류')); btn.disabled = false; btn.innerText = '제출하기'; }
+        })
+        .withFailureHandler(function(err) { showAlert('서버 오류: ' + err.message); btn.disabled = false; btn.innerText = '제출하기'; })
+        .submitContent(row, url, receiptData[row].data, receiptData[row].name, googleUrl, shortRev); 
+    }
+
+    function previewEditReceipt(row) {
+      var file = el('editReceipt_'+row).files[0]; if(!file) { delete editReceiptData[row]; return; }
+      var label = el('editReceiptName_'+row); label.innerText = "📸 변경할 인증샷: " + file.name;
+      label.style.color = '#1A2B49'; label.style.fontWeight = 'bold';
+      var reader = new FileReader();
+      reader.onload = function(e) { compressImage(e.target.result, file.name, row, editReceiptData, function(){}); }
+      reader.readAsDataURL(file);
+    }
+
+    function submitEdit(row) {
+      var url = el('editUrl_'+row).value.trim(); var googleUrl = el('editGoogle_'+row).value.trim(); var shortRev = el('editShortReview_'+row).value.trim();
+      if(!url || !googleUrl || !shortRev) { showAlert('링크와 한 줄 후기를 모두 입력해주세요.'); return; }
+      
+      var btn = el('editBtn_'+row); btn.disabled = true; btn.innerText = '수정 중...';
+      var b64 = (editReceiptData[row] && editReceiptData[row].data) ? editReceiptData[row].data : "";
+      var fname = (editReceiptData[row] && editReceiptData[row].name) ? editReceiptData[row].name : "";
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          btn.innerText = '저장 완료';
+          if(res.success) { showAlert('수정 내용이 저장되었습니다!', function() { executeLogin(); }); } 
+          else { showAlert('실패: ' + (res.error || '오류')); btn.disabled = false; btn.innerText = '수정 내용 저장'; }
+        })
+        .withFailureHandler(function(err) { showAlert('서버 오류: ' + err.message); btn.disabled = false; btn.innerText = '수정 내용 저장'; })
+        .updateSubmission(row, url, b64, fname, googleUrl, shortRev); 
+    }
+
+    window.executeLogin = executeLogin; window.logout = logout; window.openStaffModal = openStaffModal; window.processVisit = processVisit;
+    window.previewReceipt = previewReceipt; window.checkSubmitReady = checkSubmitReady; window.submitFinal = submitFinal;
+    window.previewEditReceipt = previewEditReceipt; window.submitEdit = submitEdit; window.toggleEdit = toggleEdit;
+    window.selectTime = selectTime; window.submitBooking = submitBooking; window.saveDraft = saveDraft;
+  </script>
+</body>
+</html>

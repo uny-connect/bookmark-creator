@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  
+  <style>
+    :root { --brand-navy: #1A2B49; --sub-gold: #C5A358; --bg: #f4f6f8; --card-bg: #ffffff; }
+    body { background: var(--bg); font-family: 'Pretendard', 'Noto Sans JP', sans-serif; color: #333; }
+    .navbar-custom { background: var(--brand-navy); padding: 18px 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .navbar-custom h5 { color: #fff; font-weight: 800; letter-spacing: -0.5px; margin: 0; }
+    .btn-top { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; color: #fff; font-weight: 600; padding: 8px 16px; font-size: 14px; transition: 0.2s; }
+    .btn-top:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    .btn-logout { background: #e03131 !important; border: none !important; color: #fff !important; }
+    .btn-logout:hover { background: #c92a2a !important; }
+    .top-alert-badge { background-color: #ff6b6b; color: white; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 800; margin-left: 15px; display: none; box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3); }
+    .stat-card { border-radius: 20px; box-shadow: 0 6px 24px rgba(0,0,0,0.03); padding: 24px 16px; text-align: center; background: var(--card-bg); transition: transform 0.2s; border: 1px solid #f1f3f5; }
+    .stat-card:hover { transform: translateY(-3px); }
+    .navbar-custom h5 { color: #fff; font-weight: 800; letter-spacing: -0.5px; margin: 0; }
+    .stat-title { font-size: 13px; color: #8b95a1; font-weight: 700; margin-bottom: 8px; }
+    .stat-number { font-size: 28px; font-weight: 900; color: var(--brand-navy); letter-spacing: -0.5px; }
+    .filter-bar { background: var(--card-bg); border-radius: 20px; padding: 20px; margin-bottom: 24px; box-shadow: 0 6px 24px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; display: flex; gap: 12px; flex-wrap: wrap; }
+    .form-control, .form-select { border-radius: 14px; border: 1.5px solid #e9ecef; padding: 12px 16px; font-size: 14px; background-color: #f8f9fa; transition: 0.2s; font-weight: 500; }
+    .form-control:focus, .form-select:focus { border-color: var(--brand-navy); box-shadow: 0 0 0 3px rgba(26,43,73,0.15); background-color: #fff; outline: none; }
+    .table-container { background: var(--card-bg); border-radius: 24px; padding: 24px; box-shadow: 0 8px 30px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; overflow-x: auto; min-height: 400px; }
+    table.main-table { width: 100%; min-width: 1100px; table-layout: fixed; margin: 0; }
+    table.main-table th { color: #8b95a1; font-size: 13px; font-weight: 700; padding-bottom: 16px; border-bottom: 2px solid #f1f3f5; text-align: center; }
+    table.main-table td { padding: 16px 8px; font-size: 14px; vertical-align: middle; border-bottom: 1px solid #f8f9fa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; text-align: center;}
+    table.main-table tbody tr:hover { background-color: #fcfcfd; }
+    table.main-table td.wrap-cell { white-space: normal !important; word-break: keep-all; overflow: visible !important; line-height: 1.5; }
+    .col-order { width: 6%; } .col-creator { width: 14%; text-align: left;} .col-store { width: 23%; text-align: left; } .col-date { width: 11%; } .col-deadline { width: 12%; } .col-status { width: 9%; } .col-link { width: 8%; } .col-refund { width: 10%; } .col-action { width: 8%; }
+    .badge-custom { padding: 4px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; white-space: nowrap; display: inline-block; letter-spacing: -0.3px; }
+    .b-pending { background: #f1f3f5; color: #495057; } .b-verified { background: var(--sub-gold); color: #fff; } .b-submitted { background: #2D6A4F; color: #fff; } .b-noshow { background: #343a40; color: #fff; opacity: 0.9; }
+    .b-waiting { background: #ff6b6b; color: #fff; animation: pulse 2s infinite; }
+    .b-adjust { background: #7048e8; color: #fff; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(255, 107, 107, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 107, 107, 0); } }
+    .b-ref-wait { background: #fff4e6; color: #d97706; border: 1px solid #ffd8a8; } .b-ref-done { background: #ebfbee; color: #2b8a3e; border: 1px solid #b2f2bb; }
+    .creator-link { color: var(--brand-navy); font-weight: 800; text-decoration: underline; text-decoration-color: #dee2e6; text-underline-offset: 4px; cursor: pointer; transition: 0.2s; }
+    .creator-link:hover { text-decoration-color: var(--brand-navy); }
+    .btn-edit { background: #f1f3f5; color: #495057; border-radius: 10px; font-weight: 700; font-size: 12px; border: none; padding: 6px 14px; transition: 0.2s; }
+    .btn-edit:hover { background: #e9ecef; color: #212529; }
+    .btn-brand-solid { background: var(--brand-navy); color: #fff; border-radius: 14px; font-weight: 700; padding: 12px; font-size: 14px; border: none; }
+    .modal-content { border-radius: 24px !important; border: none !important; box-shadow: 0 16px 50px rgba(0,0,0,0.1) !important; overflow: hidden; }
+    .modal-header { border-bottom: 1px solid #f1f3f5; padding: 20px 24px; background: #fff; }
+    .modal-title { font-weight: 800; color: var(--brand-navy); font-size: 16px; text-align: center; width: 100%;}
+    .modal-body { padding: 24px; background: #fff; }
+    .modal-input { border-radius: 12px; padding: 14px; font-size: 14px; background: #fafbfc; border: 1.5px solid #eceef1; width: 100%; font-weight: 500;}
+    .modal-body table th, .modal-body table td { text-align: center !important; vertical-align: middle !important; }
+    .dday-badge { padding: 3px 8px; border-radius: 12px; font-size: 10.5px; font-weight: 800; display: inline-block; margin-left: 4px; vertical-align: middle;}
+    .dday-red { background: #ffe3e3; color: #e03131; } .dday-urgent { background: #e03131; color: #fff; }
+    .noshow-warn-badge { background: #ffe3e3; color: #e03131; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 12px; margin-left: 6px; display: inline-block;}
+    .text-truncate-custom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .link-badge-container { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; }
+    
+    .btn-link-badge { display: inline-flex; align-items: center; justify-content: center; padding: 4px 6px; border-radius: 6px; font-size: 10.5px; font-weight: 700; text-align: center; text-decoration: none !important; background: #f1f3f4; border: 1px solid #e0e0e0; white-space: nowrap !important; transition: all 0.15s ease; min-width: 48px; }
+    .btn-link-badge:hover { background: #e8eaed; transform: scale(1.03); }
+    .link-receipt { color: #d93025; background: #fff0f0; border-color: #ffc9c9; }  
+    .link-contents { color: #1a73e8; background: #f0f7ff; border-color: #c2e0ff; }  
+    .link-google { color: #188038; background: #f0fdf4; border-color: #bbf7d0; }
+
+    .unified-loading-box { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 60px 20px; text-align: center; width: 100%; }
+    .unified-loading-box .spinner-border { width: 2.8rem; height: 2.8rem; color: var(--brand-navy); border-width: 3.5px; margin-bottom: 20px; }
+    .unified-loading-box h6 { font-size: 14.5px; font-weight: 700; color: var(--brand-navy); letter-spacing: -0.4px; margin: 0 0 8px 0; }
+    .unified-loading-box p { font-size: 12px; font-weight: 500; color: #8E949E; margin: 0; }
+
+    @media (max-width: 768px) {
+      .navbar-custom { padding: 14px 16px; flex-wrap: wrap; gap: 8px; } .navbar-custom h5 { font-size: 16px; }
+      .top-alert-badge { font-size: 11px; padding: 4px 10px; margin-left: 6px; } .btn-top { padding: 6px 12px; font-size: 12.5px; border-radius: 8px; white-space: nowrap; }
+      #statsArea .col-6 { padding: 3px; } .stat-card { padding: 14px 8px; border-radius: 16px; } .stat-title { font-size: 11px; margin-bottom: 4px; } .stat-number { font-size: 22px; }
+      .filter-bar { padding: 12px; gap: 8px; margin-bottom: 16px; border-radius: 16px; }
+      .table-container { background: transparent; padding: 0; box-shadow: none; border: none; }
+      table.main-table { min-width: 100% !important; display: block; } table.main-table thead { display: none !important; } table.main-table tbody { display: block; width: 100%; }
+      table.main-table tbody tr { display: block; background: #fff; border-radius: 20px; padding: 16px 20px; margin-bottom: 14px; box-shadow: 0 6px 18px rgba(0,0,0,0.03); border: 1px solid #f1f3f5; }
+      table.main-table tbody tr td { display: flex !important; justify-content: space-between !important; align-items: center !important; padding: 10px 0 !important; border-bottom: 1px solid #fcfcfd !important; white-space: normal !important; text-align: right !important; width: 100% !important; overflow: visible !important; }
+      table.main-table tbody tr td:last-child { border-bottom: none !important; } table.main-table tbody tr td::before { content: attr(data-label); font-weight: 700; color: #8b95a1; font-size: 12.5px; text-align: left; margin-right: 15px; white-space: nowrap; }
+      .link-badge-container { justify-content: flex-end; max-width: 65%; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="adminAuthScreen" style="position:fixed; top:0; left:0; width:100%; height:100%; background: #f4f6f8; z-index:99999; display:flex; justify-content:center; align-items:flex-start; padding-top: 60px;">
+    <div class="card" style="max-width: 320px; width: 100%; padding: 24px 20px; text-align: center; border-radius: 24px; border: 1px solid #e9ecef !important; box-shadow: 0 8px 32px rgba(0,0,0,0.04) !important;">
+      <span class="badge-custom b-pending" style="font-size: 10px; letter-spacing: 0.8px; padding: 5px 10px; border-radius: 6px; background-color: var(--brand-navy) !important; color: #fff; display: inline-block; font-weight: 700; margin-bottom: 16px;">SYSTEM CONTROL</span>
+      <h5 style="color: var(--brand-navy); font-weight: 800; margin-bottom: 20px; font-size: 18px;">ADMIN ACCESS</h5>
+      <input type="password" id="adminGatePw" class="form-control text-center mb-3" style="font-size: 15px; letter-spacing: 2px; border-radius: 14px; color: var(--brand-navy);" placeholder="code" onkeyup="if(event.key==='Enter') executeGateVerify()">
+      <button class="btn btn-brand-solid w-100" id="gateAuthBtn" onclick="executeGateVerify()" style="border-radius: 14px; padding: 12px; letter-spacing: 0.5px;">Sign in</button>
+    </div>
+  </div>
+
+  <div id="adminCoreWrapper" style="display: none;">
+    <nav class="navbar-custom d-flex justify-content-between align-items-center mb-4">
+      <div class="d-flex align-items-center">
+        <h5>BOOKMARK CREATOR | Admin</h5>
+        <div id="topWaitingAlert" class="top-alert-badge"><span data-ko="🚨 리뷰 검수 대기: " data-ja="🚨 レビュー検収待ち: ">🚨 리뷰 검수 대기: </span><span id="waitingCount">0</span><span data-ko="건" data-ja="件">건</span></div>
+      </div>
+      <div class="d-flex gap-2">
+        <button id="langToggleBtn" class="btn-top" style="background: rgba(0,0,0,0.2);" onclick="toggleLanguage()">🇯🇵 일본어</button>
+        <button class="btn-top" style="background: var(--sub-gold); border: none; color: #fff;" onclick="openLeaderboard()" data-ko="🏆 시즌 챌린지" data-ja="🏆 シーズンチャレンジ">🏆 시즌 챌린지</button>
+        <button class="btn-top" data-ko="📊 매장 현황" data-ja="📊 店舗の現状" onclick="new bootstrap.Modal(document.getElementById('storeStatsModal')).show()">📊 매장 현황</button>
+        <button class="btn-top btn-logout" onclick="executeSignOut()">Sign out</button>
+      </div>
+    </nav> <div class="container-fluid px-4 pb-5" id="mainContent">
+      <div class="row g-3 mb-4" id="statsArea">
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-title" data-ko="검색/필터 결과" data-ja="検索/フィルター結果">검색/필터 결과</div><div class="stat-number" id="stat-total">...</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-title" data-ko="방문전" data-ja="訪問前">방문전</div><div class="stat-number text-secondary" id="stat-pending">...</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-title" data-ko="방문완료" data-ja="訪問完了">방문완료</div><div class="stat-number" style="color: var(--sub-gold);" id="stat-verified">...</div></div></div>
+        <div class="col-6 col-md-3"><div class="stat-card"><div class="stat-title" data-ko="제출완료" data-ja="提出完了">제출완료</div><div class="stat-number" style="color: #2D6A4F;" id="stat-submitted">...</div></div></div>
+      </div>
+
+      <div class="filter-bar align-items-center">
+        <div style="flex: 1; min-width: 200px;"><input type="text" id="searchInp" class="form-control" data-ko="🔍 크리에이터 이름 또는 주문번호 검색..." data-ja="🔍 クリエイター名 또는注文番号を検索..." placeholder="🔍 크리에이터 이름 또는 주문번호 검색..." onkeyup="applyFilters()"></div>
+        <div style="width: 170px;"><select id="monthFilter" class="form-select" onchange="applyFilters()"><option value="ALL" data-ko="🗓 방문월 전체" data-ja="🗓 訪問月 すべて">🗓 방문월 전체</option></select></div>
+        <div style="width: 170px;">
+          <select id="statusFilter" class="form-select" onchange="applyFilters()">
+            <option value="ALL" data-ko="🚥 상태 전체" data-ja="🚥 ステータ스 すべて">🚥 상태 전체</option>
+            <option value="예약확인중" data-ko="🚨 승인대기" data-ja="🚨 承認待ち">🚨 승인대기</option>
+            <option value="방문전" data-ko="방문전" data-ja="訪問前">방문전</option>
+            <option value="일정조율필요" data-ko="🟣 일정조율필요" data-ja="🟣 調整必要">🟣 일정조율필요</option>
+            <option value="방문완료" data-ko="방문완료" data-ja="訪問完了">訪問完了</option>
+            <option value="제출완료" data-ko="제출완료" data-ja="提出完了">제출완료</option>
+            <option value="노쇼" data-ko="노쇼" data-ja="ノーショー">노쇼</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table class="table table-borderless main-table">
+          <thead>
+            <tr>
+              <th class="col-order text-center" data-ko="주문번호" data-ja="注文번호">주문번호</th>
+              <th class="col-creator text-center" data-ko="크리에이터" data-ja="クリエイター">크리에이터</th>
+              <th class="col-store text-center" data-ko="매장명" data-ja="店舗名">매장명</th>
+              <th class="col-date text-center" data-ko="방문 예정일" data-ja="訪問予定日">訪問予定日</th>
+              <th class="col-deadline text-center" data-ko="마감일" data-ja="締切日">마감일</th>
+              <th class="col-status text-center" data-ko="상태" data-ja="ステータス">상태</th>
+              <th class="col-link text-center" data-ko="링크" data-ja="링크">링크</th>
+              <th class="col-refund text-center" data-ko="보증금/환급" data-ja="保証金/返金">保証金/返金</th>
+              <th class="col-action text-center" data-ko="관리" data-ja="管理">관리</th>
+            </tr>
+          </thead>
+          <tbody id="missionTbody">
+            <tr>
+              <td colspan="9">
+                <div class="unified-loading-box">
+                  <div class="spinner-border" role="status"></div>
+                  <h6 data-ko="데이터를 안전하게 불러오는 중입니다..." data-ja="データを安全に読み込んでいます...">데이터를 안전하게 불러오는 중입니다...</h6>
+                  <p data-ko="잠시만 기다려주세요." data-ja="少々お待ちください。">잠시만 기다려주세요.</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="leaderboardModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title" id="leaderboardTitleText" style="font-weight: 900;">🏆 시즌 챌린지 현황</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        
+        <div class="p-4" style="background: #fafbfc; border-bottom: 1px solid #eceef1;">
+          <p class="text-muted mb-3 fw-bold" style="font-size:13px; text-align: left;" data-ko="⚙️ 챌린지 시즌 기간 및 목표 기준 설정" data-ja="⚙️ チャレンジシーズンの期間および目標基準の設定">⚙️ 챌린지 시즌 기간 및 목표 기준 설정</p>
+          <div class="row gx-2 gy-2 align-items-end justify-content-center text-start">
+            <div class="col-sm-4">
+              <label class="form-label text-muted fw-bold ps-1 mb-1" style="font-size:12px;" data-ko="챌린지 시작일" data-ja="チャレンジ開始日">챌린지 시작일</label>
+              <input type="date" id="setup-start-date" class="modal-input form-control">
+            </div>
+            <div class="col-sm-4">
+              <label class="form-label text-muted fw-bold ps-1 mb-1" style="font-size:12px;" data-ko="챌린지 종료일" data-ja="チャレンジ終了日">チャレンジ終了日</label>
+              <input type="date" id="setup-end-date" class="modal-input form-control">
+            </div>
+            <div class="col-sm-2">
+              <label class="form-label text-muted fw-bold ps-1 mb-1" style="font-size:12px;" data-ko="목표 매장수" data-ja="目標店舗数">목표 매장수</label>
+              <input type="number" id="setup-target-count" min="1" class="modal-input form-control" placeholder="20">
+            </div>
+            <div class="col-sm-2">
+              <button type="button" onclick="updateChallengeRules()" class="btn btn-brand-solid w-100" style="padding: 12px 0; border-radius: 12px;" data-ko="기준 저장" data-ja="基準保存">기준 저장</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-body p-0" style="max-height: 50vh; overflow-y: auto;">
+          <div class="p-3 text-center" style="background: #fff4e6; border-bottom: 1px solid #ffd8a8;">
+            <p class="m-0 fw-bold" style="font-size: 13.5px; color: #d97706;" data-ko="※ 지정된 시즌 내 중복 매장을 제외한 <span class='text-danger'>실제 방문(제출 완료) 매장 수</span> 기준 랭킹입니다." data-ja="※ 指定シーズン内で重複店舗を除外した実際の訪問店舗数基準의ランキングです。"></p>
+          </div>
+          <table class="table table-hover m-0" style="table-layout: fixed; width: 100%; text-align: center;">
+            <thead class="table-light sticky-top">
+              <tr>
+                <th style="width: 15%; color:#8b95a1; font-size:13px; font-weight:700;" data-ko="순위" data-ja="順位">순위</th>
+                <th style="width: 35%; color:#8b95a1; font-size:13px; font-weight:700;" data-ko="크리에이터 (고유번호)" data-ja="クリエイター (固有番号)">크리에이터</th>
+                <th style="width: 50%; color:#8b95a1; font-size:13px; font-weight:700;" data-ko="달성 현황" data-ja="達成状況">달성 현황</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="storeStatsModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title" data-ko="📊 매장별 성과 현황" data-ja="📊 店舗別成果の現状">📊 매장별 성과 현황</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0" style="max-height: 70vh; overflow-y: auto;"><table class="table table-hover m-0" style="table-layout: fixed; width: 100%;"><thead class="table-light sticky-top"><tr><th class="ps-4 text-start" style="width: 60%; color:#8b95a1; font-size:13px; font-weight:700; padding: 16px 0;" data-ko="매장명" data-ja="店舗名">매장명</th><th class="pe-4 text-end" style="width: 40%; color:#8b95a1; font-size:13px; font-weight:700; padding: 16px 0;" data-ko="진행 현황" data-ja="進行状況">진행 현황</th></tr></thead><tbody id="restListTbody"></tbody></table></div></div></div></div>
+  <div class="modal fade" id="storeDetailModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title"><span id="storeNameSpan"></span> <span data-ko="상세 현황" data-ja="詳細現状">상세 현황</span></h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-4 p-4 rounded" style="background: #f8f9fa; border: 1px solid #f1f3f5;"><p class="mb-3 fw-bold" style="font-size: 13px; color: #8b95a1;" data-ko="월별 진행 건수 (방문예정일 기준)" data-ja="月別進行件数 (訪問予定日基準)">월별 진행 건수 (방문예정일 기준)</p><div id="storeMonthSummary" class="d-flex justify-content-center flex-wrap gap-2"></div></div><div style="width: 100%; overflow-x: auto;"><table class="table table-sm text-nowrap" style="margin: 0; text-align: center;"><thead><tr><th style="color:#8b95a1; font-size:12px;" data-ko="크리에이터" data-ja="クリエイター">크리에이터</th><th style="color:#8b95a1; font-size:12px;" data-ko="방문 예정일" data-ja="訪問予定日">訪問予定일</th><th style="color:#8b95a1; font-size:12px;" data-ko="상태" data-ja="ステータス">상태</th><th style="color:#8b95a1; font-size:12px;" data-ko="링크" data-ja="リンク">링크</th></tr></thead><tbody id="storeDetailTbody"></tbody></table></div></div></div></div></div>
+  <div class="modal fade" id="creatorModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header"><h6 class="modal-title" id="creatorModalTitle"></h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="d-flex justify-content-center flex-wrap gap-3 mb-4 p-4 rounded" style="background: #f8f9fa; border: 1px solid #f1f3f5; font-size: 14px; font-weight: 600;"><div><span data-ko="총 진행: " data-ja="総進行: ">총 진행: </span><b id="cTotal" class="text-dark">0</b><span data-ko="건" data-ja="件">건</span></div><div style="color: #2D6A4F;"><span data-ko="제출 완료: " data-ja="提出完了: ">提出完了: </span><b id="cSub">0</b><span data-ko="건" data-ja="件">건</span></div><div style="color: #e03131;"><span data-ko="미제출/방문전: " data-ja="未提出/訪問前: ">未提出/訪問前: </span><b id="cPen">0</b><span data-ko="건" data-ja="件">건</span></div><div><span data-ko="미션 달성률: " data-ja="ミッション達成率: ">ミッション達成率: </span><b id="cRate" style="color: var(--brand-navy); font-weight: 800;">0%</b></div></div><div style="width: 100%; overflow-x: auto;"><table class="table table-sm text-nowrap" style="margin: 0; text-align: center;"><thead><tr><th style="color:#8b95a1; font-size:12px;" data-ko="매장명" data-ja="店舗名">매장명</th><th style="color:#8b95a1; font-size:12px;" data-ko="방문 예정일" data-ja="訪問予定日">訪問予定일</th><th style="color:#8b95a1; font-size:12px;" data-ko="상태" data-ja="ステータス">상태</th></tr></thead><tbody id="creatorTbody"></tbody></table></div></div></div></div></div>
+  <div class="modal fade" id="overrideModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h6 class="modal-title" data-ko="⚙️ 미션 정보 수정" data-ja="⚙️ ミッション情報修正">⚙️ 미션 정보 수정</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p class="text-muted mb-4 fw-bold" style="font-size:13px;" data-ko="진행 상태, 방문 예정일, 리뷰 링크 등을 임의로 변경합니다." data-ja="進行ステータス、訪問予定日、レビューリンクなどを任意に変更します。">진행 상태, 방문 예정일, 리뷰 링크 등을 임의로 변경합니다.</p><input type="hidden" id="editRow"><div class="mb-3 text-start"><label class="form-label text-muted fw-bold ps-1" style="font-size:12px;" data-ko="진행 상태 변경 (L열)" data-ja="進行ステータ스변경 (L列)">진행 상태 변경 (L열)</label>
+  <select id="editStatus" class="modal-input form-select">
+    <option value="예약대기" data-ko="예약대기 (최초 상태)" data-ja="予約待機 (初期状態)">예약대기 (최초 상태)</option>
+    <option value="예약확인중" data-ko="예약확인중 (승인 대기)" data-ja="予約確認중 (承認待ち)">예약확인중 (승인 대기)</option>
+    <option value="방문전" data-ko="방문전 (승인 완료)" data-ja="訪問前 (承認完了)">訪問前 (承認完了)</option>
+    <option value="일정조율필요" data-ko="일정조율필요 (점주일정조정)" data-ja="調整必要 (スケジュール調整)">調整必要 (スケジュール調整)</option>
+    <option value="방문완료" data-ko="방문완료" data-ja="訪問完了">訪問完了</option><option value="제출완료" data-ko="제출완료" data-ja="提出完了">제출완료</option>
+    <option value="노쇼" data-ko="노쇼 처리 (패널티)" data-ja="ノーショー処理 (ペナルティ)">노쇼 처리 (ペナルティ)</option>
+  </select>
+  </div><div class="mb-3 text-start"><label class="form-label text-muted fw-bold ps-1" style="font-size:12px;"><span data-ko="방문 예정 일시 (H열) " data-ja="訪問予定日時 (H列) ">訪問予定日時 (H列) </span><span style="font-weight: 500; color:#adb5bd;" data-ko="*자동으로 마감일(+10일) 계산" data-ja="*自動で締切日(+10일)計算">*자동으로 마감일(+10일) 계산</span></label><input type="text" id="editVisitDate" class="modal-input form-control" placeholder="날짜 및 시간을 선택하세요"></div><div class="mb-3 text-start"><label class="form-label text-muted fw-bold ps-1" style="font-size:12px;" data-ko="보증금 환급 상태 (T열)" data-ja="保証金/返金ステータス (T列)">보증금 환급 상태 (T열)</label><select id="editRefundStatus" class="modal-input form-select"><option value="">-</option><option value="환급대기" data-ko="환급대기" data-ja="返金待ち">환급대기</option><option value="환급완료" data-ko="환급완료" data-ja="返金完了">환급완료</option></select></div><div class="mb-3 text-start"><label class="form-label text-muted fw-bold ps-1" style="font-size:12px;" data-ko="콘텐츠 리뷰 링크 (O열)" data-ja="コンテンツレビューリンク (O列)">콘텐츠유링크 (O列)</label><input type="text" id="editLink" class="modal-input form-control" placeholder="https://..."></div><div class="mb-3 text-start"><label class="form-label text-muted fw-bold ps-1" style="font-size:12px;" data-ko="구글 리뷰 링크 (P열)" data-ja="Googleレビューリンク (P列)">Googleレビューリンク (P列)</label><input type="text" id="editGoogleLink" class="modal-input form-control" placeholder="https://..."></div><div class="mb-4 text-start"><label class="form-label text-muted fw-bold ps-1" style="font-size:12px;" data-ko="매장 솔직 한 줄 후기 (Q열)" data-ja="店舗への一言フィードバック (Q列)">매장 솔직 한 줄 후기 (Q열)</label><input type="text" id="editShortReview" class="modal-input form-control" placeholder="후기를 입력하거나 수정하세요"></div><button class="btn btn-brand-solid w-100" id="saveEditBtn" onclick="submitEdit()" data-ko="저장하기" data-ja="保存する">저장하기</button></div></div></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ja.js"></script>
+  
+  <script>
+    // [글로벌 전역 객체]
+    let globalMissions = []; 
+    let globalRests = []; 
+    let missionMapByStore = {}; 
+    let overrideModalObj, creatorModalObj, storeDetailModalObj, leaderboardModalObj, fpInstance = null;
+    let currentLang = localStorage.getItem('adminLang') || 'ko';
+    let lastOpenedCreatorName = ""; 
+    let logoutModalObj = null; // 🎯 [교정 완료] 전역 변수 영역으로 깔끔하게 이동 배치
+
+    // ⏳ 로그인 유지 유효기간 설정 (7일 패스로 연동 가속화)
+    const AUTH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; 
+
+    const STATUS_MAP_JA = { '예약대기': '予約待機', '예약확인중': '予約確認中', '방문전': '訪問前', '일정조율필요': '調整必要', '방문완료': '訪問完了', '제출완료': '提出完了', '노쇼': 'ノーショー' };
+
+    function t(ko, ja) { return currentLang === 'ko' ? ko : ja; }
+    function splitDateHtml(dateStr) { if (!dateStr || dateStr === '-') return '<span class="text-muted">-</span>'; let parts = dateStr.split(' '); if (parts.length > 1) { return `${parts[0]}<br><span style="font-size:11.5px; color:#8b95a1; font-weight:600;">${parts[1]}</span>`; } return dateStr; }
+    function renderStaticLang() { document.getElementById('langToggleBtn').innerText = currentLang === 'ko' ? '🇯🇵 일본어' : '🇰🇷 韓国語'; document.querySelectorAll('[data-ko]').forEach(el => { const text = el.getAttribute(`data-${currentLang}`); if (el.tagName === 'INPUT' && el.hasAttribute('placeholder')) { el.placeholder = text; } else { el.innerHTML = text; } }); if(lastOpenedCreatorName) { updateCreatorModalTitle(lastOpenedCreatorName); } }
+    function toggleLanguage() { currentLang = currentLang === 'ko' ? 'ja' : 'ko'; localStorage.setItem('adminLang', currentLang); renderStaticLang(); initMonthFilter(); applyFilters(); renderRestList(); initFlatpickr(); }
+    function initFlatpickr() { if (fpInstance) fpInstance.destroy(); fpInstance = flatpickr("#editVisitDate", { enableTime: true, dateFormat: "Y-m-d H:i", time_24hr: true, locale: currentLang, minuteIncrement: 10 }); }
+    
+    // 🔐 패스워드 게이트웨이 인증 처리
+    function executeGateVerify() {
+      const pwInp = document.getElementById('adminGatePw').value.trim();
+      if(!pwInp) return alert(t('비밀번호를 입력하세요.', 'パスワードを入力してください。'));
+      
+      const authBtn = document.getElementById('gateAuthBtn');
+      authBtn.disabled = true;
+      authBtn.innerText = t('인증 중...', '認証中...');
+      
+      google.script.run
+        .withSuccessHandler(function(isMatch) {
+          if(isMatch) {
+            localStorage.setItem('adminAuthTimestamp', Date.now());
+            
+            document.getElementById('adminAuthScreen').style.display = 'none';
+            document.getElementById('adminCoreWrapper').style.display = 'block';
+            fetchDashboardData(); 
+          } else {
+            alert(t('❌ 비밀번호가 일치하지 않습니다.', '❌ パスワードを確認してください。'));
+            authBtn.disabled = false;
+            authBtn.innerText = 'Sign in';
+            document.getElementById('adminGatePw').value = '';
+          }
+        })
+        .withFailureHandler(function(err) {
+          alert('System Error: ' + err.message);
+          authBtn.disabled = false;
+          authBtn.innerText = 'Sign in';
+        })
+        .verifyAdminPassword(pwInp);
+    }
+
+    // 🎯 [교정 완료] 커스텀 로그아웃 팝업 실행 트리거 바인딩 완료
+    function executeSignOut() {
+      if (!logoutModalObj) {
+        logoutModalObj = new bootstrap.Modal(document.getElementById('logoutConfirmModal'));
+      }
+      logoutModalObj.show();
+    }
+
+function confirmSignOutAction() {
+      if (logoutModalObj) {
+        logoutModalObj.hide();
+      }
+      
+      // 🎯 [버그 패치] 로그아웃 시 로그인 버튼 상태와 텍스트를 'Sign in'으로 완벽 초기화
+      const authBtn = document.getElementById('gateAuthBtn');
+      if (authBtn) {
+        authBtn.disabled = false;
+        authBtn.innerText = 'Sign in';
+      }
+      
+      localStorage.removeItem('adminAuthTimestamp'); // 인증 토큰 파괴
+      document.getElementById('adminCoreWrapper').style.display = 'none'; // 대시보드 격리
+      document.getElementById('adminGatePw').value = ''; // 패스워드 인풋 초기화
+      document.getElementById('adminAuthScreen').style.display = 'flex'; // 로그인 화면 복구
+    }
+
+    // 🔐 페이지 초기 로드 시 세션 유효기간 자동 판별
+    window.addEventListener('DOMContentLoaded', () => { 
+      overrideModalObj = new bootstrap.Modal(document.getElementById('overrideModal')); 
+      creatorModalObj = new bootstrap.Modal(document.getElementById('creatorModal')); 
+      storeDetailModalObj = new bootstrap.Modal(document.getElementById('storeDetailModal')); 
+      leaderboardModalObj = new bootstrap.Modal(document.getElementById('leaderboardModal')); 
+      renderStaticLang(); 
+      initFlatpickr(); 
+
+      const lastAuth = localStorage.getItem('adminAuthTimestamp');
+      const now = Date.now();
+
+      if (lastAuth && (now - lastAuth < AUTH_EXPIRY_MS)) {
+        document.getElementById('adminAuthScreen').style.display = 'none';
+        document.getElementById('adminCoreWrapper').style.display = 'block';
+        fetchDashboardData(); 
+      } else {
+        localStorage.removeItem('adminAuthTimestamp');
+        document.getElementById('adminAuthScreen').style.display = 'flex';
+      }
+    });
+    
+    function fetchDashboardData() { 
+      const loaderHtml = `<tr><td colspan="9"><div class="unified-loading-box"><div class="spinner-border" role="status"></div><h6 data-ko="데이터를 안전하게 불러오는 중입니다..." data-ja="データを安全に読み込んでいます...">데이터를 안전하게 불러오는 중입니다...</h6><p data-ko="잠시만 기다려주세요." data-ja="少々お待ちください。">잠시만 기다려주세요.</p></div></td></tr>`;
+      document.getElementById('missionTbody').innerHTML = loaderHtml;
+      renderStaticLang();
+
+      google.script.run
+        .withSuccessHandler(function(data) { 
+          globalMissions = data.missions; 
+          globalRests = data.restList; 
+          
+          if (data.challengeSettings) {
+            document.getElementById("setup-start-date").value = data.challengeSettings.startDate || '';
+            document.getElementById("setup-end-date").value = data.challengeSettings.endDate || '';
+            document.getElementById("setup-target-count").value = data.challengeSettings.targetCount || '20';
+          }
+          
+          buildMissionMap();
+
+          if(data.stats && data.stats.waitingReview > 0) { 
+            document.getElementById('topWaitingAlert').style.display = 'inline-block'; 
+            document.getElementById('waitingCount').innerText = data.stats.waitingReview; 
+          } else { 
+            document.getElementById('topWaitingAlert').style.display = 'none'; 
+          } 
+          
+          initMonthFilter(); 
+          applyFilters(); 
+          renderRestList(); 
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('missionTbody').innerHTML = `<tr><td colspan="9"><div class="unified-loading-box"><h6 class="text-danger fw-bold" style="font-size: 16px;">❌ 데이터 동기화 오류 발생</h6><p class="text-dark mt-2 fw-semibold" style="font-size: 13.5px;">사유: ${err.message}</p><p class="text-muted mt-1" style="font-size: 12px;">스프레드시트 Master_Log 열 매핑 또는 데이터 수식을 점검하세요.</p></div></td></tr>`;
+        })
+        .getAdminData(); 
+    }
+
+    function buildMissionMap() {
+      missionMapByStore = {}; 
+      globalMissions.forEach(m => {
+        const mId = String(m.restId || "").trim().toLowerCase();
+        const mName = String(m.restaurant || "").trim().toLowerCase();
+        const mNameJp = String(m.restaurantJp || "").trim().toLowerCase();
+
+        if (mId) {
+          if (!missionMapByStore[mId]) missionMapByStore[mId] = [];
+          missionMapByStore[mId].push(m);
+        }
+        if (mName) {
+          if (!missionMapByStore[mName]) missionMapByStore[mName] = [];
+          missionMapByStore[mName].push(m);
+        }
+        if (mNameJp) {
+          if (!missionMapByStore[mNameJp]) missionMapByStore[mNameJp] = [];
+          missionMapByStore[mNameJp].push(m);
+        }
+      });
+    }
+
+    function getMissionsForStore(storeId, storeName) {
+      const sId = String(storeId || "").trim().toLowerCase();
+      const sName = String(storeName || "").trim().toLowerCase();
+      
+      let list = [];
+      if (sId && missionMapByStore[sId]) list = list.concat(missionMapByStore[sId]);
+      else if (sName && missionMapByStore[sName]) list = list.concat(missionMapByStore[sName]);
+      
+      return Array.from(new Set(list));
+    }
+
+    function initMonthFilter() { const months = new Set(); globalMissions.forEach(m => { if(m.visitDate && m.visitDate !== '-') months.add(m.visitDate.substring(0, 7)); }); const select = document.getElementById('monthFilter'); select.innerHTML = `<option value="ALL">🗓 ${t('방문월 전체', '訪問月 すべて')}</option>`; Array.from(months).sort().reverse().forEach(month => { let opt = document.createElement('option'); opt.value = month; opt.innerText = currentLang === 'ko' ? month.replace('-', '년 ') + '월 방문' : month.replace('-', '年 ') + '月 訪問'; select.appendChild(opt); }); }
+    function updateStats(data) { let tot = 0, p = 0, v = 0, s = 0; data.forEach(m => { tot++; if(m.status === '방문전' || m.status === '예약확인중' || m.status === '일정조율필요') p++; else if(m.status === '방문완료') v++; else if(m.status === '제출완료') s++; }); document.getElementById('stat-total').innerText = tot; document.getElementById('stat-pending').innerText = p; document.getElementById('stat-verified').innerText = v; document.getElementById('stat-submitted').innerText = s; }
+    function applyFilters() { const searchTxt = document.getElementById('searchInp').value.toLowerCase().trim(); const statusVal = document.getElementById('statusFilter').value; const monthVal = document.getElementById('monthFilter').value; const filtered = globalMissions.filter(m => { if (statusVal !== 'ALL' && m.status !== statusVal) return false; if (monthVal !== 'ALL' && !String(m.visitDate).startsWith(monthVal)) return false; if (searchTxt) { if (!String(m.member).toLowerCase().includes(searchTxt) && !String(m.orderNo).toLowerCase().includes(searchTxt)) return false; } return true; }); updateStats(filtered); renderTable(filtered); }
+    function getStatusLabel(status) { return currentLang === 'ko' ? status : (STATUS_MAP_JA[status] || status); }
+    function getRefundLabel(status) { if(status === '환급완료') return t('환급완료','返金完了'); if(status === '환급대기') return t('환급대기','返金待ち'); return t('대기','待機'); }
+    function getDDayStyle(dateStr, status) { if (!dateStr || dateStr === '-') return '<span class="text-muted">-</span>'; if (status === '제출완료') return `<span style="color:#adb5bd; text-decoration:line-through;">${dateStr}</span>`; const today = new Date(); today.setHours(0, 0, 0, 0); const dDate = new Date(dateStr); dDate.setHours(0, 0, 0, 0); const diffDays = Math.ceil((dDate - today) / (1000 * 60 * 60 * 24)); if (diffDays < 0) return `<span class="text-danger fw-bold">${dateStr}<br><span class="dday-badge dday-urgent">${t('만료', '満了')}</span></span>`; if (diffDays === 0) return `<span class="text-danger fw-bold">${dateStr}<br><span class="dday-badge dday-urgent">${t('오늘마감', '本日締切')}</span></span>`; if (diffDays <= 3) return `<span class="text-danger fw-bold">${dateStr}<br><span class="dday-badge dday-red">D-${diffDays}</span></span>`; return `<span class="text-dark fw-bold">${dateStr}</span>`; }
+
+    function openLeaderboard() {
+      leaderboardModalObj.show();
+
+      const startRule = document.getElementById("setup-start-date").value || '2026-06-01';
+      const endRule = document.getElementById("setup-end-date").value || '2026-12-31';
+      const targetRule = parseInt(document.getElementById("setup-target-count").value || '20', 10);
+
+      document.getElementById('leaderboardTitleText').innerText = currentLang === 'ko' ? `🏆 시즌 챌린지 현황 (${startRule} ~ ${endRule})` : `🏆 シーズンチャレンジ状況 (${startRule} ~ ${endRule})`;
+
+      const stats = {};
+      const startStr = startRule; 
+      const endStr = endRule;     
+
+      globalMissions.filter(m => { 
+        if (m.status !== '제출완료' || !m.visitDate || m.visitDate === '-') return false; 
+        const vDateStr = m.visitDate.substring(0, 10); 
+        return vDateStr >= startStr && vDateStr <= endStr; 
+      }).forEach(m => { 
+        const key = m.memberCode || m.member; 
+        if (!stats[key]) { stats[key] = { name: m.member, uniqueShops: new Set(), tierEmoji: m.tierEmoji }; } 
+        stats[key].uniqueShops.add(m.restId); 
+      });
+
+      const leaderboard = Object.keys(stats).map(code => { 
+        let name = stats[code].name; 
+        let masked = name.length > 2 ? name[0] + '*'.repeat(name.length-2) + name[name.length-1] : (name.length === 2 ? name[0] + '*' : name);
+        return { code: code, masked: masked, count: stats[code].uniqueShops.size, tierEmoji: stats[code].tierEmoji }; 
+      }).sort((a, b) => b.count - a.count);
+
+      const tbody = document.getElementById('leaderboardTbody');
+      if (leaderboard.length === 0) { 
+        tbody.innerHTML = `<tr><td colspan="3" class="text-center py-5 text-muted fw-bold">${t('아직 해당 시즌 내에 챌린지에 도전 중인 크리에이터가 없습니다.', 'まだ該当シーズン内にチャレンジに挑戦中のクリエイターはいません。')}</td></tr>`; 
+      } else { 
+        tbody.innerHTML = leaderboard.map((item, index) => { 
+          const isWinner = item.count >= targetRule; 
+          const rankMedal = index === 0 ? "🥇" : (index === 1 ? "🥈" : (index === 2 ? "🥉" : `${index + 1}${t('위', '位')}`)); 
+          return `<tr style="${isWinner ? 'background-color: #fffaf0;' : ''}"><td class="align-middle fw-bold" style="font-size: 15px; ${isWinner ? 'color: #d97706;' : ''}">${rankMedal}</td><td class="align-middle fw-bold" style="font-size: 14.5px;">${item.tierEmoji} ${item.masked} <span style="font-size:11px; color:#8b95a1; font-weight:600;">(ID: ${item.code})</span></td><td class="align-middle p-3"><div class="d-flex justify-content-between mb-1" style="font-size: 12px; font-weight: 700;"><span style="color: ${isWinner ? '#d97706' : '#495057'};">${item.count}${t('곳 방문', '店舗 訪問')}</span><span style="color: #adb5bd;">${t(`목표 ${targetRule}곳`, `目標 ${targetRule}店舗`)}</span></div><div class="progress" style="height: 10px; border-radius: 10px; background-color: #f1f3f5;"><div class="progress-bar progress-bar-striped ${isWinner ? 'bg-warning progress-bar-animated' : 'bg-dark'}" role="progressbar" style="width: ${Math.min((item.count/targetRule)*100, 100)}%;"></div></div></td></tr>`; 
+        }).join(''); 
+      }
+    }
+
+    function updateChallengeRules() {
+      const startDate = document.getElementById("setup-start-date").value;
+      const endDate = document.getElementById("setup-end-date").value;
+      const targetCount = document.getElementById("setup-target-count").value;
+      
+      if (!startDate || !endDate || !targetCount) return;
+
+      const saveBtn = document.querySelector("button[onclick='updateChallengeRules()']");
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>`;
+      
+      google.script.run
+        .withSuccessHandler(function(msg) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = t("기준 저장", "基準保存");
+          
+          fetchDashboardData(); 
+          
+          if (typeof leaderboardModalObj !== 'undefined' && leaderboardModalObj) {
+            leaderboardModalObj.hide();
+          }
+        })
+        .withFailureHandler(function(err) {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = t("기준 저장", "基準保存");
+          console.error("저장 실패 상세: ", err);
+        })
+        .saveChallengeSettings(startDate, endDate, targetCount);
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById('missionTbody');
+      if (data.length === 0) { tbody.innerHTML = `<tr><td colspan="9" class="text-center py-5 text-muted fw-bold">${t('검색 결과가 없습니다.', '検索結果がありません。')}</td></tr>`; return; }
+      tbody.innerHTML = data.map(m => {
+        let sClass = m.status === '예약확인중' ? 'b-waiting' : (m.status === '제출완료' ? 'b-submitted' : (m.status === '방문완료' ? 'b-verified' : (m.status === '노쇼' ? 'b-noshow' : (m.status === '일정조율필요' ? 'b-adjust' : 'b-pending'))));
+        let sHtml = (!m.status || m.status.trim() === '') ? '<span class="text-muted fw-bold">-</span>' : `<span class="badge-custom ${sClass}">${getStatusLabel(m.status)}</span>`;
+        let deadlineHtml = getDDayStyle(m.deadline, m.status);
+        const noShowCount = globalMissions.filter(x => x.member === m.member && x.status === '노쇼').length;
+        let blacklistBadge = noShowCount > 0 ? `<br><span class="noshow-warn-badge">🚨 ${t('노쇼','ノーショー')} ${noShowCount}${t('회','回')}</span>` : '';
+        let depHtml = '<span class="text-muted">-</span>';
+        if (m.deposit > 0 || m.refundStatus) {
+          let refClass = m.refundStatus === '환급완료' ? 'b-ref-done' : 'b-ref-wait';
+          let refText = m.refundStatus ? getRefundLabel(m.refundStatus) : (m.status === '제출완료' ? getRefundLabel('환급대기') : getRefundLabel('대기')); 
+          let moneyFormat = m.deposit > 0 ? m.deposit.toLocaleString() + t('원','ウォン') : t('0원','0ウォン');
+          depHtml = `<div style="font-size:13px; font-weight:800; color:#343a40; margin-bottom:4px;">${moneyFormat}</div><div class="badge-custom ${refClass}" style="font-size:10.5px; padding:3px 8px;">${refText}</div>`;
+        }
+        let safeLink = m.reviewUrl ? m.reviewUrl.replace(/'/g, "\\'") : "";
+        let safeGoogleLink = m.googleMapUrl ? m.googleMapUrl.replace(/'/g, "\\'") : "";
+        let safeRefund = m.refundStatus ? m.refundStatus.replace(/'/g, "\\'") : "";
+        let safeReview = m.shortReview ? m.shortReview.replace(/'/g, "\\'") : ""; 
+        let displayDate = splitDateHtml(m.visitDate);
+        let displayStoreName = (currentLang === 'ja' && m.restaurantJp) ? m.restaurantJp : m.restaurant;
+        let linkHtmlArr = [];
+        if(m.receiptUrl) linkHtmlArr.push(`<a href="${m.receiptUrl}" target="_blank" class="btn-link-badge link-receipt">📄 ${t('영수증', '領収書')}</a>`);
+        if(m.reviewUrl) linkHtmlArr.push(`<a href="${m.reviewUrl}" target="_blank" class="btn-link-badge link-contents">🔗 ${t('리뷰', 'レビュー')}</a>`);
+        if(m.googleMapUrl) linkHtmlArr.push(`<a href="${m.googleMapUrl}" target="_blank" class="btn-link-badge link-google">G ${t('구글', 'Google')}</a>`);
+        let lHtml = linkHtmlArr.length > 0 ? `<div class="link-badge-container">${linkHtmlArr.join('')}</div>` : `<span class="text-muted">-</span>`;
+        return `<tr><td class="text-muted fw-bold text-center" data-label="${t('주문번호','注文番号')}">#${m.orderNo}</td><td class="wrap-cell text-center" data-label="${t('크리에이터','クリエイター')}"><span style="margin-right:4px;">${m.tierEmoji}</span><span class="creator-link" onclick="openCreatorHistory('${m.member}')">${m.member}</span>${blacklistBadge}</td><td class="text-truncate-custom text-center" title="${displayStoreName}" data-label="${t('매장명','店舗名')}">${displayStoreName}</td><td class="text-primary fw-bold text-center" data-label="${t('방문 예정일','訪問予定일')}">${displayDate}</td><td class="wrap-cell text-center" data-label="${t('마감일','締切日')}">${deadlineHtml}</td><td class="text-center" data-label="${t('상태','ステータ스')}">${sHtml}</td><td class="text-center" data-label="${t('링크','링크')}">${lHtml}</td><td class="text-center" data-label="${t('보증금/환급','保証金/返金')}">${depHtml}</td><td class="text-center" data-label="${t('관리','管理')}"><button class="btn-edit" onclick="openEdit(${m.row}, '${m.status}', '${safeLink}', '${safeRefund}', '${m.visitDate}', '${safeGoogleLink}', '${safeReview}')">${t('수정','修正')}</button></td></tr>`;
+      }).join('');
+    }
+
+    function renderRestList() { 
+      const tbody = document.getElementById('restListTbody'); 
+      tbody.innerHTML = globalRests.map(r => { 
+        const restMissions = getMissionsForStore(r.id, r.name); 
+        const pCount = restMissions.filter(m => m.status === '방문전' || m.status === '예약확인중' || m.status === '일정조율필요').length; 
+        const vCount = restMissions.filter(m => m.status === '방문완료').length; 
+        const rCount = restMissions.filter(m => m.status === '제출완료').length; 
+        let displayStoreName = (currentLang === 'ja' && r.nameJp) ? r.nameJp : r.name; 
+        let safeStoreName = encodeURIComponent(displayStoreName);
+        return `<tr><td class="ps-4 fw-bold align-middle text-truncate-custom" title="${displayStoreName}" style="padding: 16px 0; text-align: left;"><span class="creator-link" style="font-size:14.5px;" onclick="openStoreDetail('${r.id}', decodeURIComponent('${safeStoreName}'))">${displayStoreName}</span></td><td class="align-middle text-end pe-4" style="padding: 16px 0;"><span class="badge bg-light text-secondary border me-1" style="font-size:11.5px; padding:5px 10px; border-radius:8px;">${t('예약','予約')} ${pCount}</span><span class="badge text-dark border me-1" style="background:#fff4e6; border-color:#ffd8a8 !important; font-size:11.5px; padding:5px 10px; border-radius:8px;">${t('방문','訪問')} ${vCount}</span><span class="badge text-white" style="background:#2D6A4F; font-size:11.5px; padding:5px 10px; border-radius:8px;">${t('리뷰','レビュー')} ${rCount}</span></td></tr>`; 
+      }).join(''); 
+    }
+
+    function openStoreDetail(storeId, storeName) { 
+      const history = getMissionsForStore(storeId, storeName); 
+      document.getElementById('storeNameSpan').innerText = storeName; 
+      const mCounts = {}; 
+      history.forEach(m => { let mon = (m.visitDate && m.visitDate !== '-') ? m.visitDate.substring(0, 4) + '년 ' + m.visitDate.substring(5, 7) + '월' : '미정'; mCounts[mon] = (mCounts[mon] || 0) + 1; }); 
+      let mHtml = Object.keys(mCounts).sort().reverse().map(mon => { let monLabel = mon; if(currentLang === 'ja') { if(mon === '미정') monLabel = '未定'; else monLabel = mon.replace('년 ', '年 ').replace('월', '月'); } return `<span class="badge bg-white text-dark border" style="padding: 8px 12px; font-size:13px; border-radius:10px;">${monLabel}: <b class="text-primary">${mCounts[mon]}${t('건','件')}</b></span>`; }).join(''); 
+      document.getElementById('storeMonthSummary').innerHTML = mHtml || `<span class="text-muted" style="font-size:13px;">${t('진행 이력 없음','進行履歴なし')}</span>`; 
+      document.getElementById('storeDetailTbody').innerHTML = history.map(m => { let sClass = m.status === '예약확인중' ? 'b-waiting' : (m.status === '제출완료' ? 'b-submitted' : (m.status === '방문완료' ? 'b-verified' : (m.status === '노쇼' ? 'b-noshow' : (m.status === '일정조율필요' ? 'b-adjust' : 'b-pending')))); let sHtml = (!m.status || m.status.trim() === '') ? '<span class="text-muted">-</span>' : `<span class="badge-custom ${sClass}" style="padding:6px 12px; font-size:11px; font-weight:600;">${getStatusLabel(m.status)}</span>`; let subLinkHtmlArr = []; if(m.reviewUrl) subLinkHtmlArr.push(`<a href="${m.reviewUrl}" target="_blank" class="btn-link-badge link-contents">🔗 ${t('리뷰', 'レビュー')}</a>`); if(m.googleMapUrl) subLinkHtmlArr.push(`<a href="${m.googleMapUrl}" target="_blank" class="btn-link-badge link-google">G ${t('구글', 'Google')}</a>`); let modalLHtml = subLinkHtmlArr.length > 0 ? `<div class="link-badge-container">${subLinkHtmlArr.join('')}</div>` : `<span class="text-muted">-</span>`; return `<tr><td class="text-center fw-bold" style="font-size:13.5px;">${m.member}</td><td class="text-center fw-bold" style="font-size:13px;">${splitDateHtml(m.visitDate)}</td><td class="text-center">${sHtml}</td><td class="text-center">${modalLHtml}</td></tr>`; }).join(''); 
+      storeDetailModalObj.show(); 
+    }
+    
+    function updateCreatorModalTitle(name) { const titleEl = document.getElementById('creatorModalTitle'); titleEl.innerText = currentLang === 'ko' ? name + " 님의 이력 조회" : name + " 様의履歴照회"; }
+    function openCreatorHistory(name) { lastOpenedCreatorName = name; const history = globalMissions.filter(m => m.member === name); updateCreatorModalTitle(name); const total = history.length; const sub = history.filter(m => m.status === '제출완료').length; document.getElementById('cTotal').innerText = total; document.getElementById('cSub').innerText = sub; document.getElementById('cPen').innerText = total - sub; document.getElementById('cRate').innerText = total > 0 ? Math.round((sub / total) * 100) + '%' : '0%'; document.getElementById('creatorTbody').innerHTML = history.map(m => { let sClass = m.status === '예약확인중' ? 'b-waiting' : (m.status === '제출완료' ? 'b-submitted' : (m.status === '방문완료' ? 'b-verified' : (m.status === '노쇼' ? 'b-noshow' : (m.status === '일정조율필요' ? 'b-adjust' : 'b-pending')))); let sHtml = (!m.status || m.status.trim() === '') ? '<span class="text-muted">-</span>' : `<span class="badge-custom ${sClass}" style="padding:6px 12px; font-size:11px; font-weight:600;">${getStatusLabel(m.status)}</span>`; let displayStoreName = (currentLang === 'ja' && m.restaurantJp) ? m.restaurantJp : m.restaurant; return `<tr><td class="text-center text-truncate-custom fw-bold" title="${displayStoreName}" style="font-size:13.5px;">${displayStoreName}</td><td class="text-center fw-bold" style="font-size:13px;">${splitDateHtml(m.visitDate)}</td><td class="text-center">${sHtml}</td></tr>`; }).join(''); creatorModalObj.show(); }
+    function openEdit(row, status, link, refundStatus, visitDate, googleLink, shortReview) { 
+      document.getElementById('editRow').value = row; 
+      if (document.getElementById('editStatus')) { 
+        document.getElementById('editStatus').value = status; 
+      } 
+      document.getElementById('editLink').value = link; 
+      document.getElementById('editGoogleLink').value = googleLink || ''; 
+      document.getElementById('editShortReview').value = shortReview || ''; 
+      document.getElementById('editRefundStatus').value = (!refundStatus && status === '제출완료') ? '환급대기' : refundStatus; 
+      
+      let fp = document.getElementById('editVisitDate')._flatpickr; 
+      if (visitDate && visitDate !== '-') { 
+        fp.setDate(visitDate); 
+      } else { 
+        fp.clear(); 
+      } 
+      overrideModalObj.show(); 
+    }
+    function submitEdit() { 
+      const row = document.getElementById('editRow').value; 
+      const statusEl = document.getElementById('editStatus'); 
+      const status = statusEl ? statusEl.value : ''; 
+      const link = document.getElementById('editLink').value; 
+      const googleLink = document.getElementById('editGoogleLink').value; 
+      const refundStatus = document.getElementById('editRefundStatus').value; 
+      const visitDate = document.getElementById('editVisitDate').value; 
+      const shortReview = document.getElementById('editShortReview').value; 
+      
+      document.getElementById('saveEditBtn').disabled = true; 
+      document.getElementById('saveEditBtn').innerText = t("저장 중...", "保存中..."); 
+      
+      // 🎯 백엔드 adminUpdateMission(총 7개 인자) 스펙 규격과 1:1 대조 순서 정렬 완수
+      google.script.run
+        .withSuccessHandler(res => { 
+          document.getElementById('saveEditBtn').disabled = false; 
+          document.getElementById('saveEditBtn').innerText = t("저장하기", "保存する"); 
+          overrideModalObj.hide(); 
+          fetchDashboardData(); 
+        })
+        .withFailureHandler(err => {
+          alert("저장 실패: " + err.message);
+          document.getElementById('saveEditBtn').disabled = false; 
+          document.getElementById('saveEditBtn').innerText = t("저장하기", "保存する");
+        })
+        .adminUpdateMission(row, status, link, refundStatus, visitDate, googleLink, shortReview); 
+    }
+  </script>
+
+  <div class="modal fade" id="logoutConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 340px;">
+      <div class="modal-content" style="border-radius: 24px !important; box-shadow: 0 16px 48px rgba(0,0,0,0.08) !important;">
+        <div class="modal-body" style="padding: 32px 24px; text-align: center;">
+          <div style="font-size: 36px; margin-bottom: 16px;">🚪</div>
+          <h5 style="color: var(--brand-navy); font-weight: 800; margin-bottom: 12px; font-size: 17px;" data-ko="로그아웃 하시겠습니까?" data-ja="ログアウトしますか？">로그아웃 하시겠습니까?</h5>
+          <p style="font-size: 12.5px; color: #8b95a1; font-weight: 500; margin-bottom: 28px;" data-ko="안전한 인증 관리를 위해 세션을 종료합니다." data-ja=" セキュリティ保護のため、セッションを終了します。">안전한 인증 관리를 위해 세션을 종료합니다.</p>
+          
+          <div class="d-flex gap-2">
+            <button type="button" class="btn w-100" data-bs-dismiss="modal" style="background: #f1f3f5; color: #495057; border-radius: 14px; padding: 12px; font-weight: 700; font-size: 14px; border: none;" data-ko="취소" data-ja="キャンセル">취소</button>
+            <button type="button" class="btn btn-brand-solid w-100" onclick="confirmSignOutAction()" style="border-radius: 14px; padding: 12px; font-size: 14px;" data-ko="로그아웃" data-ja="ログアウト">로그아웃</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body> 
+</html>

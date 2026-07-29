@@ -13,6 +13,27 @@ function doPost(e) {
     const postData = JSON.parse(rawData);
     if (debugSheet) debugSheet.appendRow([new Date(), "수신: " + rawData]);
 
+// 🎯 [신규 추가] 아임웹 회원가입 이벤트(END_USER_SIGN_UP) 캐치 및 User_DB 적재 로직
+    const eventType = postData.eventType || "";
+    if (eventType === "END_USER_SIGN_UP" || rawData.includes("END_USER_SIGN_UP")) {
+      // 전달받은 데이터에서 회원 이메일(아이디) 추출
+      const newMemberUid = (postData.data && postData.data.memberUid) ? postData.data.memberUid : "";
+
+      if (newMemberUid && userSheet) {
+        // User_DB의 전체 열 개수(약 15열)에 맞춰 빈 배열 생성
+        const newUserRow = new Array(15).fill("");
+        
+        // A열(1번째 칸): 크리에이터 코드 (회원 아이디/이메일)
+        newUserRow[0] = newMemberUid;
+        // B열(2번째 칸): 영문명 또는 닉네임 임시 값 부여
+        newUserRow[1] = "신규가입(정보수집필요)"; 
+        
+        userSheet.appendRow(newUserRow);
+      }
+      // 회원가입 처리가 끝나면 더 이상 아래(주문) 로직을 실행하지 않고 즉시 종료
+      return ContentService.createTextOutput(JSON.stringify({"result": "success_signup"})).setMimeType(ContentService.MimeType.JSON);
+    }
+
     const orderNo = postData.orderNo || postData.order_no || "번호없음";
     const memberCode = postData.member_code || (postData.member && postData.member.code) || "";
     const totalPrice = (postData.payment && postData.payment.paidPrice) ? postData.payment.paidPrice : 0;

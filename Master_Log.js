@@ -1,11 +1,11 @@
 /*****************************************************************************************
- * ⚡ [엔진 완전 최적화] 아임웹 신규 주문 및 취소/환불 웹훅 실시간 시트 적재 시스템
+ * ⚡ [엔진 완전 최적화] 아임웹 신규 주문 및 취소/환불 웹훅 실시간 시트 적재 시스템 (최종)
  ****************************************************************************************/
 function doPost(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const logSheet = ss.getSheetByName("Master_Log");
   const userSheet = ss.getSheetByName("User_DB");
-  const restSheet = ss.getSheetByName("Restaurant_List"); // 🎯 매장 ID 추적용 시트 바인딩
+  const restSheet = ss.getSheetByName("Restaurant_List"); 
   const debugSheet = ss.getSheetByName("Log"); 
 
   try {
@@ -13,95 +13,99 @@ function doPost(e) {
     const postData = JSON.parse(rawData);
     if (debugSheet) debugSheet.appendRow([new Date(), "수신: " + rawData]);
 
-// 🎯 [신규 추가] 아임웹 회원가입 이벤트(END_USER_SIGN_UP) 캐치 및 User_DB 적재 로직
     const eventType = postData.eventType || "";
+    
+    // 1️⃣ 아임웹 회원가입 이벤트(END_USER_SIGN_UP) 캐치
     if (eventType === "END_USER_SIGN_UP" || rawData.includes("END_USER_SIGN_UP")) {
-      // 전달받은 데이터에서 회원 이메일(아이디) 추출
       const newMemberUid = (postData.data && postData.data.memberUid) ? postData.data.memberUid : "";
-
       if (newMemberUid && userSheet) {
-        // User_DB의 전체 열 개수(약 15열)에 맞춰 빈 배열 생성
         const newUserRow = new Array(15).fill("");
-        
-        // A열(1번째 칸): 크리에이터 코드 (회원 아이디/이메일)
         newUserRow[0] = newMemberUid;
-        // B열(2번째 칸): 영문명 또는 닉네임 임시 값 부여
         newUserRow[1] = "신규가입(정보수집필요)"; 
-        
         userSheet.appendRow(newUserRow);
       }
-      // 회원가입 처리가 끝나면 더 이상 아래(주문) 로직을 실행하지 않고 즉시 종료
       return ContentService.createTextOutput(JSON.stringify({"result": "success_signup"})).setMimeType(ContentService.MimeType.JSON);
     }
 
-    const orderNo = postData.orderNo || postData.order_no || "번호없음";
-    const memberCode = postData.member_code || (postData.member && postData.member.code) || "";
-    const totalPrice = (postData.payment && postData.payment.paidPrice) ? postData.payment.paidPrice : 0;
+    // 2️⃣ 아임웹 주문 이벤트 처리 (v2 구조 대응)
+    const dataObj = postData.data || postData; 
+
+    const orderNo = dataObj.orderNo || dataObj.order_no || "번호없음";
+    const memberCode = dataObj.memberUid || dataObj.member_code || (dataObj.member && dataObj.member.code) || "";
+    const totalPrice = dataObj.totalPaymentPrice || (dataObj.payment && dataObj.payment.paidPrice) || 0;
     
-    let items = postData.items || [];
-    if (items.length === 0 && postData.section && postData.section.sectionItems) {
-      items = postData.section.sectionItems;
+    // 3️⃣ 상품(items) 배열 추출 
+    let items = dataObj.items || [];
+    if (items.length === 0 && dataObj.sections && Array.isArray(dataObj.sections)) {
+      dataObj.sections.forEach(section => {
+        if (section.sectionItems && Array.isArray(section.sectionItems)) {
+          items = items.concat(section.sectionItems);
+        }
+      });
+    } else if (items.length === 0 && dataObj.section && dataObj.section.sectionItems) {
+      items = dataObj.section.sectionItems;
     }
 
-    // 🎯 [사전 데이터 스캔] Restaurant_List를 메모리에 올려 상품명-매장ID 매핑용 사전 맵 구축
+    // 4️⃣ 매장 ID 추적용 사전 맵 구축
     const restData = restSheet ? restSheet.getDataRange().getValues() : [];
     const restIdMap = {};
     for (let k = 2; k < restData.length; k++) {
       const rId = String(restData[k][0]).trim();
       const rNameKo = String(restData[k][1]).trim();
       if (rNameKo && rId) {
-        restIdMap[rNameKo] = rId; // 한국어 매장명을 키값으로 고유 ID 저장
+        restIdMap[rNameKo] = rId; 
       }
     }
 
+    // 5️⃣ 추출된 아이템들을 순회하며 Master_Log에 기록
     items.forEach(function(item) {
       const productName = item.product_name || item.name || (item.productInfo && item.productInfo.prodName) || "식당명 없음";
       
       const values = logSheet.getDataRange().getValues();
       let rowIndex = -1;
       for (let i = 1; i < values.length; i++) {
-        if (String(values[i][0]).replace(/'/g, '') === String(orderNo) && values[i][5] === productName) {
+        if (String(values[i][0]).replace(/'/g, '') === String(orderNo)) { // 상품명 비교 제거(수식 충돌 방지)
           rowIndex = i + 1;
           break;
         }
       }
 
-      // 최초 기본 상태를 '예약대기'로 세팅 (크리에이터가 날짜 고르기 전 상태)
       let status = "예약대기"; 
-      if (rawData.includes("CANCEL") || rawData.includes("REFUND")) {
+      if (rawData.includes("CANCEL") || rawData.includes("REFUND") || eventType === "ORDER_CANCEL") {
         status = "취소완료";
       }
 
       if (rowIndex > 0) {
-        // 1️⃣ 기존 데이터 존재 시: 상태(L열)만 정밀 업데이트 후 마감
+        // 기존 주문 업데이트
         logSheet.getRange(rowIndex, 12).setValue(status); 
         if (status === "취소완료") {
-          logSheet.getRange(rowIndex, 21).setValue("취소환불"); // U열 환불 처리 플래그 적재
+          logSheet.getRange(rowIndex, 21).setValue("취소환불"); 
         }
       } else {
-        // 2️⃣ 신규 주문 발생 시: 크리에이터 및 매장 정보 교차 대조 후 구조화 배열 생성
-        let englishName = "미승인/정보없음";
-        if (memberCode) {
+        // 신규 주문 추가
+        
+        // 🎯 [신규 로직] User_DB를 검색하여 이메일 대신 '고유키(m202...)' 찾아오기
+        let uniqueKey = memberCode; // 기본값은 넘어온 이메일
+        if (memberCode && userSheet) {
           const userData = userSheet.getDataRange().getValues();
           for (let j = 1; j < userData.length; j++) {
-            if (String(userData[j][0]) === String(memberCode)) {
-              englishName = userData[j][1];
+            // N열(인덱스 13)에 있는 이메일과 비교하여 일치하면 A열(인덱스 0)의 고유키 추출
+            if (String(userData[j][13]) === String(memberCode) || String(userData[j][0]) === String(memberCode)) {
+              uniqueKey = userData[j][0];
               break;
             }
           }
         }
 
-        // 🎯 [버그 해결] 사전 구축한 맵에서 상품명과 일치하는 매장 고유 ID 자동 스캔
         const targetStoreId = restIdMap[productName] || "";
 
-        // 실제 크리에이터 마스터 로그 구조 (A~X열) 스펙에 완벽 동기화 (총 24칸)
         const newRow = new Array(24).fill(""); 
         newRow[0] = "'" + orderNo;   // A: 주문번호
-        newRow[1] = memberCode;      // B: 멤버코드
-        newRow[2] = englishName;     // C: 영문 성함
+        newRow[1] = uniqueKey;       // B: 멤버코드 (고유키로 자동 변환됨!)
+        newRow[2] = "";              // C: 영문 성함 (요청하신 대로 공백 처리)
         newRow[3] = "";              // D: 참여 채널
-        newRow[4] = targetStoreId;   // E: 점포 ID (★공백 유실 버그 완벽 수리)
-        newRow[5] = productName;     // F: 점포명
+        newRow[4] = targetStoreId;   // E: 점포 ID
+        newRow[5] = "";              // F: 점포명 (시트 수식이 작동하도록 공백 처리)
         newRow[6] = "";              // G: 예약 캡처 URL
         newRow[7] = "";              // H: 방문예정일시
         newRow[8] = "";              // I: 방문인원

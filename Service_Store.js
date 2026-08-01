@@ -216,7 +216,7 @@ function loginStoreByPin(pin) {
       }
     }
     
-    return { success: false, error: "無効なパートナーコードです。 다시 확인해 주세요." };
+    return { success: false, error: "無効なパートナーコードです。再度コードを確認してください。" };
   } catch (e) {
     return { success: false, error: "서버 오류: " + e.toString() };
   }

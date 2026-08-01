@@ -33,14 +33,13 @@
     table.main-table td { padding: 16px 8px; font-size: 14px; vertical-align: middle; border-bottom: 1px solid #f8f9fa; white-space: nowrap; font-weight: 500; text-align: center; }
     table.main-table tbody tr:hover { background-color: #fcfcfd; }
     
-    /* 🎯 [초정밀 가운데 정렬 패치 공역] */
     .badge-custom { 
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
       padding: 0 12px !important; 
-      height: 28px !important;         /* 고정 높이 바인딩 */
-      line-height: 1 !important;       /* 글자 튕김 차단 */
+      height: 28px !important; 
+      line-height: 1 !important; 
       border-radius: 20px; 
       font-size: 12.5px; 
       font-weight: 700; 
@@ -64,7 +63,7 @@
       display: inline-flex !important; 
       align-items: center !important;
       justify-content: center !important;
-      height: 28px !important;         /* 뱃지 서식과 균형 일치화 */
+      height: 28px !important; 
       padding: 0 12px !important; 
       line-height: 1 !important;
       border-radius: 8px; 
@@ -238,6 +237,19 @@
     </div>
   </div>
 
+<!-- 🎯 공통 커스텀 알림 모달 (화면 상단 배치로 변경) -->
+<div class="modal fade" id="customAlert" tabindex="-1" style="z-index: 1060;">
+  <!-- 💡 modal-dialog-centered 속성을 삭제하고, 화면 위에서 살짝 띄워주는 mt-5 속성을 넣었습니다. -->
+  <div class="modal-dialog mt-5">
+    <div class="modal-content border-0" style="border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-width: 320px; margin: auto;">
+      <div class="modal-body text-center" style="padding: 24px;">
+        <p class="fw-bold" id="alertMessage" style="font-size: 15px; color: var(--brand-navy); word-break: keep-all; line-height: 1.6; margin: 0 0 20px 0;"></p>
+        <button type="button" class="btn w-100" data-bs-dismiss="modal" style="border-radius: 14px; padding: 12px; font-weight: 700; background-color: var(--brand-navy); color: #fff; margin: 0;">確認</button>
+      </div>
+    </div>
+  </div>
+</div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     let globalStoreId = "<?= storeId ?>"; 
@@ -245,6 +257,18 @@
     let configModalObj = null;
     let preloadedConfig = null; 
     let webAppUrl = ""; 
+
+    let alertModalObj = null;
+
+    // 기본 alert 대신 사용할 커스텀 모달 함수
+    function showAlert(msg) {
+      var safeMsg = String(msg || "알 수 없는 오류가 발생했습니다.");
+      document.getElementById('alertMessage').innerHTML = safeMsg.replace(/\n/g, '<br>');
+      if (!alertModalObj) {
+        alertModalObj = new bootstrap.Modal(document.getElementById('customAlert'));
+      }
+      alertModalObj.show();
+    }
 
     window.onload = function() {
       configModalObj = new bootstrap.Modal(document.getElementById('configModal'));
@@ -281,7 +305,7 @@
     function executeStoreLogin() {
       var pin = document.getElementById('partnerPin').value.trim().toUpperCase();
       if (!pin) {
-        alert("パートナーコードを入力してください。");
+        showAlert("パートナーコードを入力してください。<br>(파트너 코드를 입력해주세요.)");
         return;
       }
       
@@ -298,13 +322,13 @@
             document.getElementById('storeDashboardSection').style.display = 'block';
             loadDashboardData(globalStoreId);
           } else {
-            alert(res.error);
+            showAlert(res.error);
             btn.disabled = false;
             btn.innerText = "レポートを確認する";
           }
         })
         .withFailureHandler(function(err) {
-          alert("Base通報エラー: " + err.message);
+          showAlert("Base通報エラー: " + err.message);
           btn.disabled = false;
           btn.innerText = "レポートを確認する";
         })
@@ -377,7 +401,6 @@
     function initMonthFilter() { const months = new Set(); globalStoreMissions.forEach(m => { if (m.visitDate && m.visitDate !== '-') months.add(m.visitDate.substring(0, 7)); }); const select = document.getElementById('monthFilter'); select.innerHTML = '<option value="ALL">🗓 訪問月 すべて</option>'; Array.from(months).sort().reverse().forEach(month => { let opt = document.createElement('option'); opt.value = month; opt.innerText = month.replace('-', '年 ') + '月'; select.appendChild(opt); }); }
     function applyFilters() { const monthVal = document.getElementById('monthFilter').value; const filteredMissions = globalStoreMissions.filter(m => { if (monthVal !== 'ALL' && !String(m.visitDate).startsWith(monthVal)) return false; return true; }); renderTable(filteredMissions); }
 
-// 🎯 [정밀 싱크 완료] 전 시스템 뱃지 톤앤매너 완벽 통일 렌더링 엔진
     function renderTable(missions) {
       const tbody = document.getElementById('storeMissionTbody');
       if (missions.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted fw-bold">該当する履歴がありません。</td></tr>'; return; }
@@ -400,7 +423,6 @@
         else {
           let transStatus = m.status; let bgClass = "b-pending";
           if (m.status === '방문전') { transStatus = "訪問前"; bgClass = "b-pending"; }
-          // 🎯 보정부: 일정조율필요 상태 진입 시, 어드민과 동일한 트렌디 보라색(b-adjust) 레이아웃 적용
           else if (m.status === '일정조율필요') { transStatus = "調整必要"; bgClass = "b-adjust"; }
           else if (m.status === '방문완료') { transStatus = "訪問完了"; bgClass = "b-verified"; }
           else if (m.status === '제출완료') { transStatus = "投稿完了"; bgClass = "b-submitted"; }
@@ -427,7 +449,7 @@
         let lHtml = linkHtmlArr.length > 0 ? `<div class="link-badge-container">${linkHtmlArr.join('')}</div>` : `<span class="text-muted">-</span>`;
         
         let commentHtml = '<span class="text-muted">-</span>';
-        if (m.status === '제출완료' && m.shortReview) {
+        if (m.status === '提出完了' && m.shortReview) {
           commentHtml = `<div style="font-size: 13px; color: #495057; white-space: normal; line-height: 1.5; text-align: center; letter-spacing: -0.3px;">"${m.shortReview}"</div>`;
         }
         
@@ -455,7 +477,7 @@
           .withSuccessHandler(function(res) {
             btn.disabled = false; btn.innerText = "⚙️ 店舗設定";
             if (res.success) { preloadedConfig = res; fillConfigAndShow(res); } 
-            else { alert('エラー: ' + res.error); }
+            else { showAlert('エラー: ' + res.error); }
           }).getStoreConfig(globalStoreId);
       }
     }
@@ -518,11 +540,12 @@
           if (res.success) {
             configModalObj.hide();
             google.script.run.withSuccessHandler(function(data) { if(data.success) preloadedConfig = data; }).getStoreConfig(globalStoreId);
+            showAlert('設定が保存されました。');
           } else { 
-            alert('保存に失敗しました: ' + res.error); 
+            showAlert('保存に失敗しました: ' + res.error); 
           }
         })
-        .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = "設定を保存する"; alert('サーバーエラーが発生しました。'); })
+        .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = "設定を保存する"; showAlert('サーバーエラーが発生しました。'); })
         .updateStoreConfig(row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes);
     }
   </script>

@@ -449,7 +449,7 @@
         let lHtml = linkHtmlArr.length > 0 ? `<div class="link-badge-container">${linkHtmlArr.join('')}</div>` : `<span class="text-muted">-</span>`;
         
         let commentHtml = '<span class="text-muted">-</span>';
-        if (m.status === '提出完了' && m.shortReview) {
+        if (m.status === '제출완료' && m.shortReview) {
           commentHtml = `<div style="font-size: 13px; color: #495057; white-space: normal; line-height: 1.5; text-align: center; letter-spacing: -0.3px;">"${m.shortReview}"</div>`;
         }
         

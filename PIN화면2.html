@@ -182,17 +182,19 @@
     </div>
   </div>
 
-  <!-- 🎯 [네이티브 규격 패치] 제이쿼리 의존성을 제거하고 부트스트랩 5 표준 스펙으로 모달 마감 처리 완료 -->
-  <div class="modal fade" id="customAlert" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content p-3 text-center border-0" style="border-radius:20px;">
-        <div class="modal-body">
-          <p class="fw-bold mb-4 mt-2" id="alertMessage" style="font-size:15px;"></p>
-          <button type="button" class="btn btn-brand btn-custom py-2" data-bs-dismiss="modal">확인</button>
-        </div>
+ 
+  
+<!-- 🎯 공통 커스텀 알림 모달 (화면 상단 배치) -->
+<div class="modal fade" id="customAlert" tabindex="-1" style="z-index: 1060;">
+  <div class="modal-dialog mt-5">
+    <div class="modal-content border-0" style="border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-width: 320px; margin: auto;">
+      <div class="modal-body text-center" style="padding: 24px;">
+        <p class="fw-bold" id="alertMessage" style="font-size: 15px; color: var(--brand-navy); word-break: keep-all; line-height: 1.6; margin: 0 0 20px 0;"></p>
+        <button type="button" class="btn w-100" data-bs-dismiss="modal" style="border-radius: 14px; padding: 12px; font-weight: 700; background-color: var(--brand-navy); color: #fff; margin: 0;">確認 (확인)</button>
       </div>
     </div>
   </div>
+</div>
 
   <div class="modal fade" id="staffModal" tabindex="-1">
     <div class="modal-dialog">

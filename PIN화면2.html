@@ -355,8 +355,12 @@
         var isRestaurant = (m.info && m.info.storeType !== 'RETAIL'); 
         var peopleSelectorHtml = '';
         if (isRestaurant) {
+          // 🎯 [수정] 4명 고정 대신 매장별 maxPeople 적용
+          var maxAllowed = (m.info && m.info.maxPeople) ? parseInt(m.info.maxPeople, 10) : 4;
           var optionsHtml = '';
-          for(var i = 1; i <= 4; i++) { optionsHtml += '<option value="' + i + '">' + i + ' 명</option>'; }
+          for(var i = 1; i <= maxAllowed; i++) { 
+            optionsHtml += '<option value="' + i + '">' + i + ' 명</option>'; 
+          }
           peopleSelectorHtml = '<div class="d-flex justify-content-center align-items-center gap-2"><span style="font-size:13px; font-weight:700; color:#495057;">방문 인원</span><select id="peopleCount_' + m.row + '" class="form-select form-select-sm" style="width: 80px; text-align: center; border-radius: 8px; font-weight: 700; padding: 6px;">' + optionsHtml + '</select></div><p style="font-size:11px; color:#e03131; font-weight:700; margin-top:8px; margin-bottom:0; letter-spacing:-0.3px;">⚠️크리에이터 동반 방문 희망 시, 각자 예약 후 필수 문의.</p>';
         } else { peopleSelectorHtml = '<input type="hidden" id="peopleCount_' + m.row + '" value="1">'; }
 

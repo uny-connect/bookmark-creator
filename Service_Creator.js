@@ -329,13 +329,13 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
       const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${safeRow}&o=${encodeURIComponent(orderNo)}`;
       const feedbackUrl = `${scriptUrl}?mode=feedback&row=${safeRow}&o=${encodeURIComponent(orderNo)}`;
 
-      const subject = `【BOOKMARK CREATOR】 クリエイター来店予約の確認(${dateStr})`;
+      const subject = `【BOOKMARK CREATORS】 クリエイター来店予約の確認(${dateStr})`;
       const htmlBody = `
         <meta charset="UTF-8">
         <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #f4f5f7;">
           <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
             <div style="text-align: center; margin-bottom: 20px;">
-              <h1 style="color: #1A2B49; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATOR</h1>
+              <h1 style="color: #1A2B49; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
               <div style="width: 40px; height: 3px; background: #C5A358; margin: 10px auto;"></div>
             </div>
             <h2 style="color: #1A2B49; margin-top: 0; font-size: 18px; border-bottom: 2px solid #f1f3f5; padding-bottom: 15px; text-align: center;">&#128197; 来店予約の依頼</h2>
@@ -343,7 +343,7 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
               <p style="color: #1A2B49; font-size: 16px; font-weight: bold; margin-bottom: 5px;">${storeNameJp}</p>
               <p style="color: #495057; font-size: 14px; margin-top: 0;">店舗管理者様</p>
             </div>
-            <p style="color: #495057; font-size: 14px; line-height: 1.6;">BOOKMARK CREATORより、クリエイターの訪問予約申請が届きました。内容をご確認の上、以下のボタンより確定または日時変更のご対応をお願いいたします。</p>
+            <p style="color: #495057; font-size: 14px; line-height: 1.6;">BOOKMARK CREATORSより、クリエイターの訪問予約申請が届きました。内容をご確認の上、以下のボタンより確定または日時変更のご対応をお願いいたします。</p>
             <div style="background-color: #f8f9fa; border-left: 4px solid #C5A358; padding: 15px; border-radius: 4px; margin: 20px 0;">
               <p style="margin: 5px 0; font-size: 15px;"><strong>&#128100; クリエイター名:</strong> ${memberName}</p>
               <p style="margin: 5px 0; font-size: 15px;"><strong>&#9200; 訪問日時:</strong> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
@@ -358,7 +358,7 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
         </div>`;
       
       try {
-        GmailApp.sendEmail(storeEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATOR" });
+        GmailApp.sendEmail(storeEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
         sheet.getRange(safeRow, 25).setValue("점주메일 발송완료"); // Y열[25]에 기록
       } catch (mailErr) {
         console.error("점주 이메일 슈팅 실패: " + mailErr.toString());

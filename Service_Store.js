@@ -63,7 +63,7 @@ function submitStoreFeedback(row, orderNo, msg) {
           <!-- 상단 브랜딩 영역 -->
           <div style="margin-bottom: 24px; text-align: left;">
             <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #7048e8; padding: 4px 10px; border-radius: 6px; display: inline-block;">ADMIN NOTICE</span>
-            <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATOR</h2>
+            <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
           </div>
           
           <!-- 헤더 타이틀 및 안내 문구 -->
@@ -107,7 +107,7 @@ function submitStoreFeedback(row, orderNo, msg) {
 
     if (adminEmail && adminEmail.includes('@')) {
       try {
-        GmailApp.sendEmail(adminEmail, alertSubject, "", { htmlBody: alertBody, name: "BOOKMARK CREATOR" });
+        GmailApp.sendEmail(adminEmail, alertSubject, "", { htmlBody: alertBody, name: "BOOKMARK CREATORS" });
         sheet.getRange(safeRow, 25).setValue("운영진알림 발송완료"); 
       } catch (adminMailErr) {
         console.error("❌ 운영진 메일 알림 셧다운 낚아챔: " + adminMailErr.toString());
@@ -137,14 +137,14 @@ function submitStoreFeedback(row, orderNo, msg) {
           const pCount = rowData[8] ? String(rowData[8]).replace(/[^0-9]/g, '') : '1'; 
           const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
-          const creatorSubject = "[NOTICE] [BOOKMARK CREATOR] 방문 일정 변경 조율 안내";
+          const creatorSubject = "[NOTICE] [BOOKMARK CREATORS] 방문 일정 변경 조율 안내";
           const creatorHtmlBody = `
             <meta charset="UTF-8">
             <div style="background: #f4f5f7; padding: 30px 10px; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;">
               <div style="max-width: 500px; margin: 0 auto; padding: 32px 20px; background: #ffffff; border: 1px solid #eef0f2; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
                 <div style="margin-bottom: 24px; text-align: left;">
                   <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #e03131; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
-                  <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATOR</h2>
+                  <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
                 </div>
                 <div style="border-top: 2px solid #e03131; padding-top: 24px; margin-bottom: 24px;">
                   <p style="font-size: 14.5px; font-weight: 700; color: #e03131; margin: 0 0 12px 0;">🟣 방문 일정 변경 요청 알림</p>
@@ -176,7 +176,7 @@ function submitStoreFeedback(row, orderNo, msg) {
             </div>`;
 
           try {
-            GmailApp.sendEmail(creatorEmail, creatorSubject, "", { htmlBody: creatorHtmlBody, name: "BOOKMARK CREATOR" });
+            GmailApp.sendEmail(creatorEmail, creatorSubject, "", { htmlBody: creatorHtmlBody, name: "BOOKMARK CREATORS" });
             const prevLog = String(sheet.getRange(safeRow, 25).getValue() || '');
             sheet.getRange(safeRow, 25).setValue(prevLog.includes("완료") ? "조율 노티 전체메일 발송완료" : "크리에이터 노티 메일 발송완료");
           } catch (creatorMailErr) {
@@ -392,13 +392,13 @@ function storeDirectConfirm(row, orderNo) {
         }
 
         if (creatorEmail && creatorEmail.includes("@")) {
-          const subject = "[BOOKMARK CREATOR] 予約確定のご案内"; // 🎯 메일 제목 인코딩 리스크 방어 우회식 처리 완료
+          const subject = "[BOOKMARK CREATORS] 予約確定のご案内"; // 🎯 메일 제목 인코딩 리스크 방어 우회식 처리 완료
           const htmlBody = `
             <meta charset="UTF-8">
             <div style="max-width: 500px; margin: 0 auto; padding: 32px 20px; background: #ffffff; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; border: 1px solid #eef0f2; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
               <div style="margin-bottom: 24px; text-align: left;">
                 <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
-                <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATOR</h2>
+                <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
               </div>
               <div style="border-top: 2px solid #1A2B49; padding-top: 24px; margin-bottom: 24px;">
                 <p style="font-size: 14.5px; font-weight: 700; color: #2D6A4F; margin: 0 0 12px 0;">✅ 예약 확정 알림</p>
@@ -430,7 +430,7 @@ function storeDirectConfirm(row, orderNo) {
             </div>`;
           
           try {
-            GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATOR" });
+            GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
             sheet.getRange(safeRow, 25).setValue("크리에이터확정메일 발송완료"); 
           } catch (directMailErr) {
             console.error("❌ 점주 직접 확정 메일 발송 실패: " + directMailErr.toString());

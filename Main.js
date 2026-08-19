@@ -7,7 +7,7 @@ function doGet(e) {
   // 1️⃣ 어드민 대시보드 진입 분기
   if (mode === 'admin') {
     return HtmlService.createTemplateFromFile('Admin').evaluate()
-      .setTitle('BOOKMARK CREATOR | Admin')
+      .setTitle('BOOKMARK CREATORS | Admin')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
   }
@@ -17,7 +17,7 @@ function doGet(e) {
     const template = HtmlService.createTemplateFromFile('Store'); 
     template.storeId = e?.parameter?.id || ''; 
     return template.evaluate()
-      .setTitle('BOOKMARK CREATOR | パート너리포트')
+      .setTitle('BOOKMARK CREATORS | パートナーレポート')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
   }
@@ -71,12 +71,12 @@ function doGet(e) {
             }
 
             if (creatorEmail && creatorEmail.includes("@")) {
-              const subject = "🗓️ [BOOKMARK CREATOR] 방문 예약 확정 안내";
+              const subject = "🗓️ [BOOKMARK CREATORS] 방문 예약 확정 안내";
               const htmlBody = `
                 <div style="max-width: 500px; margin: 0 auto; padding: 32px 20px; background: #ffffff; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; border: 1px solid #eef0f2; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
                   <div style="margin-bottom: 24px; text-align: left;">
                     <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
-                    <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATOR</h2>
+                    <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
                   </div>
                   <div style="border-top: 2px solid #1A2B49; padding-top: 24px; margin-bottom: 24px;">
                     <p style="font-size: 14.5px; font-weight: 700; color: #2D6A4F; margin: 0 0 12px 0;">✅ 예약 확정 안내</p>
@@ -107,7 +107,7 @@ function doGet(e) {
                   </div>
                 </div>`;
               
-              GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATOR" });
+              GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
             }
           }
         } catch (mailErr) {
@@ -143,7 +143,7 @@ function doGet(e) {
         <body>
           <div class="container">
             <div style="margin-bottom: 10px; margin-top: 10px;"><span class="badge-partner">PARTNER CENTER</span></div>
-            <h2 class="brand-title">BOOKMARK CREATOR</h2>
+            <h2 class="brand-title">BOOKMARK CREATORS</h2>
             <div class="card">
               <span class="fail-status">❌ 確定不可</span>
               <p class="desc-text">
@@ -156,7 +156,7 @@ function doGet(e) {
           </div>
         </body>
         </html>
-      `).setTitle('BOOKMARK CREATOR | 確定 불가').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      `).setTitle('BOOKMARK CREATORS | 確定不可').addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
     // 🚨 [2] 정상 확정 완료 시 화면 (하단 회색 박스 스펙 통일)
@@ -183,7 +183,7 @@ function doGet(e) {
         <body>
           <div class="container">
             <div style="margin-bottom: 10px; margin-top: 10px;"><span class="badge-partner">PARTNER CENTER</span></div>
-            <h2 class="brand-title">BOOKMARK CREATOR</h2>
+            <h2 class="brand-title">BOOKMARK CREATORS</h2>
             <div class="card">
               <span class="success-status">✅ 予約確定完了</span>
               <p class="desc-text">
@@ -196,7 +196,7 @@ function doGet(e) {
           </div>
         </body>
         </html>
-      `).setTitle('BOOKMARK CREATOR | 確定完了').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      `).setTitle('BOOKMARK CREATORS | 確定完了').addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
 
   // 4️⃣ 점주 피드백 입력 분기
@@ -204,7 +204,7 @@ function doGet(e) {
     const template = HtmlService.createTemplateFromFile('Feedback');
     template.row = e?.parameter?.row || '';
     template.orderNo = e?.parameter?.o || '';
-    return template.evaluate().setTitle('BOOKMARK CREATOR | 리퀘스트').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    return template.evaluate().setTitle('BOOKMARK CREATORS | 리퀘스트').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
   }
 
@@ -212,7 +212,7 @@ function doGet(e) {
   const template = HtmlService.createTemplateFromFile('PIN화면2');
   template.orderNo = (e?.parameter?.o) || ''; 
   template.phoneLast4 = (e?.parameter?.p) || '';
-  return template.evaluate().setTitle('BOOKMARK CREATOR | Creator').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+  return template.evaluate().setTitle('BOOKMARK CREATORS | Creator').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
 }
 
@@ -220,10 +220,11 @@ function doGet(e) {
  * [2] 시트 어시스턴트 유틸리티 매뉴얼 (onOpen / onEdit)
  ********************************************************************/
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu('⚙️ BOOKMARK CREATOR 관리')
+  SpreadsheetApp.getUi().createMenu('⚙️ BOOKMARK CREATORS 관리')
     .addItem('✨ 빈칸 자동 채우기 (이름/매장/마감일/보증금)', 'fillMissingData')
     .addItem('🔑 매장별 고유 PIN 6자리 생성', 'generateStorePins') 
     .addItem('🚨 자동 노쇼 일괄 처리 (과거 날짜)', 'checkAndMarkNoShow')
+    .addItem('👥 아임웹 신규 회원 동기화', 'syncImwebUsers') // 👈 이 줄을 새로 추가합니다!
     .addToUi();
 }
 
@@ -424,12 +425,12 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
             const rawPeopleStr = String(sheet.getRange(safeRow, 9).getValue() || '1');
             const pCount = rawPeopleStr.replace(/[^0-9]/g, '');
 
-            subject = "🗓️ [BOOKMARK CREATOR] 방문 예약 확정 안내";
+            subject = "🗓️ [BOOKMARK CREATORS] 방문 예약 확정 안내";
             htmlBody = `
               <div style="max-width: 500px; margin: 0 auto; padding: 32px 20px; background: #ffffff; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; border: 1px solid #eef0f2; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
                 <div style="margin-bottom: 24px; text-align: left;">
                   <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
-                  <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATOR</h2>
+                  <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
                 </div>
                 <div style="border-top: 2px solid #1A2B49; padding-top: 24px; margin-bottom: 24px;">
                   <p style="font-size: 14.5px; font-weight: 700; color: #2D6A4F; margin: 0 0 12px 0;">✅ 예약 확정 알림</p>
@@ -460,12 +461,12 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
                 </div>
               </div>`;
           } else if (newStatus === '일정조율필요') {
-            subject = "🚨 [BOOKMARK CREATOR] 일정 조율 요청 안내";
+            subject = "🚨 [BOOKMARK CREATORS] 일정 조율 요청 안내";
             htmlBody = `
               <div style="max-width: 500px; margin: 0 auto; padding: 32px 20px; background: #ffffff; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; border: 1px solid #eef0f2; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
                 <div style="margin-bottom: 24px; text-align: left;">
                   <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #e03131; padding: 4px 10px; border-radius: 6px; display: inline-block;">STATUS NOTICE</span>
-                  <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATOR</h2>
+                  <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
                 </div>
                 <div style="border-top: 2px solid #e03131; padding-top: 24px; margin-bottom: 28px;">
                   <p style="font-size: 14.5px; font-weight: 700; color: #e03131; margin: 0 0 12px 0;">🟣 일정 변경 요청 알림</p>
@@ -479,7 +480,7 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
                 </div>
               </div>`;
           }
-          GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATOR" });
+          GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
         }
       } catch (mailErr) {}
     }

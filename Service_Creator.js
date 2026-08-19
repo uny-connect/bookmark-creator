@@ -15,7 +15,7 @@ function getMissions(orderNo, phoneLast4) {
       userTierMap.set(mCode, parseTierEmoji(uRow[8])); 
     }
     
-    // 매장 ID 맵과 매장 이름 맵을 동시에 구축 (ID가 없을 때 이름으로 찾기 위함)
+// 매장 ID 맵과 매장 이름 맵을 동시에 구축 (ID가 없을 때 이름으로 찾기 위함)
     const restMap = new Map();
     const restNameMap = new Map();
     for (let k = 1; k < data.Restaurant_List.length; k++) {
@@ -24,11 +24,15 @@ function getMissions(orderNo, phoneLast4) {
       const rName = String(rRow[1] || '').trim();
       const storeType = String(rRow[7] || '').trim().toUpperCase();
       
+      // 🎯 V열(22번째 열, 인덱스 21)에서 최대인원 파싱 (미입력 또는 오류 시 기본값 4)
+      const maxPeople = parseInt(rRow[21], 10) || 4;
+
       const rDetails = { 
         map: String(rRow[17] || '#').trim(),
         guide: String(rRow[18] || '#').trim(),
         bookingUrl: (storeType === 'RETAIL') ? '' : String(rRow[20] || '').trim(), 
         storeType: storeType, 
+        maxPeople: maxPeople, // 🎯 추가됨
         blackouts: getSafeBlackouts(rRow[13])
       };
       
@@ -56,9 +60,9 @@ function getMissions(orderNo, phoneLast4) {
       if (!restInfo && restaurantName) {
         restInfo = restNameMap.get(restaurantName);
       }
-      // 둘 다 없으면 빈 객체 셰이프 유지
+      // 둘 다 없으면 기본값 유지 (maxPeople: 4 추가 방어)
       if (!restInfo) {
-        restInfo = { map: '#', guide: '#', bookingUrl: '', storeType: '', blackouts: [] };
+        restInfo = { map: '#', guide: '#', bookingUrl: '', storeType: '', maxPeople: 4, blackouts: [] };
       }
       
       const formatDate = (val, format) => (val instanceof Date) ? Utilities.formatDate(val, timeZone, format) : String(val || '');

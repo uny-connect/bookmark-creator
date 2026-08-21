@@ -188,7 +188,7 @@ function doGet(e) {
               <span class="success-status">✅ 予約確定完了</span>
               <p class="desc-text">
                 来店予約が確定しました。<br>
-                クリエイターの訪問日시에 맞춰서,<br>
+                クリエイターの訪問日時にあわせて、<br>
                 ご準備をお願いいたします。🙏
               </p>
               <div class="notice-box">このままページを閉じてください。</div>

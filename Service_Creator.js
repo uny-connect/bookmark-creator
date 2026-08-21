@@ -318,8 +318,8 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
     }
 
     const profileHtml = (creatorProfileUrl.length > 5) 
-      ? `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>チャンネル:</span></strong> <a href="${creatorProfileUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;"><span>プロフィールを見る (プロフ) ❯</span></a></p>`
-      : `<p style="margin: 5px 0; font-size: 15px; color: #8b95a1;"><strong>&#128279; <span>チャンネル:</span></strong> <span>当日確認</span></p>`;
+      ? `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <a href="${creatorProfileUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;"><span>SNSを見る❯</span></a></p>`
+      : `<p style="margin: 5px 0; font-size: 15px; color: #8b95a1;"><strong>&#128279; <span>SNS:</span></strong> <span>当日確認</span></p>`;
     
     // 🎯 [대안 1 적용] 이메일 발송 트라이캐치 격리 및 Y열(25번째 열) 실시간 추적 로그 작성
     if (storeEmail && storeEmail.includes("@")) {

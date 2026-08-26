@@ -224,7 +224,8 @@ function onOpen() {
     .addItem('✨ 빈칸 자동 채우기 (이름/매장/마감일/보증금)', 'fillMissingData')
     .addItem('🔑 매장별 고유 PIN 6자리 생성', 'generateStorePins') 
     .addItem('🚨 자동 노쇼 일괄 처리 (과거 날짜)', 'checkAndMarkNoShow')
-    .addItem('👥 아임웹 신규 회원 동기화', 'syncImwebUsers') // 👈 이 줄을 새로 추가합니다!
+    .addItem('👥 아임웹 신규 회원 동기화', 'syncImwebUsers')
+    .addItem('📧 매장 메일 수신 테스트 발송', 'sendTestEmailToStore') // 🎯 신규 추가
     .addToUi();
 }
 

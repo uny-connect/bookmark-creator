@@ -358,7 +358,11 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
         </div>`;
       
       try {
-        GmailApp.sendEmail(storeEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
+        GmailApp.sendEmail(storeEmail, subject, "", { 
+        htmlBody: htmlBody, 
+        name: "BOOKMARK CREATORS",
+        from: "info@bookmarkfukuoka.jp" // 🎯 등록한 유료 도메인 메일 지정
+      });
         sheet.getRange(safeRow, 25).setValue("점주메일 발송완료"); // Y열[25]에 기록
       } catch (mailErr) {
         console.error("점주 이메일 슈팅 실패: " + mailErr.toString());

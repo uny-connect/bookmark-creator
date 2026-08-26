@@ -654,3 +654,126 @@ function verifyAdminPassword(inputPw) {
     return false;
   } catch(e) { return false; }
 }
+
+/********************************************************************
+ * 📧 매장 이메일 수신 정상 여부 즉시 검증 엔진 (선택 셀 자동 감지 지원)
+ ********************************************************************/
+function sendTestEmailToStore() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const activeSheet = ss.getActiveSheet();
+  const restSheet = ss.getSheetByName('Restaurant_List');
+  
+  if (!restSheet) return ui.alert('❌ Restaurant_List 시트를 찾을 수 없습니다.');
+  
+  let targetEmail = "";
+  let storeNameJp = "";
+  let storeId = "";
+
+  // 1️⃣ Restaurant_List 시트에서 특정 셀/행을 클릭하고 있는 경우 자동 감지
+  if (activeSheet.getName().trim() === 'Restaurant_List') {
+    const selectedRow = activeSheet.getActiveRange().getRow();
+    
+    // 헤더(1행)가 아닌 2행 이상의 데이터 행을 선택한 경우
+    if (selectedRow >= 2) {
+      const rowValues = restSheet.getRange(selectedRow, 1, 1, 11).getValues()[0];
+      storeId = String(rowValues[0] || '').trim(); // A열: 점포 ID
+      const nameKo = String(rowValues[1] || '').trim(); // B열: 한국어명
+      const nameJp = String(rowValues[2] || '').trim(); // C열: 일본어명
+      const email = String(rowValues[10] || '').trim(); // K열: 이메일 (인덱스 10)
+
+      if (storeId && email && email.includes('@')) {
+        storeNameJp = nameJp || nameKo;
+        targetEmail = email;
+
+        const confirm = ui.alert(
+          '📧 선택된 매장 테스트 발송',
+          `[선택된 매장 정보]\n• 점포 ID: ${storeId}\n• 매장명: ${storeNameJp}\n• 수신 이메일: ${targetEmail}\n\n이 매장으로 테스트 메일을 발송하시겠습니까?`,
+          ui.ButtonSet.YES_NO
+        );
+
+        if (confirm !== ui.Button.YES) return;
+      }
+    }
+  }
+
+  // 2️⃣ 자동 감지가 안 되었거나 다른 시트에서 실행한 경우 (기존 팝업 입력 모드)
+  if (!targetEmail) {
+    const response = ui.prompt(
+      '📧 매장 메일 수신 테스트',
+      '테스트할 매장의 [점포 ID]를 입력하세요:\n(예: FUK01)',
+      ui.ButtonSet.OK_CANCEL
+    );
+
+    if (response.getSelectedButton() !== ui.Button.OK) return;
+    const inputVal = response.getResponseText().trim();
+    if (!inputVal) return ui.alert('⚠️ 점포 ID를 입력해주세요.');
+
+    const restData = restSheet.getDataRange().getValues();
+    for (let i = 1; i < restData.length; i++) {
+      const sheetStoreId = String(restData[i][0] || '').trim().toUpperCase();
+      if (sheetStoreId === inputVal.toUpperCase()) {
+        storeId = sheetStoreId;
+        targetEmail = String(restData[i][10] || '').trim(); // K열 이메일
+        storeNameJp = String(restData[i][2] || '').trim() || String(restData[i][1] || '').trim();
+        break;
+      }
+    }
+  }
+
+  if (!targetEmail || !targetEmail.includes('@')) {
+    return ui.alert(`❌ 유효한 이메일 주소를 찾을 수 없습니다.\nRestaurant_List 시트의 K열 이메일을 확인해 주세요.`);
+  }
+
+  // 3️⃣ 테스트 메일 발송 처리
+  try {
+    const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+    const subject = `【TEST / 接続テスト】 BOOKMARK CREATORS 予約通知テスト送信 (${storeNameJp})`;
+    
+    const htmlBody = `
+      <meta charset="UTF-8">
+      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #f4f5f7;">
+        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+          
+          <div style="text-align: center; margin-bottom: 20px;">
+            <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #e03131; padding: 4px 10px; border-radius: 6px; display: inline-block;">CONNECTION TEST</span>
+            <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
+            <div style="width: 40px; height: 3px; background: #C5A358; margin: 10px auto;"></div>
+          </div>
+          
+          <h2 style="color: #1A2B49; margin-top: 0; font-size: 16px; border-bottom: 2px solid #f1f3f5; padding-bottom: 15px; text-align: center;">&#128236; メール受信テスト</h2>
+          
+          <div style="margin-top: 20px;">
+            <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin-bottom: 5px;">${storeNameJp}</p>
+            <p style="color: #495057; font-size: 13.5px; margin-top: 0;">店舗管理者様</p>
+          </div>
+          
+          <p style="color: #495057; font-size: 13.5px; line-height: 1.6;">
+            本メールは、BOOKMARK CREATORSからの予約受付通知が正常に届くか確認するための<b>【テストメール】</b>です。<br>
+            このメールが確認できましたら、今後のクリエイター来店予約通知も問題なく受信いただけます。
+          </p>
+          
+          <div style="background-color: #f8f9fa; border-left: 4px solid #2D6A4F; padding: 15px; border-radius: 4px; margin: 20px 0;">
+            <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ 店舗ID:</strong> ${storeId || '-'}</p>
+            <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ 受信状態:</strong> <span style="color: #2D6A4F; font-weight: bold;">正常受信完了 (Success)</span></p>
+            <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ テスト日時:</strong> ${todayStr}</p>
+            <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ 対象アドレス:</strong> ${targetEmail}</p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 24px; padding: 12px; background-color: #f1f3f5; border-radius: 8px; font-size: 12px; color: #6c757d; font-weight: 600;">
+            ※ 本メールに対する返信や確定手続きは不要です。
+          </div>
+        </div>
+      </div>`;
+
+    GmailApp.sendEmail(targetEmail, subject, "", {
+      htmlBody: htmlBody,
+      name: "BOOKMARK CREATORS",
+      from: "info@bookmarkfukuoka.jp"
+    });
+
+    ui.alert(`✅ [테스트 발송 성공]\n\n• 매장명: ${storeNameJp}\n• 수신 이메일: ${targetEmail}\n\n해당 매장 메일함을 확인해 주세요.`);
+  } catch (err) {
+    ui.alert(`❌ [발송 실패 에러]\n\n${err.toString()}`);
+  }
+}

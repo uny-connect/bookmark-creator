@@ -12,7 +12,7 @@ function getMissions(orderNo, phoneLast4) {
       // uRow[3]이 전화번호 열이 맞는지 반드시 시트 확인 필요!
       const phoneStr = uRow[3] ? String(uRow[3]).replace(/[^0-9]/g, '') : '';
       userMap.set(mCode, phoneStr);
-      userTierMap.set(mCode, parseTierEmoji(uRow[8])); 
+      userTierMap.set(mCode, parseTierEmoji(uRow[9])); 
     }
     
 // 매장 ID 맵과 매장 이름 맵을 동시에 구축 (ID가 없을 때 이름으로 찾기 위함)

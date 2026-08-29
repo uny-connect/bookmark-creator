@@ -32,16 +32,14 @@
     </p>
 
     <div class="card text-start">
-      <!-- 1단계: 점포 ID 조회 -->
       <div class="mb-3">
         <label class="form-label">店舗コード (점포 ID)</label>
         <div class="input-group">
-          <input type="text" id="storeIdInput" class="form-control text-uppercase fw-bold" placeholder="例: FUK01" value="<?= initialStoreId ?>">
+          <input type="text" id="storeIdInput" class="form-control text-uppercase fw-bold" placeholder="例: FUK01" value="<?= initialStoreId ?>" onkeyup="if(event.key==='Enter'){searchStore()}">
           <button class="btn btn-outline-secondary" type="button" id="searchBtn" onclick="searchStore()" style="border-radius: 0 12px 12px 0; font-size: 13px; font-weight: 700;">確認</button>
         </div>
       </div>
 
-      <!-- 2단계: 매장 확인 & 이메일 입력 (조회 후 활성화) -->
       <div id="step2Area" style="display: none;">
         <div class="store-badge-box">
           <p class="m-0 mb-1"><strong>店舗名:</strong> <span id="storeNameText" style="color: #1A2B49; font-weight: 700;"></span></p>
@@ -50,7 +48,7 @@
 
         <div class="mb-4">
           <label class="form-label">通知先メールアドレス (이메일 주소)</label>
-          <input type="email" id="emailInput" class="form-control" placeholder="example@gmail.com">
+          <input type="email" id="emailInput" class="form-control" placeholder="example@gmail.com" onkeyup="if(event.key==='Enter'){registerAndSendTest()}">
           <div class="form-text" style="font-size: 11.5px; color: #8b95a1;">※ 既存のアドレスがある場合は上書き保存されます。</div>
         </div>
 
@@ -90,6 +88,11 @@
             currentStore = null;
           }
         })
+        .withFailureHandler(function(err) {
+          searchBtn.disabled = false;
+          searchBtn.innerText = '確認';
+          alert('通信エラー: ' + err.message);
+        })
         .findStoreSimple(id);
     }
 
@@ -111,6 +114,11 @@
           } else {
             alert('❌ 処理失敗: ' + res.error);
           }
+        })
+        .withFailureHandler(function(err) {
+          btn.disabled = false;
+          btn.innerText = '登録してテスト送信';
+          alert('通信エラー: ' + err.message);
         })
         .saveStoreEmailAndSendTest(currentStore.storeId, email);
     }

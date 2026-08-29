@@ -4,6 +4,16 @@
 function doGet(e) {
   const mode = e?.parameter?.mode;
   
+  // 🎯 [신규] 영업/담당자용 웹 테스트 발송 툴 분기 (store 분기보다 앞에 배치하여 파라미터 충돌 방지)
+  if (mode === 'test_tool') {
+    const template = HtmlService.createTemplateFromFile('TestTool');
+    template.initialStoreId = e?.parameter?.id || '';
+    return template.evaluate()
+      .setTitle('BOOKMARK CREATORS | 店舗メール登録・テスト')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+  }
+
   // 1️⃣ 어드민 대시보드 진입 분기
   if (mode === 'admin') {
     return HtmlService.createTemplateFromFile('Admin').evaluate()
@@ -62,7 +72,7 @@ function doGet(e) {
             for (let j = 1; j < userData.length; j++) {
               const dbMemberCode = String(userData[j][0] || '').trim().replace(/['"\s]/g, '').toLowerCase();
               if (dbMemberCode === currentMemberCode) {
-                creatorEmail = String(userData[j][13] || '').trim(); // 🎯 N열(인덱스 13)로 수정
+                creatorEmail = String(userData[j][13] || '').trim();
                 break;
               }
             }
@@ -301,7 +311,7 @@ function getAdminData() {
     for (let u = 1; u < userDB.length; u++) {
       if(userDB[u][0]) {
         try {
-          userTierMap[String(userDB[u][0]).trim()] = parseTierEmoji(userDB[u][9]); // 🎯 J열(인덱스 9)로 수정
+          userTierMap[String(userDB[u][0]).trim()] = parseTierEmoji(userDB[u][9]);
         } catch(tierErr) {
           userTierMap[String(userDB[u][0]).trim()] = '🟡'; 
         }
@@ -406,7 +416,7 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
         
         for (let j = 1; j < userData.length; j++) {
           if (String(userData[j][0]).trim() === currentMemberCode) {
-            creatorEmail = String(userData[j][13] || '').trim(); // 🎯 N열(인덱스 13)로 수정
+            creatorEmail = String(userData[j][13] || '').trim();
             break;
           }
         }
@@ -480,172 +490,6 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
     }
     return { success: true };
   } catch(e) { return { success: false, error: e.toString() }; }
-}
-
-/********************************************************************
- * [4] 백그라운드 데이터 자동 배치 & 정합성 보완 필터
- ********************************************************************/
-function checkAndMarkNoShow() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var logSheet = ss.getSheetByName("Master_Log");
-  if (!logSheet) return;
-  
-  var range = logSheet.getDataRange();
-  var values = range.getValues();
-  var now = new Date();
-  var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  
-  for (var i = 2; i < values.length; i++) {
-    var visitDateVal = values[i][7];  
-    var currentStatus = String(values[i][11]).trim(); 
-    
-    if (visitDateVal instanceof Date) {
-      var visitDate = new Date(visitDateVal);
-      if (visitDate < todayStart && (currentStatus === "방문전" || currentStatus === "예약확정")) {
-        logSheet.getRange(i + 1, 12).setValue("노쇼");       
-        logSheet.getRange(i + 1, 21).setValue("보증금몰수");   
-      }
-    }
-  }
-}
-
-function fillMissingData() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var logSheet = ss.getSheetByName("Master_Log");
-  var userSheet = ss.getSheetByName("User_DB");
-  if (!logSheet || !userSheet) return;
-  
-  var logRange = logSheet.getDataRange();
-  var logData = logRange.getValues();
-  var userData = userSheet.getDataRange().getValues();
-  
-  var userMap = {};
-  for (var j = 1; j < userData.length; j++) {
-    var mCode = String(userData[j][0]).trim(); 
-    if (mCode && mCode !== "" && mCode !== "undefined") {
-      userMap[mCode] = userData[j][1]; 
-    }
-  }
-  
-  var updatedRows = 0;
-  for (var i = 2; i < logData.length; i++) {
-    var row = i + 1;
-    var memberCode = String(logData[i][1]).trim();         
-    var currentEnglishName = String(logData[i][2]).trim(); 
-    var visitDate = logData[i][7];                         
-    
-    if ((currentEnglishName === "" || currentEnglishName === "undefined" || currentEnglishName === "미승인/정보없음") && memberCode && userMap[memberCode]) {
-      logSheet.getRange(row, 3).setValue(userMap[memberCode]);
-      updatedRows++;
-    }
-    
-    if (visitDate instanceof Date) {
-      var deadlineVal = logData[i][9];
-      var depositVal = logData[i][10];
-      
-      if (!deadlineVal || deadlineVal === "") {
-        var d = new Date(visitDate);
-        d.setDate(d.getDate() + 10); 
-        logSheet.getRange(row, 10).setValue(d);
-        updatedRows++;
-      }
-      if (!depositVal || depositVal === 0 || depositVal === "") {
-        logSheet.getRange(row, 11).setValue(50000);
-        updatedRows++;
-      }
-    }
-  }
-  SpreadsheetApp.getUi().alert("✨ 빈칸 자동 채우기가 완료되었습니다.\n(총 " + updatedRows + "개의 데이터 보완됨)");
-}
-
-function generateStorePins() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var storeSheet = ss.getSheetByName("Restaurant_List"); 
-  if (!storeSheet) return;
-  
-  var lastRow = storeSheet.getLastRow();
-  if (lastRow <= 1) return;
-  
-  var data = storeSheet.getRange(1, 1, lastRow, 9).getValues();
-  var createdCount = 0;
-  var charPool = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-  var pinLength = 6; 
-  
-  for (var i = 1; i < data.length; i++) {
-    var storeId = String(data[i][0]).trim();        
-    var currentPin = String(data[i][8]).trim();     
-    
-    if (storeId !== "" && storeId !== "undefined" && (!currentPin || currentPin === "")) {
-      var randPin = "";
-      for (var j = 0; j < pinLength; j++) {
-        var randomIndex = Math.floor(Math.random() * charPool.length);
-        randPin += charPool.charAt(randomIndex);
-      }
-      storeSheet.getRange(i + 1, 9).setValue("'" + randPin);
-      createdCount++;
-    }
-  }
-  SpreadsheetApp.getUi().alert("🔒 PIN 생성 완료: 총 " + createdCount + "개 발급됨.");
-}
-
-function getChallengeSettings() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Settings");
-  
-  if (!sheet) {
-    sheet = ss.insertSheet("Settings");
-    sheet.appendRow(["항목", "설정값"]);
-    sheet.appendRow(["START_DATE", "2026-06-01"]);
-    sheet.appendRow(["END_DATE", "2026-11-30"]); 
-    sheet.appendRow(["TARGET_COUNT", "20"]);        
-  }
-  
-  var data = sheet.getDataRange().getValues();
-  var settings = { startDate: "", endDate: "", targetCount: "20" };
-  
-  for (var i = 1; i < data.length; i++) {
-    var key = String(data[i][0]).trim();
-    var val = data[i][1];
-    if (val instanceof Date) {
-      val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
-    }
-    val = String(val).trim();
-    
-    if (key === "START_DATE") settings.startDate = val;
-    if (key === "END_DATE") settings.endDate = val;
-    if (key === "TARGET_COUNT") settings.targetCount = val;
-  }
-  return settings;
-}
-
-function saveChallengeSettings(startDate, endDate, targetCount) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName("Settings");
-  if (!sheet) sheet = ss.insertSheet("Settings");
-  
-  sheet.clear();
-  sheet.appendRow(["항목", "설정값"]);
-  sheet.appendRow(["START_DATE", startDate]);
-  sheet.appendRow(["END_DATE", endDate]);
-  sheet.appendRow(["TARGET_COUNT", targetCount]);
-  
-  return "✨ 챌린지 시즌 설정이 성공적으로 저장되었습니다.";
-}
-
-function verifyAdminPassword(inputPw) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName("Settings");
-    if (!sheet) return false;
-    
-    var data = sheet.getDataRange().getValues();
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim() === "ADMIN_PASSWORD") {
-        return String(data[i][1]).trim() === String(inputPw).trim();
-      }
-    }
-    return false;
-  } catch(e) { return false; }
 }
 
 function sendTestEmailToStore() {

@@ -471,7 +471,7 @@ function findStoreSimple(storeId) {
         };
       }
     }
-    return { success: false, error: "無効な店舗コードです。(일치하는 매장 코드가 없습니다.)" };
+    return { success: false, error: "無効な店舗コードです。" };
   } catch (e) {
     return { success: false, error: e.toString() };
   }

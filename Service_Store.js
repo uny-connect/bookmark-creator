@@ -126,7 +126,7 @@ function submitStoreFeedback(row, orderNo, msg) {
         
         for (let j = 1; j < userData.length; j++) {
           if (String(userData[j][0]).trim() === currentMemberCode) {
-            creatorEmail = String(userData[j][12] || '').trim();
+            creatorEmail = String(userData[j][13] || '').trim();
             break;
           }
         }
@@ -246,7 +246,7 @@ function getStoreData(storeId) {
     for (let u = 1; u < userDB.length; u++) {
       if (userDB[u][0]) {
         let emoji = '🟡';
-        try { emoji = parseTierEmoji(userDB[u][8]); } catch(ex) {}
+        try { emoji = parseTierEmoji(userDB[u][9]); } catch(ex) {}
         userTierMap[String(userDB[u][0]).trim()] = emoji;
       }
     }
@@ -386,7 +386,7 @@ function storeDirectConfirm(row, orderNo) {
         for (let j = 1; j < userData.length; j++) {
           const dbMemberCode = String(userData[j][0] || '').trim().replace(/['"\s]/g, '').toLowerCase();
           if (dbMemberCode === currentMemberCode) {
-            creatorEmail = String(userData[j][12] || '').trim();
+            creatorEmail = String(userData[j][13] || '').trim();
             break;
           }
         }

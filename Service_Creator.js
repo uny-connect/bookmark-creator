@@ -175,7 +175,7 @@ function updateSubmission(row, newUrl, newReceiptBase64, newReceiptName, newGoog
   } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-/* ⚡ [속도 대폭 튜닝] 시트 스캔 횟수를 단 1회로 줄인 고속 슬롯 필터 제너레이터 */
+/* ⚡ [속도 대폭 튜닝 + 요일별 유연 상한선] 고속 슬롯 필터 제너레이터 */
 function checkAvailability(storeId, targetDateStr) {
   try {
     const data = _getSheetsData(['Restaurant_List', 'Master_Log']);
@@ -186,7 +186,7 @@ function checkAvailability(storeId, targetDateStr) {
       if (String(restList[i][0]).trim() === storeId) {
         config = {
           maxPerSlot: parseInt(restList[i][11], 10) || 1,
-          dailyCap: parseInt(restList[i][12], 10) || 999,
+          rawDailyCap: String(restList[i][12] || '').trim(), // 🎯 원본 문자열 보존 (요일별 파싱용)
           blackouts: getSafeBlackouts(restList[i][13]),
           bizHours: String(restList[i][14] || '').trim(),
           intervalMin: parseInt(restList[i][15], 10) || 30,
@@ -200,9 +200,13 @@ function checkAvailability(storeId, targetDateStr) {
     if (!config.bizHours) return { error: "오류: 매장 영업시간 설정 미비" };
 
     const targetDateObj = new Date(targetDateStr);
-    const tDayJa = ['日', '月', '火', '水', '木', '金', '土'][targetDateObj.getDay()]; 
-    const tWeekNum = Math.ceil(targetDateObj.getDate() / 7); 
+    const dayJaMap = ['日', '月', '火', '水', '木', '金', '土'];
+    const dayKoMap = ['일', '월', '화', '수', '목', '금', '토'];
+    const tDayJa = dayJaMap[targetDateObj.getDay()];
+    const tDayKo = dayKoMap[targetDateObj.getDay()];
+    const tWeekNum = Math.ceil(targetDateObj.getDate() / 7);
 
+    // 1️⃣ 정기 휴무일 체크 1. 특정 날짜 지정 (YYYY-MM-DD), 2. 매주 고정 요일 (月, 火曜日...), 3. 일본 매장 특유의 'N번째 주 요일' (第2月曜日,第1火曜日...)
     const isBlackout = config.blackouts.some(b => {
       if (!b) return false;
       if (b === targetDateStr || b === tDayJa) return true;
@@ -215,16 +219,63 @@ function checkAvailability(storeId, targetDateStr) {
 
     if (isBlackout) return { isAvailable: false, reason: "정기 휴무일", availableSlots: [] };
 
-    let dailyTotal = 0; 
+    // 2️⃣ 요일별/기본값 상한선(effectiveDailyCap) 동적 연산
+    let effectiveDailyCap = 999;
+    const rawCap = config.rawDailyCap;
+
+    if (!rawCap || /^\d+$/.test(rawCap)) {
+      // 숫자만 있거나 빈칸인 경우 -> 모든 요일 동일 적용
+      effectiveDailyCap = rawCap ? parseInt(rawCap, 10) : 999;
+    } else {
+      // 콤마(,) 구분 복합 규칙 파싱 (예: "2, 토:0, 일:0" 또는 "기본:2, 金:1")
+      const capRules = rawCap.split(/[,/]/).map(s => s.trim());
+      let defaultCap = 999;
+      let specificCap = null;
+
+      for (let rule of capRules) {
+        if (!rule) continue;
+
+        // "2" 처럼 단독 숫자 -> 기본값으로 채택
+        if (/^\d+$/.test(rule)) {
+          defaultCap = parseInt(rule, 10);
+          continue;
+        }
+
+        const parts = rule.split(/[:=]/).map(s => s.trim());
+        if (parts.length === 2) {
+          const key = parts[0];
+          const val = parseInt(parts[1], 10);
+
+          // '기본', 'default', '全体', '基本' -> 기본값으로 채택
+          if (/^(기본|default|全体|基本)$/i.test(key)) {
+            defaultCap = isNaN(val) ? 999 : val;
+          }
+          // 오늘 요일(한/일 모두 대응)과 일치 -> 특정 요일값 채택
+          else if (key.includes(tDayKo) || key.includes(tDayJa)) {
+            specificCap = isNaN(val) ? 0 : val;
+          }
+        }
+      }
+
+      // 특정 요일 지정값이 있으면 우선 적용, 없으면 기본값 적용
+      effectiveDailyCap = (specificCap !== null) ? specificCap : defaultCap;
+    }
+
+    // 0팀으로 설정된 요일이면 즉시 마감 처리
+    if (effectiveDailyCap <= 0) {
+      return { isAvailable: false, reason: "당일 체험 마감", availableSlots: [] };
+    }
+
+    // 3️⃣ 당일 기존 예약 현황 메모리 스캔
+    let dailyTotal = 0;
     let timeSlotCounts = {};
     const timeZone = Session.getScriptTimeZone();
 
-    // 🚨 [핵심 변경] getValue() 추방 ❯ 전체 2차원 메모리 배열 내부 스캔으로 전면 대체
     const masterLog = data.Master_Log;
     for (let i = 2; i < masterLog.length; i++) {
       const mRow = masterLog[i];
       if (String(mRow[4]).trim() === storeId && !String(mRow[11]).includes('취소') && !String(mRow[11]).includes('노쇼')) {
-        let v = mRow[7]; // 메모리에 이미 들어와 있는 컬럼 데이터 직접 참조
+        let v = mRow[7];
         let dateStr = (v instanceof Date) ? Utilities.formatDate(v, timeZone, 'yyyy-MM-dd') : String(v || '').substring(0, 10);
         let timeStr = (v instanceof Date) ? Utilities.formatDate(v, timeZone, 'HH:mm') : String(v || '').substring(11, 16).replace(/\s+/g, '');
         
@@ -235,8 +286,12 @@ function checkAvailability(storeId, targetDateStr) {
       }
     }
 
-    if (dailyTotal >= config.dailyCap) return { isAvailable: false, reason: "당일 체험 마감", availableSlots: [] };
+    // 당일 총 예약 상한선 도달 체크
+    if (dailyTotal >= effectiveDailyCap) {
+      return { isAvailable: false, reason: "당일 체험 마감", availableSlots: [] };
+    }
 
+    // 4️⃣ 시간대별 슬롯 생성 및 마감 체크
     let allSlots = [];
     try {
       const parseTime = (t) => { const p = t.split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); };

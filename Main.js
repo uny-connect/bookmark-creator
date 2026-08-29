@@ -38,13 +38,11 @@ function doGet(e) {
         isAlreadyRequested = true; 
       } 
       else if (safeRow && sheetOrderNo === String(orderNo).trim().replace(/'/g, '')) {
-        // 시트 진행 상태를 '방문전'으로 변경 및 마킹 보완
         sheet.getRange(safeRow, 12).setValue('방문전'); 
         if (String(sheet.getRange(safeRow, 7).getValue() || '').trim() === '') {
           sheet.getRange(safeRow, 7).setValue('점주_직접_링크확정');
         }
 
-        // 크리에이터향 확정 알림 메일 슈팅 (NOTICE 뱃지 가동)
         try {
           const currentRestaurantName = String(sheet.getRange(safeRow, 6).getValue() || '').trim(); 
           const rawMemberCode = String(sheet.getRange(safeRow, 2).getValue() || '').trim();
@@ -52,9 +50,8 @@ function doGet(e) {
           
           const timeZone = Session.getScriptTimeZone();
           const rawVisitDate = sheet.getRange(safeRow, 8).getValue();
-          // 🎯 버그 보정: 이스케이프 없이 안전하게 변수로 분리 선언 후 치환
           const rawPeopleStr = String(sheet.getRange(safeRow, 9).getValue() || '1');
-          const pCount = rawPeopleStr.replace(/[^0-9]/g, '');
+          const pCount = rawPeopleStr.replace(/[^0-9]/g, '') || '1';
           const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
           if (currentMemberCode) {
@@ -65,7 +62,7 @@ function doGet(e) {
             for (let j = 1; j < userData.length; j++) {
               const dbMemberCode = String(userData[j][0] || '').trim().replace(/['"\s]/g, '').toLowerCase();
               if (dbMemberCode === currentMemberCode) {
-                creatorEmail = String(userData[j][12] || '').trim();
+                creatorEmail = String(userData[j][13] || '').trim(); // 🎯 N열(인덱스 13)로 수정
                 break;
               }
             }
@@ -118,7 +115,6 @@ function doGet(e) {
       console.error("❌ store_confirm 코어 에러: " + err.toString());
     }
     
-    // 🚨 [1] 중복 확정 불가 실패 화면 (하단 회색 박스 스펙 통일)
     if (isAlreadyRequested) {
       return HtmlService.createHtmlOutput(`
         <!DOCTYPE html>
@@ -159,7 +155,6 @@ function doGet(e) {
       `).setTitle('BOOKMARK CREATORS | 確定不可').addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
-    // 🚨 [2] 정상 확정 완료 시 화면 (하단 회색 박스 스펙 통일)
     return HtmlService.createHtmlOutput(`
         <!DOCTYPE html>
         <html>
@@ -204,7 +199,7 @@ function doGet(e) {
     const template = HtmlService.createTemplateFromFile('Feedback');
     template.row = e?.parameter?.row || '';
     template.orderNo = e?.parameter?.o || '';
-    return template.evaluate().setTitle('BOOKMARK CREATORS | 리퀘스트').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    return template.evaluate().setTitle('BOOKMARK CREATORS | リクエスト').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
   }
 
@@ -225,7 +220,7 @@ function onOpen() {
     .addItem('🔑 매장별 고유 PIN 6자리 생성', 'generateStorePins') 
     .addItem('🚨 자동 노쇼 일괄 처리 (과거 날짜)', 'checkAndMarkNoShow')
     .addItem('👥 아임웹 신규 회원 동기화', 'syncImwebUsers')
-    .addItem('📧 매장 메일 수신 테스트 발송', 'sendTestEmailToStore') // 🎯 신규 추가
+    .addItem('📧 매장 메일 수신 테스트 발송', 'sendTestEmailToStore')
     .addToUi();
 }
 
@@ -238,11 +233,11 @@ function onEdit(e) {
   const col = e.range.getColumn();
   const val = String(e.range.getValue()).trim();
 
-// 🎯 [완벽 보정] E열(5번째 열) 점포 ID 입력 시 F열(6번째 열) 점포명 실시간 자동 기입
+  // E열(5번째 열) 점포 ID 입력 시 F열(6번째 열) 점포명 실시간 자동 기입
   if (col === 5 && row >= 3) { 
     const storeId = val.toUpperCase();
-    const storeNameCell = sheet.getRange(row, 6); // F열 (점포명)
-    const statusCell = sheet.getRange(row, 12);   // L열 (진행 상태)
+    const storeNameCell = sheet.getRange(row, 6);
+    const statusCell = sheet.getRange(row, 12);
     
     if (storeId === "") {
       storeNameCell.clearContent();
@@ -251,29 +246,28 @@ function onEdit(e) {
       const restSheet = ss.getSheetByName('Restaurant_List');
       if (restSheet) {
         const restData = restSheet.getDataRange().getValues();
-        let matchedName = "식당명 없음"; // 매칭 실패 시 기본 텍스트
+        let matchedName = "식당명 없음";
         
         for (let k = 2; k < restData.length; k++) {
           const sheetStoreId = String(restData[k][0]).trim().toUpperCase();
           if (sheetStoreId === storeId) {
-            matchedName = String(restData[k][1]).trim(); // B열: 한국어 매장명
+            matchedName = String(restData[k][1]).trim();
             break;
           }
         }
-        storeNameCell.setValue(matchedName); // F열에 최종 기입
+        storeNameCell.setValue(matchedName);
       }
       
-      // 🎯 [신규] L열이 비어있으면 '예약대기'로 자동 초기화 (수기 입력 시 상태 누락 방지)
       if (String(statusCell.getValue()).trim() === "") {
         statusCell.setValue("예약대기");
       }
     }
   }
 
-  // 🗓️ H열(8번째 열: 방문예정일시) 편집 시 J열(마감일), K열(보증금) 자동 연산
+  // H열(8번째 열) 방문예정일시 편집 시 J열(마감일), K열(보증금) 자동 연산
   if (col === 8 && row >= 3) { 
-    const deadlineCell = sheet.getRange(row, 10); // J열 (리뷰 마감 기한)
-    const depositCell = sheet.getRange(row, 11);  // K열 (보증금액)
+    const deadlineCell = sheet.getRange(row, 10);
+    const depositCell = sheet.getRange(row, 11);
     const cellValue = e.range.getValue();
     
     if (cellValue instanceof Date) { 
@@ -286,8 +280,8 @@ function onEdit(e) {
     } 
   }
 
-  // 🔄 L열(12번째 열: 진행 상태) 변경 시 슬롯 리셋
-  if (col === 12 && row >= 3) {
+  // L열(12번째 열) 진행 상태 변경 시 슬롯 리셋
+  if (col === 12 && row >= 3) { 
     if (val === '예약대기' || val === '일정조율필요') {
       sheet.getRange(row, 8, 1, 3).clearContent();
     }
@@ -295,7 +289,7 @@ function onEdit(e) {
 }
 
 /********************************************************************
- * [3] 어드민 코어 백엔드 API 연산 엔진 (adminUpdateMission 정밀 수리 완료)
+ * [3] 어드민 코어 백엔드 API 연산 엔진
  ********************************************************************/
 function getAdminData() {
   try {
@@ -304,10 +298,10 @@ function getAdminData() {
     let missions = [], restList = [], restNameMap = {}, userTierMap = {};
 
     const userDB = data.User_DB;
-    for (let u = 2; u < userDB.length; u++) {
+    for (let u = 1; u < userDB.length; u++) {
       if(userDB[u][0]) {
         try {
-          userTierMap[String(userDB[u][0]).trim()] = parseTierEmoji(userDB[u][8]);
+          userTierMap[String(userDB[u][0]).trim()] = parseTierEmoji(userDB[u][9]); // 🎯 J열(인덱스 9)로 수정
         } catch(tierErr) {
           userTierMap[String(userDB[u][0]).trim()] = '🟡'; 
         }
@@ -404,7 +398,6 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
       sheet.getRange(safeRow, 21).setValue((newStatus === '제출완료' && (!newRefundStatus || newRefundStatus.trim() === '')) ? '환급대기' : newRefundStatus);
     }
     
-    // ✉️ 수동 어드민 패널 상태 제어 알림 (NOTICE 뱃지 및 인원수 보정 통합)
     if ((newStatus === '방문전' || newStatus === '일정조율필요') && currentMemberCode) {
       try {
         const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('User_DB');
@@ -413,7 +406,7 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
         
         for (let j = 1; j < userData.length; j++) {
           if (String(userData[j][0]).trim() === currentMemberCode) {
-            creatorEmail = String(userData[j][12] || '').trim();
+            creatorEmail = String(userData[j][13] || '').trim(); // 🎯 N열(인덱스 13)로 수정
             break;
           }
         }
@@ -424,7 +417,7 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
           
           if (newStatus === '방문전') {
             const rawPeopleStr = String(sheet.getRange(safeRow, 9).getValue() || '1');
-            const pCount = rawPeopleStr.replace(/[^0-9]/g, '');
+            const pCount = rawPeopleStr.replace(/[^0-9]/g, '') || '1';
 
             subject = "🗓️ [BOOKMARK CREATORS] 방문 예약 확정 안내";
             htmlBody = `
@@ -655,9 +648,6 @@ function verifyAdminPassword(inputPw) {
   } catch(e) { return false; }
 }
 
-/********************************************************************
- * 📧 매장 이메일 수신 정상 여부 즉시 검증 엔진 (선택 셀 자동 감지 지원)
- ********************************************************************/
 function sendTestEmailToStore() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -670,17 +660,15 @@ function sendTestEmailToStore() {
   let storeNameJp = "";
   let storeId = "";
 
-  // 1️⃣ Restaurant_List 시트에서 특정 셀/행을 클릭하고 있는 경우 자동 감지
   if (activeSheet.getName().trim() === 'Restaurant_List') {
     const selectedRow = activeSheet.getActiveRange().getRow();
     
-    // 헤더(1행)가 아닌 2행 이상의 데이터 행을 선택한 경우
     if (selectedRow >= 2) {
       const rowValues = restSheet.getRange(selectedRow, 1, 1, 11).getValues()[0];
-      storeId = String(rowValues[0] || '').trim(); // A열: 점포 ID
-      const nameKo = String(rowValues[1] || '').trim(); // B열: 한국어명
-      const nameJp = String(rowValues[2] || '').trim(); // C열: 일본어명
-      const email = String(rowValues[10] || '').trim(); // K열: 이메일 (인덱스 10)
+      storeId = String(rowValues[0] || '').trim();
+      const nameKo = String(rowValues[1] || '').trim();
+      const nameJp = String(rowValues[2] || '').trim();
+      const email = String(rowValues[10] || '').trim();
 
       if (storeId && email && email.includes('@')) {
         storeNameJp = nameJp || nameKo;
@@ -697,7 +685,6 @@ function sendTestEmailToStore() {
     }
   }
 
-  // 2️⃣ 자동 감지가 안 되었거나 다른 시트에서 실행한 경우 (기존 팝업 입력 모드)
   if (!targetEmail) {
     const response = ui.prompt(
       '📧 매장 메일 수신 테스트',
@@ -714,7 +701,7 @@ function sendTestEmailToStore() {
       const sheetStoreId = String(restData[i][0] || '').trim().toUpperCase();
       if (sheetStoreId === inputVal.toUpperCase()) {
         storeId = sheetStoreId;
-        targetEmail = String(restData[i][10] || '').trim(); // K열 이메일
+        targetEmail = String(restData[i][10] || '').trim();
         storeNameJp = String(restData[i][2] || '').trim() || String(restData[i][1] || '').trim();
         break;
       }
@@ -725,7 +712,6 @@ function sendTestEmailToStore() {
     return ui.alert(`❌ 유효한 이메일 주소를 찾을 수 없습니다.\nRestaurant_List 시트의 K열 이메일을 확인해 주세요.`);
   }
 
-  // 3️⃣ 테스트 메일 발송 처리
   try {
     const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
     const subject = `【TEST / 接続テスト】 BOOKMARK CREATORS 予約通知テスト送信 (${storeNameJp})`;
@@ -734,32 +720,26 @@ function sendTestEmailToStore() {
       <meta charset="UTF-8">
       <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #f4f5f7;">
         <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-          
           <div style="text-align: center; margin-bottom: 20px;">
             <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #e03131; padding: 4px 10px; border-radius: 6px; display: inline-block;">CONNECTION TEST</span>
             <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
             <div style="width: 40px; height: 3px; background: #C5A358; margin: 10px auto;"></div>
           </div>
-          
           <h2 style="color: #1A2B49; margin-top: 0; font-size: 16px; border-bottom: 2px solid #f1f3f5; padding-bottom: 15px; text-align: center;">&#128236; メール受信テスト</h2>
-          
           <div style="margin-top: 20px;">
             <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin-bottom: 5px;">${storeNameJp}</p>
             <p style="color: #495057; font-size: 13.5px; margin-top: 0;">店舗管理者様</p>
           </div>
-          
           <p style="color: #495057; font-size: 13.5px; line-height: 1.6;">
             本メールは、BOOKMARK CREATORSからの予約受付通知が正常に届くか確認するための<b>【テストメール】</b>です。<br>
             このメールが確認できましたら、今後のクリエイター来店予約通知も問題なく受信いただけます。
           </p>
-          
           <div style="background-color: #f8f9fa; border-left: 4px solid #2D6A4F; padding: 15px; border-radius: 4px; margin: 20px 0;">
             <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ 店舗ID:</strong> ${storeId || '-'}</p>
             <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ 受信状態:</strong> <span style="color: #2D6A4F; font-weight: bold;">正常受信完了 (Success)</span></p>
             <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ テスト日時:</strong> ${todayStr}</p>
             <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ 対象アドレス:</strong> ${targetEmail}</p>
           </div>
-          
           <div style="text-align: center; margin-top: 24px; padding: 12px; background-color: #f1f3f5; border-radius: 8px; font-size: 12px; color: #6c757d; font-weight: 600;">
             ※ 本メールに対する返信や確定手続きは不要です。
           </div>

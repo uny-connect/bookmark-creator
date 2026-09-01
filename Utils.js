@@ -39,6 +39,7 @@ function _getSheetsData(sheetNames) {
   }, {});
 }
 
+/** [아임웹 유저 동기화] */
 function syncImwebUsers() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const rawSheet = ss.getSheetByName("Imweb_Raw");
@@ -80,7 +81,7 @@ function syncImwebUsers() {
     // 🎯 [시트 구조 변경 반영] 총 16열(A~P)에 맞춘 데이터 배열 생성
     const newRow = new Array(16).fill(""); 
     
-    newRow[0] = uniqueKey;                                // A열: 멤버코드(고유키)
+    newRow[0] = uniqueKey;                                 // A열: 멤버코드(고유키)
     newRow[1] = row[col("영문명")] || "";                   // B열: 영문 성함
     newRow[2] = row[col("이름")] || "";                     // C열: 한국어 실명
     newRow[3] = formattedPhone;                           // D열: 연락처 (하이픈 처리 완)
@@ -90,8 +91,8 @@ function syncImwebUsers() {
     newRow[7] = row[col("틱톡(TicTok)")] || "";             // H열: 틱톡 URL
     newRow[8] = row[col("구글 로컬 가이드(프로필캡쳐)")] || ""; // I열: 구글 로컬 가이드 (신규행)
     newRow[9] = row[col("회원 그룹")] || "";                // J열: 현재 등급
-    newRow[10] = "";                                      // K열: 누적 패널티 (요청하신 대로 빈칸 처리)
-    newRow[11] = "";                                      // L열: 미션 완료수 (요청하신 대로 빈칸 처리)
+    newRow[10] = "";                                      // K열: 누적 패널티
+    newRow[11] = "";                                      // L열: 미션 완료수
     newRow[12] = row[col("가입일")] || "";                  // M열: 가입 승인일
     newRow[13] = row[col("이메일")] || "";                  // N열: 이메일 주소
     newRow[14] = "";                                      // O열: 환불용 계좌 정보
@@ -101,6 +102,8 @@ function syncImwebUsers() {
     addedCount++;
   }
 
+  SpreadsheetApp.getUi().alert(`✅ 동기화 완료! 총 ${addedCount}명의 신규 유저가 User_DB에 등록되었습니다.`);
+}
 
 /**
  * 🚨 [자동 노쇼 일괄 처리 엔진 - 최종 비즈니스 세이프가드 적용]
@@ -190,7 +193,4 @@ function checkAndMarkNoShow() {
   } catch (err) {
     Logger.log(`❌ [checkAndMarkNoShow 오류] ${err.toString()}`);
   }
-}
-
-  SpreadsheetApp.getUi().alert(`✅ 동기화 완료! 총 ${addedCount}명의 신규 유저가 User_DB에 등록되었습니다.`);
 }

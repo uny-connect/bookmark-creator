@@ -601,3 +601,45 @@ function sendTestEmailToStore() {
     ui.alert(`❌ [발송 실패 에러]\n\n${err.toString()}`);
   }
 }
+
+/** [매장별 고유 PIN 6자리 생성 엔진] */
+function generateStorePins() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const storeSheet = ss.getSheetByName("Restaurant_List"); 
+  if (!storeSheet) {
+    SpreadsheetApp.getUi().alert("❌ Restaurant_List 시트를 찾을 수 없습니다.");
+    return;
+  }
+  
+  const lastRow = storeSheet.getLastRow();
+  if (lastRow <= 2) {
+    SpreadsheetApp.getUi().alert("⚠️ 등록된 매장 데이터가 없습니다.");
+    return;
+  }
+  
+  // A열부터 I열(9번째 열)까지 데이터 로드 (헤더 제외 3번째 행부터)
+  const data = storeSheet.getRange(3, 1, lastRow - 2, 9).getValues();
+  let createdCount = 0;
+  const charPool = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // 헷갈리는 0, 1, I, O 제외
+  const pinLength = 6; 
+  
+  for (let i = 0; i < data.length; i++) {
+    const storeId = String(data[i][0] || "").trim(); // A열: 매장 ID
+    const currentPin = String(data[i][8] || "").trim(); // I열: PIN
+    
+    // 매장 ID는 있는데 PIN 번호가 비어있는 경우에만 신규 발급
+    if (storeId !== "" && (!currentPin || currentPin === "undefined")) {
+      let randPin = "";
+      for (let j = 0; j < pinLength; j++) {
+        const randomIndex = Math.floor(Math.random() * charPool.length);
+        randPin += charPool.charAt(randomIndex);
+      }
+      
+      // I열(9번째 열)에 텍스트 형태('PIN)로 안전하게 주입
+      storeSheet.getRange(i + 3, 9).setValue("'" + randPin);
+      createdCount++;
+    }
+  }
+  
+  SpreadsheetApp.getUi().alert(`🔒 PIN 생성 완료: 총 ${createdCount}개의 매장 PIN이 새로 발급되었습니다.`);
+}

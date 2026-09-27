@@ -39,7 +39,7 @@ function _getSheetsData(sheetNames) {
   }, {});
 }
 
-/** [아임웹 유저 동기화 - 신규 등록 + 기존 회원 정보 업데이트(업서트)] */
+/** [아임웹 유저 동기화 - 신규 등록 + 기존 회원 정보 및 등급 업데이트(업서트)] */
 function syncImwebUsers() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const rawSheet = ss.getSheetByName("Imweb_Raw");
@@ -103,12 +103,12 @@ function syncImwebUsers() {
     const youtubeUrl = getVal("유튜브", "youtube");
     const tiktokUrl = getVal("틱톡", "tiktok", "tictok");
     const googleGuide = getVal("구글", "로컬", "가이드");
-    const userGroup = getVal("회원 그룹", "그룹", "등급");
+    const userGroup = getVal("회원 그룹", "그룹", "등급"); // 🎯 등급 정보 추출
     const signupDate = getVal("가입일", "가입 승인일");
     const email = getVal("이메일", "email");
     const adminMemo = getVal("관리자 메모", "메모");
 
-    // 🔄 [케이스 1: 기존 유저가 있는 경우 -> 누락/최신 정보 업데이트]
+    // 🔄 [케이스 1: 기존 유저가 있는 경우 -> SNS, 인적사항 및 J열 등급 업데이트]
     if (existingUserRowMap.has(uniqueKey)) {
       const targetRow = existingUserRowMap.get(uniqueKey);
       
@@ -122,8 +122,10 @@ function syncImwebUsers() {
       if (tiktokUrl) userSheet.getRange(targetRow, 8).setValue(tiktokUrl);           // H열: 틱톡
       if (googleGuide) userSheet.getRange(targetRow, 9).setValue(googleGuide);       // I열: 구글가이드
       
-      // J열(등급), K열(패널티), L열(완료수), O열(계좌)은 시트 수동 관리 데이터를 위해 보존하고
-      // N열(이메일), P열(메모)만 최신화
+      // 🎯 [J열 등급 업데이트 추가] 아임웹 회원 그룹(등급)에 값이 있으면 최신값으로 반영
+      if (userGroup) userSheet.getRange(targetRow, 10).setValue(userGroup);          // J열: 회원 그룹(등급)
+      
+      // K열(패널티), L열(미션완료수), O열(환불계좌)은 시트 수동 관리 데이터를 위해 보존
       if (email) userSheet.getRange(targetRow, 14).setValue(email);                  // N열: 이메일
       if (adminMemo) userSheet.getRange(targetRow, 16).setValue(adminMemo);          // P열: 관리자메모
       
@@ -141,7 +143,7 @@ function syncImwebUsers() {
       newRow[6] = youtubeUrl;       // G열: 유튜브
       newRow[7] = tiktokUrl;        // H열: 틱톡
       newRow[8] = googleGuide;      // I열: 구글 로컬 가이드
-      newRow[9] = userGroup;        // J열: 회원 그룹
+      newRow[9] = userGroup;        // J열: 회원 그룹(등급)
       newRow[10] = "";              // K열: 누적 패널티
       newRow[11] = "";              // L열: 미션 완료수
       newRow[12] = signupDate;      // M열: 가입일
@@ -155,7 +157,7 @@ function syncImwebUsers() {
     }
   }
 
-  SpreadsheetApp.getUi().alert(`✅ 동기화 완료!\n\n• 신규 등록: ${addedCount}명\n• 정보 업데이트: ${updatedCount}명`);
+  SpreadsheetApp.getUi().alert(`✅ 동기화 완료!\n\n• 신규 등록: ${addedCount}명\n• 정보 및 등급 업데이트: ${updatedCount}명`);
 }
 
 /**

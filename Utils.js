@@ -39,7 +39,7 @@ function _getSheetsData(sheetNames) {
   }, {});
 }
 
-/** [아임웹 유저 동기화] */
+/** [아임웹 유저 동기화 - 신규 등록 + 기존 회원 정보 업데이트(업서트)] */
 function syncImwebUsers() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const rawSheet = ss.getSheetByName("Imweb_Raw");
@@ -50,15 +50,24 @@ function syncImwebUsers() {
   const rawData = rawSheet.getDataRange().getValues();
   if (rawData.length <= 1) return SpreadsheetApp.getUi().alert("가져올 데이터가 없습니다.");
 
-  // 🎯 [핵심 수정 1] 헤더명에 띄어쓰기나 대소문자 차이가 있어도 키워드로 열을 찾는 함수
+  // 🎯 키워드로 유연하게 엑셀 헤더 열 번호 찾기
   const headers = rawData[0].map(h => String(h || "").trim().toLowerCase());
   const col = (...keywords) => {
     return headers.findIndex(h => keywords.some(k => h.includes(k.toLowerCase())));
   };
 
-  // 기존 User_DB에 있는 고유키(A열) 목록 (중복 가입 방지용)
-  const existingUsers = userSheet.getDataRange().getValues().map(row => String(row[0]).trim());
+  // 기존 User_DB의 전체 데이터 및 행 위치 매핑 (고유키 -> 행 번호)
+  const userData = userSheet.getDataRange().getValues();
+  const existingUserRowMap = new Map();
+  for (let r = 1; r < userData.length; r++) {
+    const key = String(userData[r][0] || "").trim();
+    if (key) {
+      existingUserRowMap.set(key, r + 1); // 1-based 시트 행 번호
+    }
+  }
+
   let addedCount = 0;
+  let updatedCount = 0;
 
   for (let i = 1; i < rawData.length; i++) {
     const row = rawData[i];
@@ -66,9 +75,9 @@ function syncImwebUsers() {
     // 고유키 검증
     const keyIdx = col("고유키", "회원코드", "member_code");
     const uniqueKey = keyIdx !== -1 ? String(row[keyIdx] || "").trim() : "";
-    if (!uniqueKey || existingUsers.includes(uniqueKey)) continue; 
+    if (!uniqueKey) continue; 
 
-    // 연락처 포맷팅 로직
+    // 연락처 포맷팅
     const phoneIdx = col("연락처", "휴대폰", "전화번호");
     let rawPhone = phoneIdx !== -1 ? String(row[phoneIdx] || "").replace(/[^0-9]/g, "") : "";
     if (rawPhone.startsWith("10") && (rawPhone.length === 9 || rawPhone.length === 10)) {
@@ -82,37 +91,71 @@ function syncImwebUsers() {
       formattedPhone = rawPhone.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3");
     }
 
-    // 🎯 [핵심 수정 2] 헤더 이름 오타/띄어쓰기 상관없이 안전하게 값을 가져오도록 매핑
     const getVal = (...keys) => {
       const idx = col(...keys);
       return idx !== -1 ? (row[idx] || "") : "";
     };
 
-    // 총 16열(A~P)에 맞춘 데이터 배열 생성
-    const newRow = new Array(16).fill(""); 
-    
-    newRow[0] = uniqueKey;                                             // A열: 멤버코드(고유키)
-    newRow[1] = getVal("영문명", "영문이름", "english");               // B열: 영문 성함
-    newRow[2] = getVal("이름", "성명", "실명");                         // C열: 한국어 실명
-    newRow[3] = formattedPhone;                                        // D열: 연락처
-    newRow[4] = getVal("블로그", "blog", "네이버");                     // E열: 블로그 URL
-    newRow[5] = getVal("인스타", "insta", "instagram", "릴스");         // F열: 인스타그램 URL
-    newRow[6] = getVal("유튜브", "youtube");                           // G열: 유튜브 URL
-    newRow[7] = getVal("틱톡", "tiktok", "tictok");                    // H열: 틱톡 URL
-    newRow[8] = getVal("구글", "로컬", "가이드");                       // I열: 구글 로컬 가이드
-    newRow[9] = getVal("회원 그룹", "그룹", "등급");                    // J열: 현재 등급
-    newRow[10] = "";                                                   // K열: 누적 패널티
-    newRow[11] = "";                                                   // L열: 미션 완료수
-    newRow[12] = getVal("가입일", "가입 승인일");                       // M열: 가입 승인일
-    newRow[13] = getVal("이메일", "email");                            // N열: 이메일 주소
-    newRow[14] = "";                                                   // O열: 환불용 계좌 정보
-    newRow[15] = getVal("관리자 메모", "메모");                         // P열: 관리자 메모
-    
-    userSheet.appendRow(newRow);
-    addedCount++;
+    const englishName = getVal("영문명", "영문이름", "english");
+    const koreanName = getVal("이름", "성명", "실명");
+    const blogUrl = getVal("블로그", "blog", "네이버");
+    const instaUrl = getVal("인스타", "insta", "instagram", "릴스");
+    const youtubeUrl = getVal("유튜브", "youtube");
+    const tiktokUrl = getVal("틱톡", "tiktok", "tictok");
+    const googleGuide = getVal("구글", "로컬", "가이드");
+    const userGroup = getVal("회원 그룹", "그룹", "등급");
+    const signupDate = getVal("가입일", "가입 승인일");
+    const email = getVal("이메일", "email");
+    const adminMemo = getVal("관리자 메모", "메모");
+
+    // 🔄 [케이스 1: 기존 유저가 있는 경우 -> 누락/최신 정보 업데이트]
+    if (existingUserRowMap.has(uniqueKey)) {
+      const targetRow = existingUserRowMap.get(uniqueKey);
+      
+      // B열~I열: 기본 인적사항 및 SNS 채널 URL 업데이트
+      if (englishName) userSheet.getRange(targetRow, 2).setValue(englishName);       // B열: 영문명
+      if (koreanName) userSheet.getRange(targetRow, 3).setValue(koreanName);         // C열: 이름
+      if (formattedPhone) userSheet.getRange(targetRow, 4).setValue(formattedPhone); // D열: 연락처
+      if (blogUrl) userSheet.getRange(targetRow, 5).setValue(blogUrl);               // E열: 블로그
+      if (instaUrl) userSheet.getRange(targetRow, 6).setValue(instaUrl);             // F열: 인스타
+      if (youtubeUrl) userSheet.getRange(targetRow, 7).setValue(youtubeUrl);         // G열: 유튜브
+      if (tiktokUrl) userSheet.getRange(targetRow, 8).setValue(tiktokUrl);           // H열: 틱톡
+      if (googleGuide) userSheet.getRange(targetRow, 9).setValue(googleGuide);       // I열: 구글가이드
+      
+      // J열(등급), K열(패널티), L열(완료수), O열(계좌)은 시트 수동 관리 데이터를 위해 보존하고
+      // N열(이메일), P열(메모)만 최신화
+      if (email) userSheet.getRange(targetRow, 14).setValue(email);                  // N열: 이메일
+      if (adminMemo) userSheet.getRange(targetRow, 16).setValue(adminMemo);          // P열: 관리자메모
+      
+      updatedCount++;
+    } 
+    // ➕ [케이스 2: 완전 신규 유저인 경우 -> 새로운 행 추가]
+    else {
+      const newRow = new Array(16).fill("");
+      newRow[0] = uniqueKey;        // A열: 멤버코드
+      newRow[1] = englishName;      // B열: 영문명
+      newRow[2] = koreanName;       // C열: 한국어 실명
+      newRow[3] = formattedPhone;   // D열: 연락처
+      newRow[4] = blogUrl;          // E열: 블로그
+      newRow[5] = instaUrl;         // F열: 인스타
+      newRow[6] = youtubeUrl;       // G열: 유튜브
+      newRow[7] = tiktokUrl;        // H열: 틱톡
+      newRow[8] = googleGuide;      // I열: 구글 로컬 가이드
+      newRow[9] = userGroup;        // J열: 회원 그룹
+      newRow[10] = "";              // K열: 누적 패널티
+      newRow[11] = "";              // L열: 미션 완료수
+      newRow[12] = signupDate;      // M열: 가입일
+      newRow[13] = email;           // N열: 이메일
+      newRow[14] = "";              // O열: 환불 계좌
+      newRow[15] = adminMemo;       // P열: 관리자 메모
+
+      userSheet.appendRow(newRow);
+      existingUserRowMap.set(uniqueKey, userSheet.getLastRow());
+      addedCount++;
+    }
   }
 
-  SpreadsheetApp.getUi().alert(`✅ 동기화 완료! 총 ${addedCount}명의 신규 유저가 User_DB에 등록되었습니다.`);
+  SpreadsheetApp.getUi().alert(`✅ 동기화 완료!\n\n• 신규 등록: ${addedCount}명\n• 정보 업데이트: ${updatedCount}명`);
 }
 
 /**

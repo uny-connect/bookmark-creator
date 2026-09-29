@@ -114,7 +114,14 @@ function doGet(e) {
                   </div>
                 </div>`;
               
-              GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
+              // 🎯 Settings 시트에서 운영진 이메일 목록을 읽어와 bcc(숨은참조)로 동시 수신!
+              const adminAlertEmails = getAdminAlertEmails();
+
+              GmailApp.sendEmail(creatorEmail, subject, "", { 
+                htmlBody: htmlBody, 
+                name: "BOOKMARK CREATORS",
+                bcc: adminAlertEmails
+              });
             }
           }
         } catch (mailErr) {
@@ -284,7 +291,7 @@ function onEdit(e) {
       const d = new Date(cellValue); 
       d.setDate(d.getDate() + 10); 
       deadlineCell.setValue(d); 
-      if (!depositCell.getValue()) depositCell.setValue(50000); 
+      if (!depositCell.getValue()) depositCell.setValue(10000); // 🎯 10,000원 보정!
     } else if (!cellValue) { 
       deadlineCell.clearContent(); 
     } 
@@ -388,7 +395,7 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
         dDate.setDate(dDate.getDate() + 10);
         sheet.getRange(safeRow, 8).setValue(vDate);   
         sheet.getRange(safeRow, 10).setValue(dDate);  
-        if(!sheet.getRange(safeRow, 11).getValue()) sheet.getRange(safeRow, 11).setValue(50000); 
+        if(!sheet.getRange(safeRow, 11).getValue()) sheet.getRange(safeRow, 11).setValue(10000); // 🎯 10,000원 보정!
       }
       if (newStatus === '방문전' && String(sheet.getRange(safeRow, 7).getValue() || '').trim() === '') {
         sheet.getRange(safeRow, 7).setValue('어드민_강제승인_패스');
@@ -484,7 +491,15 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
                 </div>
               </div>`;
           }
-          GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
+
+          // 🎯 운영진 이메일도 숨은참조(bcc)로 전달
+          const adminAlertEmails = getAdminAlertEmails();
+
+          GmailApp.sendEmail(creatorEmail, subject, "", { 
+            htmlBody: htmlBody, 
+            name: "BOOKMARK CREATORS",
+            bcc: adminAlertEmails
+          });
         }
       } catch (mailErr) {}
     }
@@ -642,4 +657,116 @@ function generateStorePins() {
   }
   
   SpreadsheetApp.getUi().alert(`🔒 PIN 생성 완료: 총 ${createdCount}개의 매장 PIN이 새로 발급되었습니다.`);
+}
+
+/********************************************************************
+ * 🔐 [어드민 인증 및 챌린지 설정 엔진 + 알림 이메일 로더]
+ ********************************************************************/
+
+/** 🎯 Settings 시트에서 운영진 알림 수신 이메일 목록 불러오기 도우미 */
+function getAdminAlertEmails() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Settings");
+    if (!sheet) return "bookmarkjapan.info@gmail.com";
+
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][0] || '').trim().toUpperCase();
+      if (key === "ADMIN_NOTIFICATION_EMAILS") {
+        const emails = String(data[i][1] || '').trim();
+        return emails || "bookmarkjapan.info@gmail.com";
+      }
+    }
+  } catch (e) {
+    Logger.log("getAdminAlertEmails 에러: " + e.toString());
+  }
+  return "bookmarkjapan.info@gmail.com";
+}
+
+/** [1] 관리자 패스워드 검증 함수 (공백 무시 및 강력한 정규화) */
+function verifyAdminPassword(inputPw) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Settings");
+    if (!sheet) {
+      Logger.log("❌ Settings 시트를 찾을 수 없습니다.");
+      return false;
+    }
+
+    const cleanInput = String(inputPw || '').replace(/[\s\uFEFF\xA0]+/g, ''); // 모든 공백 제거
+    const data = sheet.getDataRange().getValues();
+
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][0] || '').replace(/[\s_]+/g, '').toUpperCase();
+      // 'ADMINPASSWORD' 또는 'ADMINPW' 키 매칭
+      if (key === "ADMINPASSWORD" || key === "ADMINPW") {
+        const savedPw = String(data[i][1] || '').replace(/[\s\uFEFF\xA0]+/g, '');
+        Logger.log(`[비밀번호 검증] 시트저장값: [${savedPw}] vs 입력값: [${cleanInput}]`);
+        return savedPw === cleanInput;
+      }
+    }
+    
+    Logger.log("❌ Settings 시트에서 ADMIN_PASSWORD 항목을 찾지 못했습니다.");
+    return false;
+  } catch (e) {
+    Logger.log("verifyAdminPassword 에러: " + e.toString());
+    return false;
+  }
+}
+
+/** [2] 챌린지 시즌 설정 불러오기 */
+function getChallengeSettings() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Settings");
+    if (!sheet) return { startDate: "2026-06-01", endDate: "2026-12-31", targetCount: "20" };
+
+    const data = sheet.getDataRange().getValues();
+    const settings = { startDate: "2026-06-01", endDate: "2026-12-31", targetCount: "20" };
+    const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
+
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][0] || '').trim().toUpperCase();
+      let val = data[i][1];
+      if (val instanceof Date) {
+        val = Utilities.formatDate(val, timeZone, "yyyy-MM-dd");
+      }
+      val = String(val || '').trim();
+
+      if (key === "START_DATE") settings.startDate = val;
+      if (key === "END_DATE") settings.endDate = val;
+      if (key === "TARGET_COUNT") settings.targetCount = val;
+    }
+    return settings;
+  } catch (e) {
+    return { startDate: "2026-06-01", endDate: "2026-12-31", targetCount: "20" };
+  }
+}
+
+/** [3] 챌린지 시즌 설정 저장하기 */
+function saveChallengeSettings(startDate, endDate, targetCount) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName("Settings");
+    if (!sheet) return "Settings 시트가 없습니다.";
+
+    const data = sheet.getDataRange().getValues();
+    let startRow = -1, endRow = -1, targetRow = -1;
+
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][0] || '').trim().toUpperCase();
+      if (key === "START_DATE") startRow = i + 1;
+      if (key === "END_DATE") endRow = i + 1;
+      if (key === "TARGET_COUNT") targetRow = i + 1;
+    }
+
+    if (startRow > 0) sheet.getRange(startRow, 2).setValue(startDate);
+    if (endRow > 0) sheet.getRange(endRow, 2).setValue(endDate);
+    if (targetRow > 0) sheet.getRange(targetRow, 2).setValue(targetCount);
+
+    return "기준 저장 완료";
+  } catch (e) {
+    return "저장 실패: " + e.toString();
+  }
 }

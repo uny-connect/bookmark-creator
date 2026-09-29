@@ -88,7 +88,7 @@
     <div class="card" style="max-width: 320px; width: 100%; padding: 24px 20px; text-align: center; border-radius: 24px; border: 1px solid #e9ecef !important; box-shadow: 0 8px 32px rgba(0,0,0,0.04) !important;">
       <span class="badge-custom b-pending" style="font-size: 10px; letter-spacing: 0.8px; padding: 5px 10px; border-radius: 6px; background-color: var(--brand-navy) !important; color: #fff; display: inline-block; font-weight: 700; margin-bottom: 16px;">SYSTEM CONTROL</span>
       <h5 style="color: var(--brand-navy); font-weight: 800; margin-bottom: 20px; font-size: 18px;">ADMIN ACCESS</h5>
-      <input type="password" id="adminGatePw" class="form-control text-center mb-3" style="font-size: 15px; letter-spacing: 2px; border-radius: 14px; color: var(--brand-navy);" placeholder="code" onkeyup="if(event.key==='Enter') executeGateVerify()">
+      <input type="password" id="adminGatePw" class="form-control text-center mb-3" style="font-size: 15px; letter-spacing: 2px; border-radius: 14px; color: var(--brand-navy);" placeholder="code" onkeydown="if(event.key==='Enter'){ event.preventDefault(); executeGateVerify(); }">
       <button class="btn btn-brand-solid w-100" id="gateAuthBtn" onclick="executeGateVerify()" style="border-radius: 14px; padding: 12px; letter-spacing: 0.5px;">Sign in</button>
     </div>
   </div>

@@ -1,30 +1,37 @@
-/** [3] 미션 목록 조회 (A~U열 변경 구조 반영 - 안정화 버전) */
+/** [3] 미션 목록 조회 (전화번호 하이픈 무시 및 실시간 매칭 강화) */
 function getMissions(orderNo, phoneLast4) {
   try {
     const data = _getSheetsData(['Master_Log', 'User_DB', 'Restaurant_List']);
-    const inputOrderNo = String(orderNo).trim().replace(/'/g, '');
-    const inputPhone = String(phoneLast4).trim();
+    const inputOrderNo = String(orderNo || '').trim().replace(/['"\s]/g, '');
+    const inputPhone = String(phoneLast4 || '').trim().replace(/[^0-9]/g, '');
 
-    const userMap = new Map(); const userTierMap = new Map(); 
-    for (let j = 1; j < data.User_DB.length; j++) { // 🚨 인덱스 1(2번째 행)부터 안전하게 스캔
-      const uRow = data.User_DB[j]; if (!uRow || !uRow[0]) continue;
+    const userMap = new Map(); 
+    const userTierMap = new Map(); 
+
+    // User_DB 스캔 (인덱스 1부터)
+    for (let j = 1; j < data.User_DB.length; j++) {
+      const uRow = data.User_DB[j]; 
+      if (!uRow || !uRow[0]) continue;
+      
       const mCode = String(uRow[0]).trim();
-      // uRow[3]이 전화번호 열이 맞는지 반드시 시트 확인 필요!
+      const mEmail = String(uRow[13] || '').trim();
+      // D열(인덱스 3) 전화번호에서 숫자만 추출
       const phoneStr = uRow[3] ? String(uRow[3]).replace(/[^0-9]/g, '') : '';
-      userMap.set(mCode, phoneStr);
-      userTierMap.set(mCode, parseTierEmoji(uRow[9])); 
+      
+      if (mCode) userMap.set(mCode.toLowerCase(), phoneStr);
+      if (mEmail) userMap.set(mEmail.toLowerCase(), phoneStr); // 이메일로도 폰번호 매핑
+      userTierMap.set(mCode.toLowerCase(), parseTierEmoji(uRow[9])); 
     }
     
-// 매장 ID 맵과 매장 이름 맵을 동시에 구축 (ID가 없을 때 이름으로 찾기 위함)
+    // 매장 ID 맵 및 매장명 맵 구축
     const restMap = new Map();
     const restNameMap = new Map();
     for (let k = 1; k < data.Restaurant_List.length; k++) {
-      const rRow = data.Restaurant_List[k]; if (!rRow || !rRow[0]) continue;
+      const rRow = data.Restaurant_List[k]; 
+      if (!rRow || !rRow[0]) continue;
       const rId = String(rRow[0]).trim().toUpperCase();
       const rName = String(rRow[1] || '').trim();
       const storeType = String(rRow[7] || '').trim().toUpperCase();
-      
-      // 🎯 V열(22번째 열, 인덱스 21)에서 최대인원 파싱 (미입력 또는 오류 시 기본값 4)
       const maxPeople = parseInt(rRow[21], 10) || 4;
 
       const rDetails = { 
@@ -32,7 +39,7 @@ function getMissions(orderNo, phoneLast4) {
         guide: String(rRow[18] || '#').trim(),
         bookingUrl: (storeType === 'RETAIL') ? '' : String(rRow[20] || '').trim(), 
         storeType: storeType, 
-        maxPeople: maxPeople, // 🎯 추가됨
+        maxPeople: maxPeople,
         blackouts: getSafeBlackouts(rRow[13])
       };
       
@@ -40,27 +47,31 @@ function getMissions(orderNo, phoneLast4) {
       if (rName) restNameMap.set(rName, rDetails);
     }
 
-    const mList = []; const timeZone = Session.getScriptTimeZone();
+    const mList = []; 
+    const timeZone = Session.getScriptTimeZone();
 
     for (let i = 1; i < data.Master_Log.length; i++) {
-      const mRow = data.Master_Log[i]; if (!mRow || !mRow[0]) continue;
+      const mRow = data.Master_Log[i]; 
+      if (!mRow || !mRow[0]) continue;
       
       const status = String(mRow[11] || '').trim(); 
-      if (status.includes('취소') || String(mRow[0]).replace(/'/g, '').trim() !== inputOrderNo) continue; 
+      const sheetOrderNo = String(mRow[0]).replace(/['"\s]/g, '').trim();
+      
+      if (status.includes('취소') || sheetOrderNo !== inputOrderNo) continue; 
 
-      const memberCode = String(mRow[1]).trim();
+      const memberCode = String(mRow[1] || '').trim().toLowerCase();
       const userPhone = userMap.get(memberCode) || '';
-      if (!userPhone.endsWith(inputPhone)) continue; // 폰 번호 뒷자리 대조
+      
+      // 📱 입력한 뒷자리 4자리와 일치하는지 확인
+      if (!userPhone.endsWith(inputPhone)) continue;
 
       const restId = String(mRow[4] || '').trim().toUpperCase();
       const restaurantName = String(mRow[5] || '').trim();
       
-      // 🚨 [방어막] ID로 못 찾으면 매장 이름으로 한 번 더 가이드/맵 링크 매칭 시도
       let restInfo = restMap.get(restId);
       if (!restInfo && restaurantName) {
         restInfo = restNameMap.get(restaurantName);
       }
-      // 둘 다 없으면 기본값 유지 (maxPeople: 4 추가 방어)
       if (!restInfo) {
         restInfo = { map: '#', guide: '#', bookingUrl: '', storeType: '', maxPeople: 4, blackouts: [] };
       }
@@ -86,7 +97,6 @@ function getMissions(orderNo, phoneLast4) {
     }
     return mList;
   } catch (e) { 
-    // 🚨 에러가 나면 숨기지 않고 로그를 찍어 원인을 찾을 수 있게 양보
     Logger.log('getMissions 에러 발생: ' + e.toString());
     throw new Error('데이터 통신 오류: ' + e.toString()); 
   }
@@ -322,7 +332,28 @@ function checkAvailability(storeId, targetDateStr) {
   } catch (e) { return { error: e.toString() }; }
 }
 
-/** 확정 슬롯 타임 데이터베이스 픽싱 및 점주 메일 인터랙션 노티 */
+/** 🎯 Settings 시트에서 운영진 알림 수신 이메일 목록 불러오기 도우미 */
+function getAdminAlertEmails() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Settings");
+    if (!sheet) return "bookmarkjapan.info@gmail.com";
+
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const key = String(data[i][0] || '').trim().toUpperCase();
+      if (key === "ADMIN_NOTIFICATION_EMAILS") {
+        const emails = String(data[i][1] || '').trim();
+        return emails || "bookmarkjapan.info@gmail.com";
+      }
+    }
+  } catch (e) {
+    Logger.log("getAdminAlertEmails 에러: " + e.toString());
+  }
+  return "bookmarkjapan.info@gmail.com";
+}
+
+/** 확정 슬롯 타임 데이터베이스 픽싱 및 점주/운영진 동시 노티 엔진 */
 function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
   try {
     const safeRow = parseInt(row, 10);
@@ -342,7 +373,9 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
     const visitDateTime = dateStr + " " + timeStr;
     sheet.getRange(safeRow, 8).setValue(visitDateTime); 
     sheet.getRange(safeRow, 9).setValue(safePeopleCount + '명'); 
-    if (!sheet.getRange(safeRow, 11).getValue()) sheet.getRange(safeRow, 11).setValue(50000); 
+    
+    // 🎯 [수정] 보증금 기본값 10,000원으로 통일!
+    if (!sheet.getRange(safeRow, 11).getValue()) sheet.getRange(safeRow, 11).setValue(10000); 
     
     // 상태 즉시 변경하여 중복 진입 차단
     sheet.getRange(safeRow, 12).setValue('예약확인중'); 
@@ -354,11 +387,13 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
     const storeId = String(sheet.getRange(safeRow, 5).getValue()).trim(); 
     const memberCode = String(sheet.getRange(safeRow, 2).getValue()).trim(); 
     const memberName = String(sheet.getRange(safeRow, 3).getValue()).trim(); 
+    const orderNo = String(sheet.getRange(safeRow, 1).getValue()).trim().replace(/'/g, '');
     
-    let storeEmail = "", storeNameJp = "";
+    let storeEmail = "", storeNameJp = "", storeNameKo = "";
     for (let i = 2; i < data.Restaurant_List.length; i++) {
       if (String(data.Restaurant_List[i][0]).trim() === storeId) {
-        storeNameJp = String(data.Restaurant_List[i][2]).trim() || String(data.Restaurant_List[i][1]).trim();
+        storeNameKo = String(data.Restaurant_List[i][1]).trim();
+        storeNameJp = String(data.Restaurant_List[i][2]).trim() || storeNameKo;
         storeEmail = String(data.Restaurant_List[i][10]).trim(); 
         break;
       }
@@ -376,11 +411,12 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
       ? `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <a href="${creatorProfileUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;"><span>SNSを見る❯</span></a></p>`
       : `<p style="margin: 5px 0; font-size: 15px; color: #8b95a1;"><strong>&#128279; <span>SNS:</span></strong> <span>当日確認</span></p>`;
     
-    // 🎯 [대안 1 적용] 이메일 발송 트라이캐치 격리 및 Y열(25번째 열) 실시간 추적 로그 작성
+    // 🎯 Settings 시트에서 운영진 알림 대상 이메일 가져오기
+    const adminAlertEmails = getAdminAlertEmails();
+
+    // 📧 1. 점주에게 일본어 예약 신청 메일 발송 (+ 운영진 Bcc 숨은참조 동시 수신)
     if (storeEmail && storeEmail.includes("@")) {
       const scriptUrl = ScriptApp.getService().getUrl();
-      const orderNo = String(sheet.getRange(safeRow, 1).getValue()).trim().replace(/'/g, '');
-      
       const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${safeRow}&o=${encodeURIComponent(orderNo)}`;
       const feedbackUrl = `${scriptUrl}?mode=feedback&row=${safeRow}&o=${encodeURIComponent(orderNo)}`;
 
@@ -414,18 +450,51 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
       
       try {
         GmailApp.sendEmail(storeEmail, subject, "", { 
-        htmlBody: htmlBody, 
-        name: "BOOKMARK CREATORS",
-        from: "info@bookmarkfukuoka.jp" // 🎯 등록한 유료 도메인 메일 지정
-      });
-        sheet.getRange(safeRow, 25).setValue("점주메일 발송완료"); // Y열[25]에 기록
+          htmlBody: htmlBody, 
+          name: "BOOKMARK CREATORS",
+          from: "info@bookmarkfukuoka.jp",
+          bcc: adminAlertEmails // 🎯 점주 발송 메일을 운영진(Settings 지정)에게도 숨은참조 발송!
+        });
+        sheet.getRange(safeRow, 25).setValue("점주메일 발송완료");
       } catch (mailErr) {
         console.error("점주 이메일 슈팅 실패: " + mailErr.toString());
-        sheet.getRange(safeRow, 25).setValue("❌ 점주메일 실패: " + mailErr.toString()); // 에러 내용 시트에 바인딩
+        sheet.getRange(safeRow, 25).setValue("❌ 점주메일 실패: " + mailErr.toString());
       }
     } else {
       sheet.getRange(safeRow, 25).setValue("❌ 실패: 점주 이메일 주소 없음");
     }
+
+    // 📧 2. 운영진 전용 실시간 한국어 모니터링 알림 발송
+    try {
+      if (adminAlertEmails) {
+        const adminSubject = `🗓️ [신규 예약 접수] ${memberName} 님 ➔ ${storeNameKo || storeNameJp} (${dateStr} ${timeStr})`;
+        const adminHtml = `
+          <div style="font-family: sans-serif; padding: 24px; background: #f8f9fa; border-radius: 16px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333;">
+            <div style="margin-bottom: 16px;">
+              <span style="background: #1A2B49; color: #fff; font-size: 11px; font-weight: bold; padding: 4px 8px; border-radius: 4px;">운영진 알림</span>
+              <h3 style="color: #1A2B49; margin: 8px 0 0 0;">🗓️ 크리에이터 방문 예약 접수</h3>
+            </div>
+            <p style="font-size: 14px; color: #555; line-height: 1.5;">크리에이터가 매장에 방문 일정을 신청했습니다.<br>현재 매장의 승인/일정조율 회신을 대기 중입니다.</p>
+            <div style="background: #ffffff; border-radius: 12px; padding: 16px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
+              <p style="margin: 6px 0;"><b>• 주문번호:</b> #${orderNo}</p>
+              <p style="margin: 6px 0;"><b>• 크리에이터:</b> ${memberName} <span style="color:#888;">(${memberCode})</span></p>
+              <p style="margin: 6px 0;"><b>• 방문 매장:</b> ${storeNameKo || storeNameJp} <span style="color:#888;">(${storeId})</span></p>
+              <p style="margin: 6px 0;"><b>• 예약 일시:</b> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
+              <p style="margin: 6px 0;"><b>• 방문 인원:</b> ${safePeopleCount}명</p>
+              <p style="margin: 6px 0;"><b>• 점주 수신메일:</b> ${storeEmail || '미등록'}</p>
+            </div>
+            <p style="font-size: 12px; color: #888; margin: 0;">※ Settings 시트의 [ADMIN_NOTIFICATION_EMAILS]에 등록된 관리자 메일로 자동 발송된 안내입니다.</p>
+          </div>
+        `;
+        GmailApp.sendEmail(adminAlertEmails, adminSubject, "", { 
+          htmlBody: adminHtml, 
+          name: "BOOKMARK NOTI" 
+        });
+      }
+    } catch (adminErr) {
+      console.error("운영진 알림 발송 실패: " + adminErr.toString());
+    }
+
     return { success: true };
   } catch (e) { return { success: false, error: e.toString() }; }
 }

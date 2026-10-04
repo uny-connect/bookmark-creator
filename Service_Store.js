@@ -50,9 +50,9 @@ function submitStoreFeedback(row, orderNo, msg) {
     }
     const finalStoreName = storeNameJp ? storeNameJp : storeNameKo;
 
-    // ✉️ [1번 슈팅] 내부 운영진 담당자 알림 메일 발송 (디자인 커스텀 및 Y열 로그 레이어 연동)
-    const adminEmail = "bookmarkjapan.info@gmail.com"; 
-    const alertSubject = `[NOTICE] [${finalStoreName}] 店舗からの日程変更リクエスト`;
+// ✉️ [1번 슈팅] 내부 운영진 담당자 일본어 알림 메일 발송
+    const adminEmail = (typeof getAdminAlertEmails === 'function') ? getAdminAlertEmails() : "bookmarkjapan.info@gmail.com"; 
+    const alertSubject = `【日程変更要請】[${finalStoreName}] 店舗からの日時変更リクエスト - #${cleanOrderNo}`;
     
     // 🎯 하단 버튼을 거두어내고, 회색 카드 내부에 '■ ログ位置 (Row 번호)' 항목을 정밀 주입
     const alertBody = `
@@ -137,7 +137,8 @@ function submitStoreFeedback(row, orderNo, msg) {
           const pCount = rowData[8] ? String(rowData[8]).replace(/[^0-9]/g, '') : '1'; 
           const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
-          const creatorSubject = "[NOTICE] [BOOKMARK CREATORS] 방문 일정 변경 조율 안내";
+          // ✉️ [2번 슈팅] 크리에이터향 알림 이메일 발송 (한국어)
+          const creatorSubject = "[BOOKMARK CREATORS] 방문 일정 변경 조율 안내";
           const creatorHtmlBody = `
             <meta charset="UTF-8">
             <div style="background: #f4f5f7; padding: 30px 10px; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;">
@@ -147,7 +148,7 @@ function submitStoreFeedback(row, orderNo, msg) {
                   <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
                 </div>
                 <div style="border-top: 2px solid #e03131; padding-top: 24px; margin-bottom: 24px;">
-                  <p style="font-size: 14.5px; font-weight: 700; color: #e03131; margin: 0 0 12px 0;">🟣 방문 일정 변경 요청 알림</p>
+                  <p style="font-size: 14.5px; font-weight: 700; color: #e03131; margin: 0 0 12px 0;">[방문 일정 변경 요청 알림]</p>
                   <p style="font-size: 13.5px; line-height: 1.6; color: #495057; margin: 0;">
                     안녕하세요 크리에이터님, 신청하신 매장의 예약이 현지 사정으로 인해 <span style="font-weight: 700; color: #e03131;">일정 조율이 필요한 상태</span>로 변경되었습니다.<br><br>
                     아래의 신청 내역을 바탕으로 운영 담당자가 신속하게 연락드려 일정 재조율을 도와드리겠습니다.

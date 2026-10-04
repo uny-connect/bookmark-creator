@@ -40,7 +40,7 @@
       <div class="mb-3">
         <label class="form-label">店舗コード</label>
         <div class="input-group">
-          <input type="text" id="storeIdInput" class="form-control text-uppercase fw-bold" placeholder="例:BOOKMARK-0001" value="<?= initialStoreId ?>" onkeyup="if(event.key==='Enter'){searchStore()}">
+          <input type="text" id="storeIdInput" class="form-control text-uppercase fw-bold" placeholder="例:BOOKMARK-0001" value="<?= initialStoreId || 'BOOKMARK-' ?>" autocomplete="off" onkeyup="if(event.key==='Enter'){searchStore()}">
           <button class="btn btn-outline-secondary" type="button" id="searchBtn" onclick="searchStore()" style="border-radius: 0 12px 12px 0; font-size: 13px; font-weight: 700;">確認</button>
         </div>
       </div>
@@ -91,13 +91,43 @@
 
     window.onload = function() {
       alertModalObj = new bootstrap.Modal(document.getElementById('customAlert'));
-      const initId = document.getElementById('storeIdInput').value.trim();
-      if (initId) searchStore();
+      const inputEl = document.getElementById('storeIdInput');
+      const initId = inputEl.value.trim();
+      
+      // 🎯 단순히 'BOOKMARK-'만 채워진 초기 상태에서는 자동 검색을 건너뛰고, 실제 고유 번호까지 있을 때만 자동 조회
+      if (initId && initId !== 'BOOKMARK-') {
+        searchStore();
+      }
+
+      // 클릭 시 커서를 자동으로 텍스트 맨 끝(숫자 입력 자리)으로 이동
+      inputEl.addEventListener('focus', function() {
+        const len = this.value.length;
+        this.setSelectionRange(len, len);
+      });
     };
 
     function searchStore() {
-      const id = document.getElementById('storeIdInput').value.trim().toUpperCase();
-      if (!id) return showAlert('店舗コードを入力してください。');
+      let rawVal = document.getElementById('storeIdInput').value.trim().toUpperCase();
+      if (!rawVal || rawVal === 'BOOKMARK-') return showAlert('店舗コードを入力してください。');
+
+      // 🎯 숫자만 입력했거나 앞 접두사가 빠진 경우 자동 보정 (예: "18" -> "BOOKMARK-0018")
+      if (!rawVal.startsWith('BOOKMARK-')) {
+        const numOnly = rawVal.replace(/[^0-9]/g, '');
+        if (numOnly) {
+          rawVal = 'BOOKMARK-' + numOnly.padStart(4, '0');
+        }
+      } else {
+        // "BOOKMARK-18"처럼 숫자 자리수가 짧은 경우 4자리로 패딩 (예: "BOOKMARK-18" -> "BOOKMARK-0018")
+        const parts = rawVal.split('BOOKMARK-');
+        const numOnly = parts[1].replace(/[^0-9]/g, '');
+        if (numOnly) {
+          rawVal = 'BOOKMARK-' + numOnly.padStart(4, '0');
+        }
+      }
+
+      // 입력창에도 보정된 완성 코드 표시
+      document.getElementById('storeIdInput').value = rawVal;
+      const id = rawVal;
 
       const searchBtn = document.getElementById('searchBtn');
       searchBtn.disabled = true;

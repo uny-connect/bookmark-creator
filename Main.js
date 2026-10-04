@@ -77,16 +77,18 @@ function doGet(e) {
               }
             }
 
+            // ✉️ 1. 크리에이터 대상 한국어 확정 안내 발송 (bcc 제거로 운영진 중복수신 차단)
             if (creatorEmail && creatorEmail.includes("@")) {
-              const subject = "🗓️ [BOOKMARK CREATORS] 방문 예약 확정 안내";
+              const subject = "[BOOKMARK CREATORS] 방문 예약 확정 안내";
               const htmlBody = `
+                <meta charset="UTF-8">
                 <div style="max-width: 500px; margin: 0 auto; padding: 32px 20px; background: #ffffff; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; border: 1px solid #eef0f2; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
                   <div style="margin-bottom: 24px; text-align: left;">
                     <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
                     <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
                   </div>
                   <div style="border-top: 2px solid #1A2B49; padding-top: 24px; margin-bottom: 24px;">
-                    <p style="font-size: 14.5px; font-weight: 700; color: #2D6A4F; margin: 0 0 12px 0;">✅ 예약 확정 안내</p>
+                    <p style="font-size: 14.5px; font-weight: 700; color: #2D6A4F; margin: 0 0 12px 0;">[예약 확정 안내]</p>
                     <p style="font-size: 13.5px; line-height: 1.6; color: #495057; margin: 0;">
                       매장에서 방문 예약이 확정되었습니다.<br>
                       날짜와 시간을 다시 한번 확인 후 늦지 않게 방문해주세요! <br>
@@ -113,16 +115,43 @@ function doGet(e) {
                     <a href="http://pf.kakao.com/_vFSxfX/chat" target="_blank" style="display: block; background: #1A2B49; color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none; padding: 14px; border-radius: 12px; box-shadow: 0 4px 12px rgba(26,43,73,0.15);">카카오톡 채팅하기</a>
                   </div>
                 </div>`;
-              
-              // 🎯 Settings 시트에서 운영진 이메일 목록을 읽어와 bcc(숨은참조)로 동시 수신!
-              const adminAlertEmails = getAdminAlertEmails();
 
               GmailApp.sendEmail(creatorEmail, subject, "", { 
                 htmlBody: htmlBody, 
-                name: "BOOKMARK CREATORS",
-                bcc: adminAlertEmails
+                name: "BOOKMARK CREATORS"
               });
             }
+
+            // ✉️ 2. 관리자 대상 실시간 일본어 모니터링 알림 발송 (문자 깨짐 방지 템플릿)
+            try {
+              const adminAlertEmails = getAdminAlertEmails();
+              if (adminAlertEmails) {
+                const adminSubject = `【予約確定】店舗が予約を確定しました - #${orderNo}`;
+                const adminHtml = `
+                  <meta charset="UTF-8">
+                  <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 16px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
+                    <div style="margin-bottom: 18px;">
+                      <span style="background: #2D6A4F; color: #fff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px;">CONFIRMATION NOTICE</span>
+                      <h3 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 18px; font-weight: 800;">店舗による予約確定完了</h3>
+                    </div>
+                    <p style="font-size: 13.5px; color: #495057; margin: 0 0 16px 0;">
+                      店舗管理者がメールリンクより来店予約を【確定】しました。<br>
+                      クリエイターへ予約確定の案内メールが送信されました。
+                    </p>
+                    <div style="background: #ffffff; border-radius: 12px; padding: 18px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
+                      <p style="margin: 6px 0;"><b>・注文番号:</b> #${orderNo}</p>
+                      <p style="margin: 6px 0;"><b>・店舗名:</b> ${currentRestaurantName}</p>
+                      <p style="margin: 6px 0;"><b>・クリエイター:</b> ${currentMemberCode}</p>
+                      <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #2D6A4F; font-weight: bold;">${visitDateStr} (${pCount}名)</span></p>
+                    </div>
+                  </div>
+                `;
+                GmailApp.sendEmail(adminAlertEmails, adminSubject, "", { 
+                  htmlBody: adminHtml, 
+                  name: "BOOKMARK NOTI" 
+                });
+              }
+            } catch(e) {}
           }
         } catch (mailErr) {
           console.error("❌ doGet 메일 엔진 연산 실패: " + mailErr.toString());

@@ -1,3 +1,24 @@
+/** 🎯 현재 활성화된 웹 앱 URL 안전 취득 (Settings 시트 우선 참조 및 ScriptApp 폴백) */
+function getActiveWebAppUrl() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName("Settings");
+    if (sheet) {
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        const key = String(data[i][0] || '').trim().toUpperCase();
+        if (key === "WEB_APP_URL") {
+          const customUrl = String(data[i][1] || '').trim();
+          if (customUrl && customUrl.startsWith("http")) return customUrl;
+        }
+      }
+    }
+  } catch(e) {}
+  
+  // Settings에 설정이 없으면 기본 ScriptApp URL 사용
+  return ScriptApp.getService().getUrl();
+}
+
 /** [2] 등급 이모지 변환 (객체 매핑 구조로 압축) */
 function parseTierEmoji(tierStr) {
   if (!tierStr) return "🟡";
@@ -348,13 +369,180 @@ function fillMissingData() {
         updated++;
       }
 
-      // K열 보증금 누락/0원 시 (50,000원 기본 세팅)
+      // K열 보증금 누락/0원 시 (10,000원 기본 세팅)
       if (!depositVal || depositVal === 0 || String(depositVal).trim() === '') {
-        logSheet.getRange(rowNum, 11).setValue(50000);
+        logSheet.getRange(rowNum, 11).setValue(10000);
         updated++;
       }
     }
   }
 
   SpreadsheetApp.getUi().alert(`✨ 빈칸 채우기 완료\n\n총 ${updated}건의 누락 데이터가 성공적으로 보완되었습니다.`);
+}
+
+
+/** [관리자 기능] 선택된 행 또는 주문번호로 점주 예약 안내 메일 재발송 */
+function resendStoreBookingEmail() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName("Master_Log");
+  const restSheet = ss.getSheetByName("Restaurant_List");
+  const userSheet = ss.getSheetByName("User_DB");
+
+  if (!logSheet || !restSheet || !userSheet) return ui.alert("❌ 시트 확인 필요");
+
+  // 1. 현재 커서가 위치한 행 번호 확인 (또는 직접 입력 프롬프트)
+  let targetRow = logSheet.getActiveRange().getRow();
+  
+  // 만약 선택된 행이 3행 미만이거나 Master_Log 시트가 아니면 주문번호 입력받기
+  if (ss.getActiveSheet().getName() !== "Master_Log" || targetRow < 3) {
+    const promptRes = ui.prompt(
+      "📧 점주 메일 재발송",
+      "메일을 재발송할 [행 번호] 또는 [주문번호]를 입력하세요:\n(예: 3 또는 202609297282617)",
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (promptRes.getSelectedButton() !== ui.Button.OK) return;
+    const inputVal = promptRes.getResponseText().trim();
+    if (!inputVal) return ui.alert("입력값이 없습니다.");
+
+    if (!isNaN(inputVal) && parseInt(inputVal, 10) < 1000) {
+      targetRow = parseInt(inputVal, 10);
+    } else {
+      const data = logSheet.getDataRange().getValues();
+      for (let i = 2; i < data.length; i++) {
+        if (String(data[i][0]).replace(/['\s]/g, '') === inputVal.replace(/['\s]/g, '')) {
+          targetRow = i + 1;
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. 해당 행의 예약 데이터 로드
+  const rowData = logSheet.getRange(targetRow, 1, 1, 25).getValues()[0];
+  const orderNo = String(rowData[0] || '').replace(/'/g, '').trim();
+  const memberCode = String(rowData[1] || '').trim();
+  const memberName = String(rowData[2] || '').trim();
+  const storeId = String(rowData[4] || '').trim().toUpperCase();
+  const rawVisitDate = rowData[7];
+  const peopleStr = String(rowData[8] || '1명').replace(/[^0-9]/g, '') || '1';
+
+  if (!orderNo || !rawVisitDate) {
+    return ui.alert(`❌ [재발송 불가]\n\n${targetRow}행에 주문번호나 방문예정일시가 없습니다.`);
+  }
+
+  const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
+  const dateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, "yyyy-MM-dd") : String(rawVisitDate).substring(0, 10);
+  const timeStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, "HH:mm") : String(rawVisitDate).substring(11, 16);
+
+  // 3. 매장 정보(이메일, 매장명) 찾기
+  let storeEmail = "", storeNameJp = "";
+  const restData = restSheet.getDataRange().getValues();
+  for (let k = 2; k < restData.length; k++) {
+    if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
+      storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
+      storeEmail = String(restData[k][10] || '').trim();
+      break;
+    }
+  }
+
+  if (!storeEmail || !storeEmail.includes("@")) {
+    return ui.alert(`❌ 매장 이메일 주소를 찾을 수 없습니다.\nRestaurant_List 시트의 [${storeId}] 매장 K열을 확인해 주세요.`);
+  }
+
+  // 4. 재발송 확인 창
+  const confirm = ui.alert(
+    "📧 점주 예약 메일 재발송",
+    `[재발송 대상 정보]\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  // 5. 메일 본문 생성 및 발송
+  try {
+    const scriptUrl = getActiveWebAppUrl();
+    const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${targetRow}&o=${encodeURIComponent(orderNo)}`;
+    const feedbackUrl = `${scriptUrl}?mode=feedback&row=${targetRow}&o=${encodeURIComponent(orderNo)}`;
+
+
+
+
+// 🎯 재발송 시에도 SNS 링크 순차 자동 탐색 (블로그 -> 인스타 -> 유튜브 -> 틱톡 -> 구글 로컬 가이드)
+    let creatorProfileUrl = "";
+    const userData = userSheet.getDataRange().getValues();
+    for (let u = 1; u < userData.length; u++) {
+      if (String(userData[u][0] || '').trim().toLowerCase() === memberCode.toLowerCase()) {
+        const blogUrl = String(userData[u][4] || '').trim();       // E열 (블로그)
+        const instaUrl = String(userData[u][5] || '').trim();      // F열 (인스타)
+        const youtubeUrl = String(userData[u][6] || '').trim();    // G열 (유튜브)
+        const tiktokUrl = String(userData[u][7] || '').trim();     // H열 (틱톡)
+        const googleGuide = String(userData[u][8] || '').trim();   // I열 (구글 로컬 가이드)
+
+        creatorProfileUrl = blogUrl || instaUrl || youtubeUrl || tiktokUrl || googleGuide || "";
+        break;
+      }
+    }
+
+    let profileHtml = `<p style="margin: 5px 0; font-size: 15px; color: #8b95a1;"><strong>&#128279; <span>SNS:</span></strong> <span>当日確認</span></p>`;
+
+    if (creatorProfileUrl) {
+      const isHttp = /^https?:\/\//i.test(creatorProfileUrl);
+      const isDomainLike = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(creatorProfileUrl);
+
+      if (isHttp || isDomainLike) {
+        const fullUrl = isHttp ? creatorProfileUrl : "https://" + creatorProfileUrl;
+        const btnText = (creatorProfileUrl.includes('drive.google.com') || creatorProfileUrl.includes('imweb') || creatorProfileUrl.match(/\.(jpg|jpeg|png|webp|gif)/i))
+          ? "プロフィール確認❯" 
+          : "SNSを見る❯";
+        profileHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;"><span>${btnText}</span></a></p>`;
+      } else {
+        profileHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <span style="color: #1A2B49; font-weight: bold;">Google Local Guides (${creatorProfileUrl})</span></p>`;
+      }
+    }
+
+
+
+// 운영진 이메일 목록
+    const adminAlertEmails = (typeof getAdminAlertEmails === 'function') ? getAdminAlertEmails() : "bookmarkjapan.info@gmail.com";
+
+    const subject = `【BOOKMARK CREATORS】 クリエイター来店予約の確認(${dateStr})`;
+    const htmlBody = `
+      <meta charset="UTF-8">
+      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #f4f5f7;">
+        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <h1 style="color: #1A2B49; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
+            <div style="width: 40px; height: 3px; background: #C5A358; margin: 10px auto;"></div>
+          </div>
+          <h2 style="color: #1A2B49; margin-top: 0; font-size: 18px; border-bottom: 2px solid #f1f3f5; padding-bottom: 15px; text-align: center;">&#128197; 来店予約の依頼</h2>
+          <div style="margin-top: 20px;">
+            <p style="color: #1A2B49; font-size: 16px; font-weight: bold; margin-bottom: 5px;">${storeNameJp}</p>
+            <p style="color: #495057; font-size: 14px; margin-top: 0;">店舗管理者様</p>
+          </div>
+          <p style="color: #495057; font-size: 14px; line-height: 1.6;">BOOKMARK CREATORSより、クリエイターの訪問予約申請が届きました。内容をご確認の上、以下のボタンより確定または日時変更のご対応をお願いいたします。</p>
+          <div style="background-color: #f8f9fa; border-left: 4px solid #C5A358; padding: 15px; border-radius: 4px; margin: 20px 0;">
+            <p style="margin: 5px 0; font-size: 15px;"><strong>&#128100; クリエイター名:</strong> ${memberName}</p>
+            <p style="margin: 5px 0; font-size: 15px;"><strong>&#9200; 訪問日時:</strong> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
+            <p style="margin: 5px 0; font-size: 15px;"><strong>&#128101; 訪問人数:</strong> <span style="color: #1A2B49; font-weight: bold;">${peopleStr}名</span></p>
+            ${profileHtml}
+          </div>
+          <div style="margin: 30px 0; text-align: center;">
+            <a href="${confirmUrl}" target="_blank" style="background-color: #2D6A4F; color: #ffffff; padding: 14px 20px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 10px; display: inline-block; margin-right: 10px; box-shadow: 0 4px 12px rgba(45,106,79,0.2);">&#9989; 予約を確定する</a>
+            <a href="${feedbackUrl}" target="_blank" style="background-color: #1A2B49; color: #ffffff; padding: 14px 20px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 10px; display: inline-block; box-shadow: 0 4px 12px rgba(26,43,73,0.15);">&#128260; 日時変更をリクエスト</a>
+          </div>
+        </div>
+      </div>`;
+
+    GmailApp.sendEmail(storeEmail, subject, "", {
+      htmlBody: htmlBody,
+      name: "BOOKMARK CREATORS",
+      from: "info@bookmarkfukuoka.jp"
+    });
+
+    logSheet.getRange(targetRow, 25).setValue("점주메일 재발송완료");
+    ui.alert(`✅ [재발송 성공]\n\n• 매장: ${storeNameJp}\n• 수신 메일: ${storeEmail}\n\n점주에게 예약 승인 메일이 성공적으로 전송되었습니다!`);
+  } catch (err) {
+    logSheet.getRange(targetRow, 25).setValue("❌ 재발송 실패: " + err.toString());
+    ui.alert(`❌ 재발송 실패: ${err.toString()}`);
+  }
 }

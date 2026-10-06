@@ -377,6 +377,7 @@ function getAdminAlertEmails() {
 }
 
 /** 확정 슬롯 타임 데이터베이스 픽싱 및 점주/운영진 동시 노티 엔진 */
+/** 확정 슬롯 타임 데이터베이스 픽싱 및 점주/운영진 동시 노티 엔진 (W열 제공내역 & 관리자 SNS 완벽 연동) */
 function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
   try {
     const safeRow = parseInt(row, 10);
@@ -412,17 +413,19 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
     const memberName = String(sheet.getRange(safeRow, 3).getValue()).trim(); 
     const orderNo = String(sheet.getRange(safeRow, 1).getValue()).trim().replace(/'/g, '');
     
-    let storeEmail = "", storeNameJp = "", storeNameKo = "";
+    // 🎯 Restaurant_List에서 점포 정보 및 제공 혜택(W열, 인덱스 22) 추출
+    let storeEmail = "", storeNameJp = "", storeNameKo = "", storeBenefit = "";
     for (let i = 2; i < data.Restaurant_List.length; i++) {
-      if (String(data.Restaurant_List[i][0]).trim() === storeId) {
-        storeNameKo = String(data.Restaurant_List[i][1]).trim();
-        storeNameJp = String(data.Restaurant_List[i][2]).trim() || storeNameKo;
-        storeEmail = String(data.Restaurant_List[i][10]).trim(); 
+      if (String(data.Restaurant_List[i][0] || '').trim().toUpperCase() === storeId.toUpperCase()) {
+        storeNameKo = String(data.Restaurant_List[i][1] || '').trim();
+        storeNameJp = String(data.Restaurant_List[i][2] || '').trim() || storeNameKo;
+        storeEmail = String(data.Restaurant_List[i][10] || '').trim(); // K열 (인덱스 10)
+        storeBenefit = String(data.Restaurant_List[i][22] || '').trim(); // 🎯 W열 (인덱스 22) 제공 내역!
         break;
       }
     }
 
-// 🎯 SNS 링크 우선순위 자동 탐색 (블로그 -> 인스타 -> 유튜브 -> 틱톡 -> 구글 로컬 가이드)
+    // 🎯 SNS 링크 우선순위 자동 탐색
     let creatorProfileUrl = "";
     for (let u = 1; u < data.User_DB.length; u++) {
       if (String(data.User_DB[u][0] || '').trim().toLowerCase() === memberCode.toLowerCase()) {
@@ -430,15 +433,17 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
         const instaUrl = String(data.User_DB[u][5] || '').trim();    // F열 (인스타그램)
         const youtubeUrl = String(data.User_DB[u][6] || '').trim();  // G열 (유튜브)
         const tiktokUrl = String(data.User_DB[u][7] || '').trim();   // H열 (틱톡)
-        const googleGuide = String(data.User_DB[u][8] || '').trim(); // I열 (구글 로컬 가이드)
+        const googleGuide = String(data.User_DB[u][8] || '').trim(); // I열 (구글 가이드)
 
         creatorProfileUrl = blogUrl || instaUrl || youtubeUrl || tiktokUrl || googleGuide || "";
         break;
       }
     }
 
-    // URL 프로토콜 보정 및 화면 렌더링 분기
+    // 점주용 SNS HTML 블록
     let profileHtml = `<p style="margin: 5px 0; font-size: 15px; color: #8b95a1;"><strong>&#128279; <span>SNS:</span></strong> <span>当日確認</span></p>`;
+    // 🎯 관리자용 SNS HTML 블록
+    let adminSnsHtml = `<p style="margin: 6px 0;"><b>・SNS:</b> <span style="color: #8b95a1;">미등록 (당일 확인)</span></p>`;
 
     if (creatorProfileUrl) {
       const isHttp = /^https?:\/\//i.test(creatorProfileUrl);
@@ -450,19 +455,21 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
           ? "プロフィール確認❯" 
           : "SNSを見る❯";
         profileHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;"><span>${btnText}</span></a></p>`;
+        adminSnsHtml = `<p style="margin: 6px 0;"><b>・SNS:</b> <a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;">${fullUrl}</a></p>`;
       } else {
-        // 단순 텍스트인 경우 (예: "Lv.7")
         profileHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <span style="color: #1A2B49; font-weight: bold;">Google Local Guides (${creatorProfileUrl})</span></p>`;
+        adminSnsHtml = `<p style="margin: 6px 0;"><b>・SNS:</b> <span style="color: #1A2B49; font-weight: bold;">Google Local Guides (${creatorProfileUrl})</span></p>`;
       }
     }
 
+    // 🎯 제공 내역 HTML 블록
+    const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
+    const storeBenefitHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#127873; <span>提供内容:</span></strong> <span style="color: #2D6A4F; font-weight: bold;">${benefitDisplay}</span></p>`;
 
-
-
-// 🎯 Settings 시트에서 운영진 알림 대상 이메일 가져오기
+    // 🎯 Settings 시트에서 운영진 알림 대상 이메일 가져오기
     const adminAlertEmails = getAdminAlertEmails();
 
-    // 📧 1. 점주에게 일본어 예약 신청 메일 발송 (+ 운영진 Bcc 숨은참조)
+    // 📧 1. 점주에게 일본어 예약 신청 메일 발송
     if (storeEmail && storeEmail.includes("@")) {
       const scriptUrl = getActiveWebAppUrl();
       const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${safeRow}&o=${encodeURIComponent(orderNo)}`;
@@ -487,6 +494,7 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
               <p style="margin: 5px 0; font-size: 15px;"><strong>&#128100; クリエイター名:</strong> ${memberName}</p>
               <p style="margin: 5px 0; font-size: 15px;"><strong>&#9200; 訪問日時:</strong> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
               <p style="margin: 5px 0; font-size: 15px;"><strong>&#128101; 訪問人数:</strong> <span style="color: #1A2B49; font-weight: bold;">${safePeopleCount}名</span></p>
+              ${storeBenefitHtml}
               ${profileHtml}
             </div>
             <div style="margin: 30px 0; text-align: center;">
@@ -500,18 +508,18 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
         GmailApp.sendEmail(storeEmail, subject, "", { 
           htmlBody: htmlBody, 
           name: "BOOKMARK CREATORS",
-          from: "info@bookmarkfukuoka.jp" // 👈 bcc 제거 완료!
+          from: "info@bookmarkfukuoka.jp"
         });
         sheet.getRange(safeRow, 25).setValue("점주메일 발송완료");
       } catch (mailErr) {
-        console.error("점주 이메일 슈팅 실패: " + mailErr.toString());
+        console.error("점주 이메일 발송 실패: " + mailErr.toString());
         sheet.getRange(safeRow, 25).setValue("❌ 점주메일 실패: " + mailErr.toString());
       }
     } else {
       sheet.getRange(safeRow, 25).setValue("❌ 실패: 점주 이메일 주소 없음");
     }
 
-    // 📧 2. 운영진/담당자 실시간 일본어 모니터링 알림 발송 (문자 깨짐 방지)
+    // 📧 2. 운영진/담당자 실시간 일본어 모니터링 알림 발송 (제공내역 및 SNS 주소 완벽 포함)
     try {
       if (adminAlertEmails) {
         const adminSubject = `【予約受付】${memberName}様 ➔ ${storeNameJp || storeNameKo} (${dateStr} ${timeStr})`;
@@ -520,22 +528,24 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
           <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 16px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
             <div style="margin-bottom: 18px;">
               <span style="background: #1A2B49; color: #fff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px;">ADMIN NOTIFICATION</span>
-              <h3 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 18px; font-weight: 800;">クリエイター来店予約の受付</h3>
+              <h3 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 18px; font-weight: 800;">크리에이터 가예약 신청 접수</h3>
             </div>
             <p style="font-size: 13.5px; color: #495057; margin: 0 0 16px 0;">
-              クリエイターより来店予約の申請が届きました。<br>
-              現在、店舗側による【確定】または【日程変更】の対応待ちステータスです。
+              크리에이터의 방문 예약 신청이 접수되어 점주에게 확인 메일이 발송되었습니다.<br>
+              현재 점주의 【확정】 또는 【일정 조율】 대기 상태입니다.
             </p>
             <div style="background: #ffffff; border-radius: 12px; padding: 18px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
-              <p style="margin: 6px 0;"><b>・注文番号:</b> #${orderNo}</p>
-              <p style="margin: 6px 0;"><b>・クリエイター:</b> ${memberName} <span style="color:#8b95a1; font-size: 12px;">(${memberCode})</span></p>
-              <p style="margin: 6px 0;"><b>・訪問店舗:</b> ${storeNameJp || storeNameKo} <span style="color:#8b95a1; font-size: 12px;">(${storeId})</span></p>
-              <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
-              <p style="margin: 6px 0;"><b>・訪問人数:</b> <span style="font-weight: bold;">${safePeopleCount}名</span></p>
-              <p style="margin: 6px 0;"><b>・店舗受信メール:</b> <span style="color: #1a73e8;">${storeEmail || '未登録'}</span></p>
+              <p style="margin: 6px 0;"><b>・주문번호:</b> #${orderNo}</p>
+              <p style="margin: 6px 0;"><b>・크리에이터:</b> ${memberName} <span style="color:#8b95a1; font-size: 12px;">(${memberCode})</span></p>
+              <p style="margin: 6px 0;"><b>・방문매장:</b> ${storeNameJp || storeNameKo} <span style="color:#8b95a1; font-size: 12px;">(${storeId})</span></p>
+              <p style="margin: 6px 0;"><b>・제공내역:</b> <span style="color: #2D6A4F; font-weight: bold;">${storeBenefit || '기본 제공 내역'}</span></p>
+              <p style="margin: 6px 0;"><b>・예약일시:</b> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
+              <p style="margin: 6px 0;"><b>・방문인원:</b> <span style="font-weight: bold;">${safePeopleCount}명</span></p>
+              ${adminSnsHtml}
+              <p style="margin: 6px 0;"><b>・점주 수신메일:</b> <span style="color: #1a73e8;">${storeEmail || '미등록'}</span></p>
             </div>
             <p style="font-size: 11.5px; color: #8b95a1; margin: 0; line-height: 1.5;">
-              ※ 本メールは、Settingsシートの [ADMIN_NOTIFICATION_EMAILS] に登録された管理者宛てに自動送信されています。
+              ※ 본 메일은 Settings 시트의 [ADMIN_NOTIFICATION_EMAILS] 관리자에게 발송되는 알림입니다.
             </p>
           </div>
         `;

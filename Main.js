@@ -265,87 +265,10 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
 }
 
-/** 🎯 [신규] 아임웹 웹훅 수신 핸들러 (POST 엔진) */
-function doPost(e) {
-  try {
-    if (!e || !e.postData || !e.postData.contents) {
-      return ContentService.createTextOutput("NO_DATA");
-    }
 
-    const payload = JSON.parse(e.postData.contents);
-    const eventType = String(payload.eventType || payload.event_type || '').trim();
-
-    // 🚨 1. 아임웹 주문 취소 웹훅 처리 분기
-    if (eventType === "ORDER_CANCEL_COMPLETE" || eventType.includes("CANCEL")) {
-      const orderNo = payload.data ? payload.data.orderNo : (payload.order_no || payload.orderNo);
-      const cancelReason = payload.data?.section?.cancelInfo?.cancelReason || "아임웹 취소";
-      
-      const result = handleImwebCancellation(orderNo, cancelReason);
-      return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    return ContentService.createTextOutput("SUCCESS");
-  } catch (err) {
-    console.error("doPost 웹훅 수신 에러: " + err.toString());
-    return ContentService.createTextOutput("ERROR: " + err.toString());
-  }
-}
-
-/** 🎯 아임웹 주문 취소 시트 반영 엔진 */
-function handleImwebCancellation(orderNo, reason) {
-  try {
-    if (!orderNo) return { success: false, error: "주문번호 누락" };
-
-    const targetOrderNo = String(orderNo).trim().replace(/['"\s]/g, '');
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('Master_Log');
-    if (!sheet) return { success: false, error: "Master_Log 시트 없음" };
-
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 3) return { success: false, error: "데이터 없음" };
-
-    // A열(주문번호) 스캔
-    const orderRange = sheet.getRange(3, 1, lastRow - 2, 1).getValues();
-    let targetRow = -1;
-
-    for (let i = 0; i < orderRange.length; i++) {
-      const sheetOrder = String(orderRange[i][0] || '').trim().replace(/['"\s]/g, '');
-      if (sheetOrder === targetOrderNo) {
-        targetRow = i + 3;
-        break;
-      }
-    }
-
-    if (targetRow === -1) {
-      console.warn(`[취소 반영 실패] Master_Log에서 주문번호 #${targetOrderNo} 를 찾을 수 없음`);
-      return { success: false, error: `주문번호 #${targetOrderNo} 없음` };
-    }
-
-    // 1️⃣ L열(12번째 열) 상태를 '취소(아임웹)'로 변경
-    sheet.getRange(targetRow, 12).setValue('취소(아임웹)');
-
-    // 2️⃣ 슬롯 자동 반환: 예약일시(H열:8), 인원(I열:9), 마감일(J열:10) 비우기
-    sheet.getRange(targetRow, 8, 1, 3).clearContent();
-
-    // 3️⃣ M열(13번째 열, 피드백/비고)에 취소 일시 및 사유 안전하게 추가 (기존 내용 보존)
-    const timeZone = Session.getScriptTimeZone();
-    const timeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
-    const prevMemo = String(sheet.getRange(targetRow, 13).getValue() || '').trim();
-    const cancelNote = `[${timeStr} 아임웹 취소: ${reason}]`;
-    sheet.getRange(targetRow, 13).setValue(prevMemo ? `${prevMemo} | ${cancelNote}` : cancelNote);
-
-    console.log(`✅ [취소 반영 완료] 행: ${targetRow}, 주문번호: #${targetOrderNo}`);
-    return { success: true, row: targetRow, orderNo: targetOrderNo };
-
-  } catch (e) {
-    console.error("handleImwebCancellation 실패: " + e.toString());
-    return { success: false, error: e.toString() };
-  }
-}
-
-/********************************************************************
+/*******************************************************************************************************
  * [2] 시트 어시스턴트 유틸리티 매뉴얼 (onOpen / onEdit / fillMissingData)
- ********************************************************************/
+ *******************************************************************************************************/
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('⚙️ BOOKMARK CREATORS 관리')
     .addItem('✨ 빈칸 자동 채우기 (점포ID/이름/마감일/보증금)', 'fillMissingData')

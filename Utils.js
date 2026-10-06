@@ -497,8 +497,8 @@ function resendStoreBookingEmail() {
       if (isHttp || isDomainLike) {
         const fullUrl = isHttp ? creatorProfileUrl : "https://" + creatorProfileUrl;
         const btnText = (creatorProfileUrl.includes('drive.google.com') || creatorProfileUrl.includes('imweb') || creatorProfileUrl.match(/\.(jpg|jpeg|png|webp|gif)/i))
-          ? "プロフィール確認❯" 
-          : "SNSを見る❯";
+          ? "プロフィール確認↗" 
+          : "SNSを見る↗";
         profileHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;"><span>${btnText}</span></a></p>`;
       } else {
         profileHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <span style="color: #1A2B49; font-weight: bold;">Google Local Guides (${creatorProfileUrl})</span></p>`;

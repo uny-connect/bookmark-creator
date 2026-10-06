@@ -1,6 +1,8 @@
 /********************************************************************
- * [1] 웹 앱 진입점 컨트롤러 (doGet 엔진)
+ * [1] 웹 앱 진입점 컨트롤러 (doGet & doPost 웹훅 엔진)
  ********************************************************************/
+
+/** 🌐 웹 앱 화면 라우팅 (GET) */
 function doGet(e) {
   const mode = e?.parameter?.mode;
   
@@ -82,7 +84,7 @@ function doGet(e) {
                 }
               }
 
-              // ✉️ 1. 크리에이터 대상 한국어 확정 안내 발송 (bcc 없이 단독 발송)
+              // ✉ 1. 크리에이터 대상 한국어 확정 안내 발송 (bcc 없이 단독 발송)
               if (creatorEmail && creatorEmail.includes("@")) {
                 const subject = "[BOOKMARK CREATORS] 방문 예약 확정 안내";
                 const htmlBody = `
@@ -147,7 +149,7 @@ function doGet(e) {
                         <p style="margin: 6px 0;"><b>・注文番号:</b> #${orderNo}</p>
                         <p style="margin: 6px 0;"><b>・店舗名:</b> ${currentRestaurantName}</p>
                         <p style="margin: 6px 0;"><b>・クリエイター:</b> ${currentMemberCode}</p>
-                        <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #2D6A4F; font-weight: bold;">${visitDateStr} (${pCount}名)</span></p>
+                        <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #2D6A4F; font-weight: bold;">${visitDateStr} (${pCount}명)</span></p>
                       </div>
                     </div>
                   `;
@@ -263,12 +265,90 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
 }
 
+/** 🎯 [신규] 아임웹 웹훅 수신 핸들러 (POST 엔진) */
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput("NO_DATA");
+    }
+
+    const payload = JSON.parse(e.postData.contents);
+    const eventType = String(payload.eventType || payload.event_type || '').trim();
+
+    // 🚨 1. 아임웹 주문 취소 웹훅 처리 분기
+    if (eventType === "ORDER_CANCEL_COMPLETE" || eventType.includes("CANCEL")) {
+      const orderNo = payload.data ? payload.data.orderNo : (payload.order_no || payload.orderNo);
+      const cancelReason = payload.data?.section?.cancelInfo?.cancelReason || "아임웹 취소";
+      
+      const result = handleImwebCancellation(orderNo, cancelReason);
+      return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput("SUCCESS");
+  } catch (err) {
+    console.error("doPost 웹훅 수신 에러: " + err.toString());
+    return ContentService.createTextOutput("ERROR: " + err.toString());
+  }
+}
+
+/** 🎯 아임웹 주문 취소 시트 반영 엔진 */
+function handleImwebCancellation(orderNo, reason) {
+  try {
+    if (!orderNo) return { success: false, error: "주문번호 누락" };
+
+    const targetOrderNo = String(orderNo).trim().replace(/['"\s]/g, '');
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Master_Log');
+    if (!sheet) return { success: false, error: "Master_Log 시트 없음" };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 3) return { success: false, error: "데이터 없음" };
+
+    // A열(주문번호) 스캔
+    const orderRange = sheet.getRange(3, 1, lastRow - 2, 1).getValues();
+    let targetRow = -1;
+
+    for (let i = 0; i < orderRange.length; i++) {
+      const sheetOrder = String(orderRange[i][0] || '').trim().replace(/['"\s]/g, '');
+      if (sheetOrder === targetOrderNo) {
+        targetRow = i + 3;
+        break;
+      }
+    }
+
+    if (targetRow === -1) {
+      console.warn(`[취소 반영 실패] Master_Log에서 주문번호 #${targetOrderNo} 를 찾을 수 없음`);
+      return { success: false, error: `주문번호 #${targetOrderNo} 없음` };
+    }
+
+    // 1️⃣ L열(12번째 열) 상태를 '취소(아임웹)'로 변경
+    sheet.getRange(targetRow, 12).setValue('취소(아임웹)');
+
+    // 2️⃣ 슬롯 자동 반환: 예약일시(H열:8), 인원(I열:9), 마감일(J열:10) 비우기
+    sheet.getRange(targetRow, 8, 1, 3).clearContent();
+
+    // 3️⃣ M열(13번째 열, 피드백/비고)에 취소 일시 및 사유 안전하게 추가 (기존 내용 보존)
+    const timeZone = Session.getScriptTimeZone();
+    const timeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
+    const prevMemo = String(sheet.getRange(targetRow, 13).getValue() || '').trim();
+    const cancelNote = `[${timeStr} 아임웹 취소: ${reason}]`;
+    sheet.getRange(targetRow, 13).setValue(prevMemo ? `${prevMemo} | ${cancelNote}` : cancelNote);
+
+    console.log(`✅ [취소 반영 완료] 행: ${targetRow}, 주문번호: #${targetOrderNo}`);
+    return { success: true, row: targetRow, orderNo: targetOrderNo };
+
+  } catch (e) {
+    console.error("handleImwebCancellation 실패: " + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
 /********************************************************************
- * [2] 시트 어시스턴트 유틸리티 매뉴얼 (onOpen / onEdit)
+ * [2] 시트 어시스턴트 유틸리티 매뉴얼 (onOpen / onEdit / fillMissingData)
  ********************************************************************/
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('⚙️ BOOKMARK CREATORS 관리')
-    .addItem('✨ 빈칸 자동 채우기 (이름/매장/마감일/보증금)', 'fillMissingData')
+    .addItem('✨ 빈칸 자동 채우기 (점포ID/이름/마감일/보증금)', 'fillMissingData')
     .addItem('📩 선택한 예약 건 점주 메일 재발송', 'resendStoreBookingEmail')
     .addItem('🔑 매장별 고유 PIN 6자리 생성', 'generateStorePins') 
     .addItem('🚨 자동 노쇼 일괄 처리 (과거 날짜)', 'checkAndMarkNoShow')
@@ -286,7 +366,7 @@ function onEdit(e) {
   const col = e.range.getColumn();
   const val = String(e.range.getValue()).trim();
 
-  // E열(5번째 열) 점포 ID 입력 시 F열(6번째 열) 점포명 실시간 자동 기입
+  // 1️⃣ E열(5번째 열) 점포 ID 입력 시 ➔ F열(6번째 열) 점포명 실시간 자동 기입
   if (col === 5 && row >= 3) { 
     const storeId = val.toUpperCase();
     const storeNameCell = sheet.getRange(row, 6);
@@ -302,9 +382,9 @@ function onEdit(e) {
         let matchedName = "식당명 없음";
         
         for (let k = 2; k < restData.length; k++) {
-          const sheetStoreId = String(restData[k][0]).trim().toUpperCase();
+          const sheetStoreId = String(restData[k][0] || '').trim().toUpperCase();
           if (sheetStoreId === storeId) {
-            matchedName = String(restData[k][1]).trim();
+            matchedName = String(restData[k][1] || '').trim();
             break;
           }
         }
@@ -317,7 +397,53 @@ function onEdit(e) {
     }
   }
 
-  // H열(8번째 열) 방문예정일시 편집 시 J열(마감일), K열(보증금) 자동 연산
+  // 2️⃣ 🎯 F열(6번째 열) 점포명 직접 입력 시 ➔ E열(5번째 열) 점포 ID 실시간 역방향 기입 + F열 공식 명칭 보정
+  if (col === 6 && row >= 3) {
+    const cleanStoreName = val.replace(/\s+/g, '');
+    const storeIdCell = sheet.getRange(row, 5);
+    const storeNameCell = sheet.getRange(row, 6);
+    const statusCell = sheet.getRange(row, 12);
+
+    if (cleanStoreName === "") {
+      storeIdCell.clearContent();
+    } else {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const restSheet = ss.getSheetByName('Restaurant_List');
+      if (restSheet) {
+        const restData = restSheet.getDataRange().getValues();
+        let matchedId = "";
+        let matchedOfficialName = "";
+
+        for (let k = 2; k < restData.length; k++) {
+          const sheetStoreId = String(restData[k][0] || '').trim().toUpperCase();
+          const sheetNameKo = String(restData[k][1] || '').trim();
+          const sheetNameJp = String(restData[k][2] || '').trim();
+          const cleanKo = sheetNameKo.replace(/\s+/g, '');
+          const cleanJp = sheetNameJp.replace(/\s+/g, '');
+
+          if ((cleanKo && (cleanKo === cleanStoreName || cleanStoreName.includes(cleanKo) || cleanKo.includes(cleanStoreName))) ||
+              (cleanJp && (cleanJp === cleanStoreName || cleanStoreName.includes(cleanJp)))) {
+            matchedId = sheetStoreId;
+            matchedOfficialName = sheetNameKo;
+            break;
+          }
+        }
+
+        if (matchedId) {
+          storeIdCell.setValue(matchedId);
+          if (matchedOfficialName && matchedOfficialName !== val) {
+            storeNameCell.setValue(matchedOfficialName); // 공식 명칭으로 자동 보정
+          }
+        }
+      }
+
+      if (String(statusCell.getValue()).trim() === "") {
+        statusCell.setValue("예약대기");
+      }
+    }
+  }
+
+  // 3️⃣ H열(8번째 열) 방문예정일시 편집 시 J열(마감일), K열(보증금) 자동 연산
   if (col === 8 && row >= 3) { 
     const deadlineCell = sheet.getRange(row, 10);
     const depositCell = sheet.getRange(row, 11);
@@ -333,12 +459,75 @@ function onEdit(e) {
     } 
   }
 
-  // L열(12번째 열) 진행 상태 변경 시 슬롯 리셋
+  // 4️⃣ L열(12번째 열) 진행 상태 변경 시 슬롯 리셋
   if (col === 12 && row >= 3) { 
     if (val === '예약대기' || val === '일정조율필요') {
       sheet.getRange(row, 8, 1, 3).clearContent();
     }
   }
+}
+
+/** 🎯 [빈칸 일괄 자동 채우기] 점포 ID 역추적 + 마감일/보증금 일괄 보정 */
+function fillMissingData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const masterSheet = ss.getSheetByName('Master_Log');
+  const restSheet = ss.getSheetByName('Restaurant_List');
+  if (!masterSheet || !restSheet) {
+    SpreadsheetApp.getUi().alert('❌ 시트를 찾을 수 없습니다.');
+    return;
+  }
+
+  const restData = restSheet.getDataRange().getValues();
+  const nameToRestMap = new Map();
+
+  // Restaurant_List 매핑 맵 생성 (띄어쓰기 제거 키 -> { id, officialName })
+  for (let k = 2; k < restData.length; k++) {
+    const rId = String(restData[k][0] || '').trim().toUpperCase();
+    const rNameKo = String(restData[k][1] || '').trim();
+    const rNameJp = String(restData[k][2] || '').trim();
+
+    if (rId && rNameKo) nameToRestMap.set(rNameKo.replace(/\s+/g, ''), { id: rId, name: rNameKo });
+    if (rId && rNameJp) nameToRestMap.set(rNameJp.replace(/\s+/g, ''), { id: rId, name: rNameKo });
+  }
+
+  const lastRow = masterSheet.getLastRow();
+  if (lastRow < 3) {
+    SpreadsheetApp.getUi().alert('⚠️ 검사할 데이터가 없습니다.');
+    return;
+  }
+
+  // 안전하게 25개 열 전체 로드
+  const masterRange = masterSheet.getRange(3, 1, lastRow - 2, 25);
+  const masterValues = masterRange.getValues();
+  let updatedStoreIdCount = 0;
+  let updatedDepositCount = 0;
+
+  for (let i = 0; i < masterValues.length; i++) {
+    const currentRow = i + 3;
+    const currentStoreId = String(masterValues[i][4] || '').trim(); // E열 (인덱스 4)
+    const currentStoreName = String(masterValues[i][5] || '').trim().replace(/\s+/g, ''); // F열 (인덱스 5)
+    const currentDeposit = masterValues[i][10]; // K열 (인덱스 10)
+
+    // 1. E열 점포 ID 누락 건 F열 점포명으로 역방향 채우기 + F열 공식 명칭 보정
+    if (!currentStoreId && currentStoreName) {
+      for (let [cleanName, info] of nameToRestMap.entries()) {
+        if (currentStoreName.includes(cleanName) || cleanName.includes(currentStoreName)) {
+          masterSheet.getRange(currentRow, 5).setValue(info.id);
+          masterSheet.getRange(currentRow, 6).setValue(info.name);
+          updatedStoreIdCount++;
+          break;
+        }
+      }
+    }
+
+    // 2. K열 보증금 빈칸 10,000원 채우기
+    if (!currentDeposit || String(currentDeposit).trim() === '') {
+      masterSheet.getRange(currentRow, 11).setValue(10000);
+      updatedDepositCount++;
+    }
+  }
+
+  SpreadsheetApp.getUi().alert(`✨ 자동 채우기 완료!\n\n• 점포 ID 자동 입력: ${updatedStoreIdCount}건\n• 보증금(10,000원) 채우기: ${updatedDepositCount}건`);
 }
 
 /********************************************************************
@@ -803,4 +992,34 @@ function saveChallengeSettings(startDate, endDate, targetCount) {
   } catch (e) {
     return "저장 실패: " + e.toString();
   }
+}
+
+/** 🧪 아임웹 주문 취소 웹훅 가상 테스트 함수 */
+function testCancelWebhook() {
+  // ⚠️ 중요: 현재 Master_Log 시트 A열에 실제로 존재하는 주문번호 하나를 입력하세요 (예: 2222 또는 실제 주문번호)
+  const testOrderNo = "2222"; 
+
+  // 아임웹에서 실제로 보내는 취소 웹훅 규격 가상 데이터
+  const samplePayload = {
+    eventType: "ORDER_CANCEL_COMPLETE",
+    eventTime: 1791274411890,
+    data: {
+      orderNo: testOrderNo,
+      section: {
+        cancelInfo: {
+          cancelReason: "테스트 단순 변심 취소"
+        }
+      }
+    }
+  };
+
+  const mockEvent = {
+    postData: {
+      contents: JSON.stringify(samplePayload)
+    }
+  };
+
+  // doPost 직접 호출 실행
+  const response = doPost(mockEvent);
+  Logger.log("실행 결과: " + response.getContent());
 }

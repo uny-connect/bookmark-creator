@@ -435,16 +435,26 @@ function resendStoreBookingEmail() {
   const dateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, "yyyy-MM-dd") : String(rawVisitDate).substring(0, 10);
   const timeStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, "HH:mm") : String(rawVisitDate).substring(11, 16);
 
-  // 3. 매장 정보(이메일, 매장명) 찾기
-  let storeEmail = "", storeNameJp = "";
+  // Utils.js의 resendStoreBookingEmail 내부 3번 영역 수정:
+  let storeEmail = "", storeNameJp = "", storeBenefit = "";
   const restData = restSheet.getDataRange().getValues();
   for (let k = 2; k < restData.length; k++) {
     if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
       storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
       storeEmail = String(restData[k][10] || '').trim();
+      storeBenefit = String(restData[k][22] || '').trim(); // 🎯 W열 제공내역 추출!
       break;
     }
   }
+
+// 본문 profileHtml 바로 위에 추가:
+  const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
+  const storeBenefitHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#127873; <span>提供内容:</span></strong> <span style="color: #2D6A4F; font-weight: bold;">${benefitDisplay}</span></p>`;
+
+// htmlBody 카드 내부에 ${storeBenefitHtml} 포함:
+// <p>방문인원 ... </p>
+// ${storeBenefitHtml}
+// ${profileHtml}
 
   if (!storeEmail || !storeEmail.includes("@")) {
     return ui.alert(`❌ 매장 이메일 주소를 찾을 수 없습니다.\nRestaurant_List 시트의 [${storeId}] 매장 K열을 확인해 주세요.`);

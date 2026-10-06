@@ -185,20 +185,30 @@ function updateSubmission(row, newUrl, newReceiptBase64, newReceiptName, newGoog
   } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-/* ⚡ [속도 대폭 튜닝 + 요일별 유연 상한선] 고속 슬롯 필터 제너레이터 */
+/* ⚡ [속도 대폭 튜닝 + 요일별 유연 상한선] 고속 슬롯 필터 제너레이터 (오류 방어 완벽 강화) */
 function checkAvailability(storeId, targetDateStr) {
   try {
     const data = _getSheetsData(['Restaurant_List', 'Master_Log']);
     let config = null;
 
+    const cleanInputId = String(storeId || '').trim().toUpperCase().replace(/['"]/g, '');
     const restList = data.Restaurant_List;
-    for (let i = 2; i < restList.length; i++) {
-      if (String(restList[i][0]).trim() === storeId) {
+
+    // 1️⃣ 매장 ID 또는 매장명으로 유연하게 매칭 (헤더 1~2행 제외 인덱스 1부터 탐색)
+    for (let i = 1; i < restList.length; i++) {
+      const rowId = String(restList[i][0] || '').trim().toUpperCase().replace(/['"]/g, '');
+      const rowNameKo = String(restList[i][1] || '').trim();
+      const rowNameJp = String(restList[i][2] || '').trim();
+
+      if (rowId === cleanInputId || (cleanInputId && (cleanInputId === rowNameKo || cleanInputId === rowNameJp))) {
+        // O열(인덱스 14) 영업시간 정규화: 작은따옴표, 전각 하이픈, 물결표 전부 표준 반각 하이픈(-)으로 변환
+        let rawBiz = String(restList[i][14] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
+
         config = {
           maxPerSlot: parseInt(restList[i][11], 10) || 1,
-          rawDailyCap: String(restList[i][12] || '').trim(), // 🎯 원본 문자열 보존 (요일별 파싱용)
+          rawDailyCap: String(restList[i][12] || '').trim(),
           blackouts: getSafeBlackouts(restList[i][13]),
-          bizHours: String(restList[i][14] || '').trim(),
+          bizHours: rawBiz,
           intervalMin: parseInt(restList[i][15], 10) || 30,
           blockedTimes: String(restList[i][16] || '').split(',').map(s => s.trim()).filter(Boolean)
         };
@@ -216,7 +226,7 @@ function checkAvailability(storeId, targetDateStr) {
     const tDayKo = dayKoMap[targetDateObj.getDay()];
     const tWeekNum = Math.ceil(targetDateObj.getDate() / 7);
 
-    // 1️⃣ 정기 휴무일 체크 1. 특정 날짜 지정 (YYYY-MM-DD), 2. 매주 고정 요일 (月, 火曜日...), 3. 일본 매장 특유의 'N번째 주 요일' (第2月曜日,第1火曜日...)
+    // 1️⃣ 정기 휴무일 체크
     const isBlackout = config.blackouts.some(b => {
       if (!b) return false;
       if (b === targetDateStr || b === tDayJa) return true;
@@ -229,23 +239,19 @@ function checkAvailability(storeId, targetDateStr) {
 
     if (isBlackout) return { isAvailable: false, reason: "정기 휴무일", availableSlots: [] };
 
-    // 2️⃣ 요일별/기본값 상한선(effectiveDailyCap) 동적 연산
+    // 2️⃣ 요일별/기본값 상한선 연산
     let effectiveDailyCap = 999;
     const rawCap = config.rawDailyCap;
 
     if (!rawCap || /^\d+$/.test(rawCap)) {
-      // 숫자만 있거나 빈칸인 경우 -> 모든 요일 동일 적용
       effectiveDailyCap = rawCap ? parseInt(rawCap, 10) : 999;
     } else {
-      // 콤마(,) 구분 복합 규칙 파싱 (예: "2, 토:0, 일:0" 또는 "기본:2, 金:1")
       const capRules = rawCap.split(/[,/]/).map(s => s.trim());
       let defaultCap = 999;
       let specificCap = null;
 
       for (let rule of capRules) {
         if (!rule) continue;
-
-        // "2" 처럼 단독 숫자 -> 기본값으로 채택
         if (/^\d+$/.test(rule)) {
           defaultCap = parseInt(rule, 10);
           continue;
@@ -256,22 +262,16 @@ function checkAvailability(storeId, targetDateStr) {
           const key = parts[0];
           const val = parseInt(parts[1], 10);
 
-          // '기본', 'default', '全体', '基本' -> 기본값으로 채택
           if (/^(기본|default|全体|基本)$/i.test(key)) {
             defaultCap = isNaN(val) ? 999 : val;
-          }
-          // 오늘 요일(한/일 모두 대응)과 일치 -> 특정 요일값 채택
-          else if (key.includes(tDayKo) || key.includes(tDayJa)) {
+          } else if (key.includes(tDayKo) || key.includes(tDayJa)) {
             specificCap = isNaN(val) ? 0 : val;
           }
         }
       }
-
-      // 특정 요일 지정값이 있으면 우선 적용, 없으면 기본값 적용
       effectiveDailyCap = (specificCap !== null) ? specificCap : defaultCap;
     }
 
-    // 0팀으로 설정된 요일이면 즉시 마감 처리
     if (effectiveDailyCap <= 0) {
       return { isAvailable: false, reason: "당일 체험 마감", availableSlots: [] };
     }
@@ -280,11 +280,12 @@ function checkAvailability(storeId, targetDateStr) {
     let dailyTotal = 0;
     let timeSlotCounts = {};
     const timeZone = Session.getScriptTimeZone();
-
     const masterLog = data.Master_Log;
+
     for (let i = 2; i < masterLog.length; i++) {
       const mRow = masterLog[i];
-      if (String(mRow[4]).trim() === storeId && !String(mRow[11]).includes('취소') && !String(mRow[11]).includes('노쇼')) {
+      const mStoreId = String(mRow[4] || '').trim().toUpperCase();
+      if (mStoreId === cleanInputId && !String(mRow[11]).includes('취소') && !String(mRow[11]).includes('노쇼')) {
         let v = mRow[7];
         let dateStr = (v instanceof Date) ? Utilities.formatDate(v, timeZone, 'yyyy-MM-dd') : String(v || '').substring(0, 10);
         let timeStr = (v instanceof Date) ? Utilities.formatDate(v, timeZone, 'HH:mm') : String(v || '').substring(11, 16).replace(/\s+/g, '');
@@ -296,40 +297,62 @@ function checkAvailability(storeId, targetDateStr) {
       }
     }
 
-    // 당일 총 예약 상한선 도달 체크
     if (dailyTotal >= effectiveDailyCap) {
       return { isAvailable: false, reason: "당일 체험 마감", availableSlots: [] };
     }
 
-    // 4️⃣ 시간대별 슬롯 생성 및 마감 체크
+    // 4️⃣ 시간대별 슬롯 생성 (브레이크타임 콤마 및 분 단위 안전 파싱)
     let allSlots = [];
     try {
-      const parseTime = (t) => { const p = t.split(':'); return parseInt(p[0], 10) * 60 + parseInt(p[1], 10); };
-      const times = config.bizHours.split('-');
-      const startMin = parseTime(times[0].trim());
-      let endMin = parseTime(times[1].trim());
-      if (endMin < startMin) endMin += 1440; 
-      
+      const parseTime = (t) => {
+        const clean = String(t || '').trim();
+        const p = clean.split(':');
+        return parseInt(p[0], 10) * 60 + (p[1] ? parseInt(p[1], 10) : 0);
+      };
+
+      // 콤마(,)가 포함된 복수 영업시간 구간도 지원 (예: "10:30-15:00, 17:00-21:00")
+      const timeRanges = config.bizHours.split(',');
+
       const blocks = config.blockedTimes.map(b => {
         if (!b.includes('-')) return { type: 'exact', time: parseTime(b) };
         const bp = b.split('-');
-        let bs = parseTime(bp[0].trim()), be = parseTime(bp[1].trim());
-        if (endMin < bs) be += 1440;
+        let bs = parseTime(bp[0]), be = parseTime(bp[1]);
         return { type: 'range', start: bs, end: be };
       });
 
-      for (let curr = startMin; curr < endMin; curr += config.intervalMin) {
-        const hit = blocks.some(b => b.type === 'exact' ? curr === b.time : (curr >= b.start && curr <= b.end));
-        if (!hit) {
-          const h = Math.floor(curr / 60) % 24, m = curr % 60;
-          allSlots.push((h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m));
+      timeRanges.forEach(rangeStr => {
+        const times = rangeStr.trim().split('-');
+        if (times.length === 2) {
+          const startMin = parseTime(times[0]);
+          let endMin = parseTime(times[1]);
+          if (endMin < startMin) endMin += 1440;
+
+          for (let curr = startMin; curr <= endMin; curr += config.intervalMin) {
+            const hit = blocks.some(b => b.type === 'exact' ? curr === b.time : (curr >= b.start && curr <= b.end));
+            if (!hit) {
+              const h = Math.floor(curr / 60) % 24;
+              const m = curr % 60;
+              allSlots.push((h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m));
+            }
+          }
         }
-      }
-    } catch(e) { return { error: "営業時間の入力形式が正しくありません。(例: 11:00-22:00)" }; }
+      });
+    } catch(e) {
+      return { error: "영업시간 입력 형식 오류: " + e.toString() };
+    }
+
+    if (allSlots.length === 0) {
+      return { error: "오류: 매장 영업시간 설정 미비" };
+    }
 
     const availableSlots = allSlots.filter(time => (timeSlotCounts[time] || 0) < config.maxPerSlot);
-    return availableSlots.length ? { isAvailable: true, availableSlots } : { isAvailable: false, reason: "すべての枠が埋まっているか、予約不可の日です。", availableSlots: [] };
-  } catch (e) { return { error: e.toString() }; }
+    return availableSlots.length 
+      ? { isAvailable: true, availableSlots } 
+      : { isAvailable: false, reason: "모든 시간대 예약이 마감되었습니다.", availableSlots: [] };
+
+  } catch (e) {
+    return { error: e.toString() };
+  }
 }
 
 /** 🎯 Settings 시트에서 운영진 알림 수신 이메일 목록 불러오기 도우미 */
@@ -477,8 +500,7 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
         GmailApp.sendEmail(storeEmail, subject, "", { 
           htmlBody: htmlBody, 
           name: "BOOKMARK CREATORS",
-          from: "info@bookmarkfukuoka.jp",
-          bcc: adminAlertEmails
+          from: "info@bookmarkfukuoka.jp" // 👈 bcc 제거 완료!
         });
         sheet.getRange(safeRow, 25).setValue("점주메일 발송완료");
       } catch (mailErr) {

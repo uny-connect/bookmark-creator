@@ -1,5 +1,5 @@
 /*****************************************************************************************
- * ⚡ [엔진 완전 최적화] 아임웹 실제 수신 페이로드 정합성 100% 동기화 시스템
+ * ⚡ [엔진 완전 최적화] 아임웹 실제 수신 페이로드 정합성 100% 동기화 시스템 (주문/가입/취소 통합)
  ****************************************************************************************/
 function doPost(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -9,18 +9,29 @@ function doPost(e) {
   const debugSheet = ss.getSheetByName("Log"); 
 
   try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return ContentService.createTextOutput("NO_DATA");
+    }
+
     const rawData = e.postData.contents;
     const postData = JSON.parse(rawData);
     if (debugSheet) debugSheet.appendRow([new Date(), "수신: " + rawData]);
 
-    const eventType = postData.eventType || "";
+    const eventType = String(postData.eventType || postData.event_type || "").trim();
     const dataObj = postData.data || postData;
 
-    // 1️⃣ 아임웹 회원가입 이벤트(END_USER_SIGN_UP)
+    // 🚨 0️⃣ 아임웹 주문 취소/환불 웹훅 (ORDER_CANCEL_COMPLETE)
+    if (eventType === "ORDER_CANCEL_COMPLETE" || eventType.includes("CANCEL")) {
+      const orderNo = dataObj.orderNo || dataObj.order_no || postData.orderNo || postData.order_no;
+      const cancelReason = dataObj?.section?.cancelInfo?.cancelReason || "아임웹 취소";
+      const result = handleImwebCancellation(orderNo, cancelReason);
+      return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 1️⃣ 아임웹 회원가입 이벤트 (END_USER_SIGN_UP)
     if (eventType === "END_USER_SIGN_UP") {
       const newMemberUid = String(dataObj.memberUid || "").trim();
       if (newMemberUid && userSheet) {
-        // 이미 등록된 회원인지 확인
         const uValues = userSheet.getDataRange().getValues();
         let exists = false;
         for (let u = 1; u < uValues.length; u++) {
@@ -30,26 +41,26 @@ function doPost(e) {
         }
         if (!exists) {
           const newUserRow = new Array(16).fill("");
-          newUserRow[0] = newMemberUid;                  // A: 고유키(이메일UID)
-          newUserRow[1] = "신규가입(정보수집필요)";        // B: 이름
-          newUserRow[13] = newMemberUid;                 // N: 이메일
+          newUserRow[0] = newMemberUid;                   // A: 고유키(이메일UID)
+          newUserRow[1] = "신규가입(정보수집필요)";         // B: 이름
+          newUserRow[13] = newMemberUid;                  // N: 이메일
           userSheet.appendRow(newUserRow);
         }
       }
       return ContentService.createTextOutput(JSON.stringify({"result": "success_signup"})).setMimeType(ContentService.MimeType.JSON);
     }
 
-    // 2️⃣ 아임웹 주문 이벤트 (ORDER_CREATE)
-    const orderNo = String(dataObj.orderNo || dataObj.order_no || "번호없음").trim();
+    // 2️⃣ 아임웹 주문 생성 이벤트 (ORDER_CREATE / ORDER_PAY_COMPLETE)
+    const rawOrderNo = String(dataObj.orderNo || dataObj.order_no || "번호없음").trim();
+    const cleanOrderNo = rawOrderNo.replace(/['"\s]/g, '');
     const totalPrice = dataObj.totalPaymentPrice || (dataObj.payment && dataObj.payment.paidPrice) || 0;
     
-    // 🎯 실제 아임웹 JSON 키값 완벽 타겟팅
     const memberUid = String(dataObj.memberUid || dataObj.member_code || "").trim();
     const ordererName = String(dataObj.ordererName || dataObj.orderer_name || "").trim();
     const ordererCall = String(dataObj.ordererCall || dataObj.orderer_phone || "").replace(/[^0-9]/g, "");
 
-    // 3️⃣ User_DB 대조 (기존 유저의 영문명/고유키 확인 및 없을 시 연락처 선기록)
-    let englishName = ordererName; // 기본값은 주문자 실명
+    // 3️⃣ User_DB 대조
+    let englishName = ordererName;
     let finalMemberKey = memberUid;
 
     if (userSheet) {
@@ -61,8 +72,7 @@ function doPost(e) {
         
         if ((memberUid && dbKey === memberUid) || (memberUid && dbEmail === memberUid)) {
           finalMemberKey = dbKey;
-          englishName = String(uData[j][1] || ordererName).trim(); // User_DB B열 이름
-          // 혹시 D열 연락처가 비어있다면 이번 주문서의 전화번호로 보완
+          englishName = String(uData[j][1] || ordererName).trim();
           if (!uData[j][3] && ordererCall) {
             userSheet.getRange(j + 1, 4).setValue(ordererCall);
           }
@@ -71,14 +81,13 @@ function doPost(e) {
         }
       }
 
-      // User_DB에 아예 없는 신규 유저가 바로 주문한 경우: 로그인용 최소 정보 자동 안착
       if (!foundUser && memberUid) {
         const newUserRow = new Array(16).fill("");
-        newUserRow[0] = memberUid;       // A: 고유키 (아임웹 memberUid)
-        newUserRow[1] = ordererName;     // B: 이름
-        newUserRow[2] = ordererName;     // C: 실명
-        newUserRow[3] = ordererCall;     // D: 연락처 (로그인에 필수!)
-        newUserRow[13] = memberUid;      // N: 이메일
+        newUserRow[0] = memberUid;
+        newUserRow[1] = ordererName;
+        newUserRow[2] = ordererName;
+        newUserRow[3] = ordererCall;
+        newUserRow[13] = memberUid;
         newUserRow[15] = "주문시 자동안착";
         userSheet.appendRow(newUserRow);
       }
@@ -96,7 +105,7 @@ function doPost(e) {
       items = dataObj.items;
     }
 
-    // 5️⃣ 매장 리스트(Restaurant_List) 사전 구축
+    // 5️⃣ Restaurant_List 사전 구축 (한글명/일본어명 매칭)
     const restData = restSheet ? restSheet.getDataRange().getValues() : [];
     const restIdList = [];
     for (let k = 2; k < restData.length; k++) {
@@ -111,11 +120,12 @@ function doPost(e) {
     items.forEach(function(item) {
       const rawProdName = (item.productInfo && item.productInfo.prodName) || item.product_name || item.name || "식당명 없음";
       
-      // 상품명("미이로 miiro")에서 매장명 매칭
       let targetStoreId = "";
       let matchedStoreName = rawProdName;
       for (let m = 0; m < restIdList.length; m++) {
-        if (rawProdName.toLowerCase().includes(restIdList[m].name.toLowerCase())) {
+        const cleanProd = rawProdName.replace(/\s+/g, '').toLowerCase();
+        const cleanRest = restIdList[m].name.replace(/\s+/g, '').toLowerCase();
+        if (cleanProd.includes(cleanRest) || cleanRest.includes(cleanProd)) {
           targetStoreId = restIdList[m].id;
           matchedStoreName = restIdList[m].name;
           break;
@@ -125,7 +135,7 @@ function doPost(e) {
       const values = logSheet.getDataRange().getValues();
       let rowIndex = -1;
       for (let i = 1; i < values.length; i++) {
-        if (String(values[i][0]).replace(/'/g, '').trim() === orderNo) {
+        if (String(values[i][0]).replace(/['"\s]/g, '') === cleanOrderNo) {
           rowIndex = i + 1;
           break;
         }
@@ -142,18 +152,18 @@ function doPost(e) {
           logSheet.getRange(rowIndex, 21).setValue("취소환불"); 
         }
       } else {
-        const newRow = new Array(24).fill(""); 
-        newRow[0] = "'" + orderNo;           // A: 주문번호
+        const newRow = new Array(25).fill(""); 
+        newRow[0] = "'" + cleanOrderNo;      // A: 주문번호
         newRow[1] = finalMemberKey;          // B: 멤버코드
         newRow[2] = englishName;             // C: 성함
         newRow[3] = "";                      // D: 참여 채널
         newRow[4] = targetStoreId;           // E: 점포 ID
-        newRow[5] = matchedStoreName;        // F: 점포명 ("미이로" 자동 매칭)
+        newRow[5] = matchedStoreName;        // F: 점포명
         newRow[6] = "";                      // G: 예약 캡처 URL
         newRow[7] = "";                      // H: 방문예정일시
         newRow[8] = "";                      // I: 방문인원
         newRow[9] = "";                      // J: 리뷰 마감 기한
-        newRow[10] = totalPrice;             // K: 보증금액 (10000)
+        newRow[10] = totalPrice || 10000;    // K: 보증금액 (기본 10000)
         newRow[11] = status;                 // L: 진행 상태 ("예약대기")
         newRow[12] = "";                     // M: 점주 피드백
         newRow[13] = "";                     // N: 방문 확인
@@ -174,5 +184,56 @@ function doPost(e) {
   } catch (err) {
     if (debugSheet) debugSheet.appendRow([new Date(), "에러: " + err.toString()]);
     return ContentService.createTextOutput(JSON.stringify({"result": "error", "error": err.toString()})).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/** 🎯 아임웹 주문 취소 시트 반영 엔진 */
+function handleImwebCancellation(orderNo, reason) {
+  try {
+    if (!orderNo) return { success: false, error: "주문번호 누락" };
+
+    const targetOrderNo = String(orderNo).trim().replace(/['"\s]/g, '');
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Master_Log');
+    if (!sheet) return { success: false, error: "Master_Log 시트 없음" };
+
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 3) return { success: false, error: "데이터 없음" };
+
+    const orderRange = sheet.getRange(3, 1, lastRow - 2, 1).getValues();
+    let targetRow = -1;
+
+    for (let i = 0; i < orderRange.length; i++) {
+      const sheetOrder = String(orderRange[i][0] || '').trim().replace(/['"\s]/g, '');
+      if (sheetOrder === targetOrderNo) {
+        targetRow = i + 3;
+        break;
+      }
+    }
+
+    if (targetRow === -1) {
+      console.warn(`[취소 반영 실패] Master_Log에서 주문번호 #${targetOrderNo} 를 찾을 수 없음`);
+      return { success: false, error: `주문번호 #${targetOrderNo} 없음` };
+    }
+
+    // 1️⃣ L열(12번째 열) 상태를 '취소(아임웹)'로 변경
+    sheet.getRange(targetRow, 12).setValue('취소(아임웹)');
+
+    // 2️⃣ 슬롯 자동 반환: 예약일시(H열:8), 인원(I열:9), 마감일(J열:10) 비우기
+    sheet.getRange(targetRow, 8, 1, 3).clearContent();
+
+    // 3️⃣ M열(13번째 열, 피드백/비고)에 취소 일시 및 사유 안전하게 덧붙이기
+    const timeZone = Session.getScriptTimeZone();
+    const timeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
+    const prevMemo = String(sheet.getRange(targetRow, 13).getValue() || '').trim();
+    const cancelNote = `[${timeStr} 아임웹 취소: ${reason}]`;
+    sheet.getRange(targetRow, 13).setValue(prevMemo ? `${prevMemo} | ${cancelNote}` : cancelNote);
+
+    console.log(`✅ [취소 반영 완료] 행: ${targetRow}, 주문번호: #${targetOrderNo}`);
+    return { success: true, row: targetRow, orderNo: targetOrderNo };
+
+  } catch (e) {
+    console.error("handleImwebCancellation 실패: " + e.toString());
+    return { success: false, error: e.toString() };
   }
 }

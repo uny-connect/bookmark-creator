@@ -209,10 +209,7 @@ function syncImwebUsers() {
 }
 
 /**
- * 🚨 [자동 노쇼 일괄 처리 엔진 - 최종 비즈니스 세이프가드 적용]
- * - 대상: 상태(L열)가 '방문전'이고, 방문 예약 일시(H열)로부터 익일 04:00가 경과한 미방문 건
- * - 보호 대상: '예약대기', '일정조율필요', '예약확인중', '방문완료', '제출완료', '취소완료' 등은 절대 노쇼 처리하지 않음
- * - 시스템 로그는 Y열(25번째 열)에 기록
+ * 🚨 [자동 노쇼 일괄 처리 엔진]
  */
 function checkAndMarkNoShow() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -224,27 +221,22 @@ function checkAndMarkNoShow() {
 
   try {
     const data = sheet.getDataRange().getValues();
-    if (data.length < 3) return; // 헤더 제외 3행부터 시작
+    if (data.length < 3) return;
 
     const now = new Date();
     const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
     let updatedCount = 0;
 
-    // Master_Log 데이터 시작 행: 3행 (배열 인덱스 2부터)
     for (let i = 2; i < data.length; i++) {
       const row = data[i];
-      const rowNum = i + 1; // 실제 스프레드시트 행 번호
+      const rowNum = i + 1;
 
-      const orderNo = String(row[0] || '').trim().replace(/'/g, ''); // A열: 주문번호
-      const status = String(row[11] || '').trim();                  // L열: 진행 상태 (인덱스 11)
-      const visitDateRaw = row[7];                                  // H열: 방문예정일시 (인덱스 7)
+      const orderNo = String(row[0] || '').trim().replace(/'/g, ''); 
+      const status = String(row[11] || '').trim();                   
+      const visitDateRaw = row[7];                                   
 
-      // 1️⃣ 주문번호가 없거나, '방문전'이 아닌 다른 모든 상태는 건너뜀 (안전 격리)
-      if (!orderNo || status !== '방문전') {
-        continue;
-      }
+      if (!orderNo || status !== '방문전') continue;
 
-      // 2️⃣ 날짜 파싱 (Date 객체 및 YYYY-MM-DD HH:mm 문자열 안전 파싱)
       let visitDate = null;
       if (visitDateRaw instanceof Date) {
         visitDate = new Date(visitDateRaw.getTime());
@@ -260,20 +252,15 @@ function checkAndMarkNoShow() {
         }
       }
 
-      if (!visitDate || isNaN(visitDate.getTime())) {
-        continue;
-      }
+      if (!visitDate || isNaN(visitDate.getTime())) continue;
 
-      // 3️⃣ [비즈니스 버퍼] 방문일 익일 새벽 04:00 이후에만 노쇼 처리
       const safeDeadline = new Date(visitDate.getTime());
       safeDeadline.setDate(safeDeadline.getDate() + 1);
       safeDeadline.setHours(4, 0, 0, 0);
 
       if (now > safeDeadline) {
-        // L열 (12번째 열) 진행 상태를 '노쇼'로 변경
         sheet.getRange(rowNum, 12).setValue('노쇼');
         
-        // 🎯 M열은 건드리지 않고, 시스템 로그 전용인 Y열(25번째 열)에만 기록
         const currentSysLog = String(sheet.getRange(rowNum, 25).getValue() || '').trim();
         const autoLog = `[시스템] ${Utilities.formatDate(now, timeZone, 'yyyy-MM-dd HH:mm')} 자동 노쇼 처리`;
         const updatedSysLog = currentSysLog ? `${currentSysLog} | ${autoLog}` : autoLog;
@@ -286,7 +273,6 @@ function checkAndMarkNoShow() {
 
     Logger.log(`✅ [checkAndMarkNoShow] 총 ${updatedCount}건 노쇼 처리 완료`);
     
-    // 수동 메뉴 클릭 시에만 UI 알림창 출력 (새벽 자동 트리거 시 팝업 에러 방어)
     if (SpreadsheetApp.getUi) {
       try {
         SpreadsheetApp.getUi().alert(`✅ 노쇼 처리 완료\n\n총 ${updatedCount}건이 노쇼 처리되었습니다.`);
@@ -297,7 +283,8 @@ function checkAndMarkNoShow() {
     Logger.log(`❌ [checkAndMarkNoShow 오류] ${err.toString()}`);
   }
 }
-/** [비상용] Master_Log 누락 데이터 일괄 복구 및 자동 완성 */
+
+/** 🎯 [통합 완결본] Master_Log 누락 데이터 일괄 복구 및 자동 완성 (점포ID/이름/매장명/마감일/보증금 전체 통합) */
 function fillMissingData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const logSheet = ss.getSheetByName("Master_Log");
@@ -309,77 +296,101 @@ function fillMissingData() {
     return;
   }
 
-  const logData = logSheet.getDataRange().getValues();
+  const lastRow = logSheet.getLastRow();
+  if (lastRow < 3) {
+    SpreadsheetApp.getUi().alert("⚠️ 검사할 데이터가 없습니다.");
+    return;
+  }
+
+  const logData = logSheet.getRange(3, 1, lastRow - 2, 25).getValues();
   const userData = userSheet.getDataRange().getValues();
   const restData = restSheet.getDataRange().getValues();
 
-  // 1️⃣ User_DB 맵핑 (멤버코드 -> 영문 성함: B열)
+  // 1️⃣ User_DB 매핑 (멤버코드 -> 영문 성함)
   const userMap = new Map();
   for (let j = 1; j < userData.length; j++) {
-    const code = String(userData[j][0] || '').trim();
+    const code = String(userData[j][0] || '').trim().toLowerCase();
     const engName = String(userData[j][1] || '').trim();
-    if (code && engName) {
-      userMap.set(code.toLowerCase(), engName);
-    }
+    if (code && engName) userMap.set(code, engName);
   }
 
-  // 2️⃣ Restaurant_List 맵핑 (점포 ID -> 한국어 점포명: B열)
-  const restMap = new Map();
+  // 2️⃣ Restaurant_List 양방향 매핑 (ID -> Name, Name -> ID)
+  const idToNameMap = new Map();
+  const nameToIdMap = new Map();
+
   for (let k = 2; k < restData.length; k++) {
     const sId = String(restData[k][0] || '').trim().toUpperCase();
-    const sName = String(restData[k][1] || '').trim();
-    if (sId && sName) {
-      restMap.set(sId, sName);
+    const sNameKo = String(restData[k][1] || '').trim();
+    const sNameJp = String(restData[k][2] || '').trim();
+
+    if (sId && sNameKo) {
+      idToNameMap.set(sId, sNameKo);
+      nameToIdMap.set(sNameKo.replace(/\s+/g, ''), { id: sId, name: sNameKo });
+    }
+    if (sId && sNameJp) {
+      nameToIdMap.set(sNameJp.replace(/\s+/g, ''), { id: sId, name: sNameKo });
     }
   }
 
-  let updated = 0;
+  let updatedCount = 0;
 
-  // 3️⃣ Master_Log 3행(인덱스 2)부터 전체 행 검사
-  for (let i = 2; i < logData.length; i++) {
-    const rowNum = i + 1; // 1-based 행 번호
+  for (let i = 0; i < logData.length; i++) {
+    const rowNum = i + 3;
     const memberCode = String(logData[i][1] || '').trim().toLowerCase();
     const currentEngName = String(logData[i][2] || '').trim();
-    const storeId = String(logData[i][4] || '').trim().toUpperCase();
+    const currentStoreId = String(logData[i][4] || '').trim().toUpperCase();
     const currentStoreName = String(logData[i][5] || '').trim();
+    const cleanStoreName = currentStoreName.replace(/\s+/g, '');
     const visitDateVal = logData[i][7];
+    const deadlineVal = logData[i][9];
+    const depositVal = logData[i][10];
 
-    // ① 영문 이름(C열) 복구
+    let rowChanged = false;
+
+    // ① 영문 성함(C열) 복구
     if ((!currentEngName || currentEngName === "미승인/정보없음" || currentEngName === "undefined") && userMap.has(memberCode)) {
       logSheet.getRange(rowNum, 3).setValue(userMap.get(memberCode));
-      updated++;
+      rowChanged = true;
     }
 
-    // ② 점포명(F열) 복구
-    if ((!currentStoreName || currentStoreName === "식당명 없음" || currentStoreName === "undefined") && restMap.has(storeId)) {
-      logSheet.getRange(rowNum, 6).setValue(restMap.get(storeId));
-      updated++;
+    // ② 점포 ID는 비어있고 점포명이 있는 경우 ➔ 점포 ID(E열) 역추적 기입
+    if (!currentStoreId && cleanStoreName) {
+      for (let [cleanName, info] of nameToIdMap.entries()) {
+        if (cleanStoreName.includes(cleanName) || cleanName.includes(cleanStoreName)) {
+          logSheet.getRange(rowNum, 5).setValue(info.id);
+          logSheet.getRange(rowNum, 6).setValue(info.name);
+          rowChanged = true;
+          break;
+        }
+      }
+    }
+    // ③ 점포 ID는 있는데 점포명이 비어있는 경우 ➔ 점포명(F열) 기입
+    else if (currentStoreId && (!currentStoreName || currentStoreName === "식당명 없음") && idToNameMap.has(currentStoreId)) {
+      logSheet.getRange(rowNum, 6).setValue(idToNameMap.get(currentStoreId));
+      rowChanged = true;
     }
 
-    // ③ 방문일시(H열)가 있는 경우: 마감일(J열) 및 기본 보증금(K열) 복구
+    // ④ 방문일시(H열)가 있는 경우 ➔ 마감일(J열) 복구 (방문일 + 10일)
     if (visitDateVal instanceof Date && !isNaN(visitDateVal.getTime())) {
-      const deadlineVal = logData[i][9];
-      const depositVal = logData[i][10];
-
-      // J열 마감일 누락 시 (방문일 + 10일)
       if (!deadlineVal || String(deadlineVal).trim() === '') {
         const d = new Date(visitDateVal.getTime());
         d.setDate(d.getDate() + 10);
         logSheet.getRange(rowNum, 10).setValue(d);
-        updated++;
-      }
-
-      // K열 보증금 누락/0원 시 (10,000원 기본 세팅)
-      if (!depositVal || depositVal === 0 || String(depositVal).trim() === '') {
-        logSheet.getRange(rowNum, 11).setValue(10000);
-        updated++;
+        rowChanged = true;
       }
     }
+
+    // ⑤ 보증금(K열) 누락 시 10,000원 기본 세팅
+    if (!depositVal || depositVal === 0 || String(depositVal).trim() === '') {
+      logSheet.getRange(rowNum, 11).setValue(10000);
+      rowChanged = true;
+    }
+
+    if (rowChanged) updatedCount++;
   }
 
-  SpreadsheetApp.getUi().alert(`✨ 빈칸 채우기 완료\n\n총 ${updated}건의 누락 데이터가 성공적으로 보완되었습니다.`);
+  SpreadsheetApp.getUi().alert(`✨ 자동 채우기 완료!\n\n총 ${updatedCount}개 행의 누락 데이터가 성공적으로 보정되었습니다.`);
 }
-
 
 /** [관리자 기능] 선택된 행 또는 주문번호로 점주 예약 안내 메일 재발송 */
 function resendStoreBookingEmail() {
@@ -391,10 +402,8 @@ function resendStoreBookingEmail() {
 
   if (!logSheet || !restSheet || !userSheet) return ui.alert("❌ 시트 확인 필요");
 
-  // 1. 현재 커서가 위치한 행 번호 확인 (또는 직접 입력 프롬프트)
   let targetRow = logSheet.getActiveRange().getRow();
   
-  // 만약 선택된 행이 3행 미만이거나 Master_Log 시트가 아니면 주문번호 입력받기
   if (ss.getActiveSheet().getName() !== "Master_Log" || targetRow < 3) {
     const promptRes = ui.prompt(
       "📧 점주 메일 재발송",
@@ -418,7 +427,6 @@ function resendStoreBookingEmail() {
     }
   }
 
-  // 2. 해당 행의 예약 데이터 로드
   const rowData = logSheet.getRange(targetRow, 1, 1, 25).getValues()[0];
   const orderNo = String(rowData[0] || '').replace(/'/g, '').trim();
   const memberCode = String(rowData[1] || '').trim();
@@ -435,32 +443,22 @@ function resendStoreBookingEmail() {
   const dateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, "yyyy-MM-dd") : String(rawVisitDate).substring(0, 10);
   const timeStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, "HH:mm") : String(rawVisitDate).substring(11, 16);
 
-  // Utils.js의 resendStoreBookingEmail 내부 3번 영역 수정:
+  // 3. 매장 정보(이메일, 매장명, W열 제공내역) 찾기
   let storeEmail = "", storeNameJp = "", storeBenefit = "";
   const restData = restSheet.getDataRange().getValues();
   for (let k = 2; k < restData.length; k++) {
     if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
       storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
       storeEmail = String(restData[k][10] || '').trim();
-      storeBenefit = String(restData[k][22] || '').trim(); // 🎯 W열 제공내역 추출!
+      storeBenefit = String(restData[k][22] || '').trim(); // 🎯 W열(인덱스 22) 제공내역
       break;
     }
   }
-
-// 본문 profileHtml 바로 위에 추가:
-  const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
-  const storeBenefitHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#127873; <span>提供内容:</span></strong> <span style="color: #2D6A4F; font-weight: bold;">${benefitDisplay}</span></p>`;
-
-// htmlBody 카드 내부에 ${storeBenefitHtml} 포함:
-// <p>방문인원 ... </p>
-// ${storeBenefitHtml}
-// ${profileHtml}
 
   if (!storeEmail || !storeEmail.includes("@")) {
     return ui.alert(`❌ 매장 이메일 주소를 찾을 수 없습니다.\nRestaurant_List 시트의 [${storeId}] 매장 K열을 확인해 주세요.`);
   }
 
-  // 4. 재발송 확인 창
   const confirm = ui.alert(
     "📧 점주 예약 메일 재발송",
     `[재발송 대상 정보]\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
@@ -468,25 +466,22 @@ function resendStoreBookingEmail() {
   );
   if (confirm !== ui.Button.YES) return;
 
-  // 5. 메일 본문 생성 및 발송
+  // 4. 메일 본문 생성 및 발송
   try {
     const scriptUrl = getActiveWebAppUrl();
     const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${targetRow}&o=${encodeURIComponent(orderNo)}`;
     const feedbackUrl = `${scriptUrl}?mode=feedback&row=${targetRow}&o=${encodeURIComponent(orderNo)}`;
 
-
-
-
-// 🎯 재발송 시에도 SNS 링크 순차 자동 탐색 (블로그 -> 인스타 -> 유튜브 -> 틱톡 -> 구글 로컬 가이드)
+    // 🎯 SNS 링크 우선순위 탐색
     let creatorProfileUrl = "";
     const userData = userSheet.getDataRange().getValues();
     for (let u = 1; u < userData.length; u++) {
       if (String(userData[u][0] || '').trim().toLowerCase() === memberCode.toLowerCase()) {
-        const blogUrl = String(userData[u][4] || '').trim();       // E열 (블로그)
-        const instaUrl = String(userData[u][5] || '').trim();      // F열 (인스타)
-        const youtubeUrl = String(userData[u][6] || '').trim();    // G열 (유튜브)
-        const tiktokUrl = String(userData[u][7] || '').trim();     // H열 (틱톡)
-        const googleGuide = String(userData[u][8] || '').trim();   // I열 (구글 로컬 가이드)
+        const blogUrl = String(userData[u][4] || '').trim();       
+        const instaUrl = String(userData[u][5] || '').trim();      
+        const youtubeUrl = String(userData[u][6] || '').trim();    
+        const tiktokUrl = String(userData[u][7] || '').trim();     
+        const googleGuide = String(userData[u][8] || '').trim();   
 
         creatorProfileUrl = blogUrl || instaUrl || youtubeUrl || tiktokUrl || googleGuide || "";
         break;
@@ -510,10 +505,9 @@ function resendStoreBookingEmail() {
       }
     }
 
-
-
-// 운영진 이메일 목록
-    const adminAlertEmails = (typeof getAdminAlertEmails === 'function') ? getAdminAlertEmails() : "bookmarkjapan.info@gmail.com";
+    // 🎯 제공 내역 HTML 블록
+    const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
+    const storeBenefitHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#127873; <span>提供内容:</span></strong> <span style="color: #2D6A4F; font-weight: bold;">${benefitDisplay}</span></p>`;
 
     const subject = `【BOOKMARK CREATORS】 クリエイター来店予約の確認(${dateStr})`;
     const htmlBody = `
@@ -533,7 +527,8 @@ function resendStoreBookingEmail() {
           <div style="background-color: #f8f9fa; border-left: 4px solid #C5A358; padding: 15px; border-radius: 4px; margin: 20px 0;">
             <p style="margin: 5px 0; font-size: 15px;"><strong>&#128100; クリエイター名:</strong> ${memberName}</p>
             <p style="margin: 5px 0; font-size: 15px;"><strong>&#9200; 訪問日時:</strong> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
-            <p style="margin: 5px 0; font-size: 15px;"><strong>&#128101; 訪問人数:</strong> <span style="color: #1A2B49; font-weight: bold;">${peopleStr}名</span></p>
+            <p style="margin: 5px 0; font-size: 15px;"><strong>&#128101; 訪問人数:</strong> <span style="color: #1A2B49; font-weight: bold;">${peopleStr}명</span></p>
+            ${storeBenefitHtml}
             ${profileHtml}
           </div>
           <div style="margin: 30px 0; text-align: center;">

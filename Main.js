@@ -1,5 +1,5 @@
 /********************************************************************
- * [1] 웹 앱 진입점 컨트롤러 (doGet & doPost 웹훅 엔진)
+ * [1] 웹 앱 진입점 컨트롤러 (doGet 엔진)
  ********************************************************************/
 
 /** 🌐 웹 앱 화면 라우팅 (GET) */
@@ -265,9 +265,8 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
 }
 
-
 /*******************************************************************************************************
- * [2] 시트 어시스턴트 유틸리티 매뉴얼 (onOpen / onEdit / fillMissingData)
+ * [2] 시트 어시스턴트 유틸리티 매뉴얼 (onOpen / onEdit)
  *******************************************************************************************************/
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('⚙️ BOOKMARK CREATORS 관리')
@@ -388,69 +387,6 @@ function onEdit(e) {
       sheet.getRange(row, 8, 1, 3).clearContent();
     }
   }
-}
-
-/** 🎯 [빈칸 일괄 자동 채우기] 점포 ID 역추적 + 마감일/보증금 일괄 보정 */
-function fillMissingData() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const masterSheet = ss.getSheetByName('Master_Log');
-  const restSheet = ss.getSheetByName('Restaurant_List');
-  if (!masterSheet || !restSheet) {
-    SpreadsheetApp.getUi().alert('❌ 시트를 찾을 수 없습니다.');
-    return;
-  }
-
-  const restData = restSheet.getDataRange().getValues();
-  const nameToRestMap = new Map();
-
-  // Restaurant_List 매핑 맵 생성 (띄어쓰기 제거 키 -> { id, officialName })
-  for (let k = 2; k < restData.length; k++) {
-    const rId = String(restData[k][0] || '').trim().toUpperCase();
-    const rNameKo = String(restData[k][1] || '').trim();
-    const rNameJp = String(restData[k][2] || '').trim();
-
-    if (rId && rNameKo) nameToRestMap.set(rNameKo.replace(/\s+/g, ''), { id: rId, name: rNameKo });
-    if (rId && rNameJp) nameToRestMap.set(rNameJp.replace(/\s+/g, ''), { id: rId, name: rNameKo });
-  }
-
-  const lastRow = masterSheet.getLastRow();
-  if (lastRow < 3) {
-    SpreadsheetApp.getUi().alert('⚠️ 검사할 데이터가 없습니다.');
-    return;
-  }
-
-  // 안전하게 25개 열 전체 로드
-  const masterRange = masterSheet.getRange(3, 1, lastRow - 2, 25);
-  const masterValues = masterRange.getValues();
-  let updatedStoreIdCount = 0;
-  let updatedDepositCount = 0;
-
-  for (let i = 0; i < masterValues.length; i++) {
-    const currentRow = i + 3;
-    const currentStoreId = String(masterValues[i][4] || '').trim(); // E열 (인덱스 4)
-    const currentStoreName = String(masterValues[i][5] || '').trim().replace(/\s+/g, ''); // F열 (인덱스 5)
-    const currentDeposit = masterValues[i][10]; // K열 (인덱스 10)
-
-    // 1. E열 점포 ID 누락 건 F열 점포명으로 역방향 채우기 + F열 공식 명칭 보정
-    if (!currentStoreId && currentStoreName) {
-      for (let [cleanName, info] of nameToRestMap.entries()) {
-        if (currentStoreName.includes(cleanName) || cleanName.includes(currentStoreName)) {
-          masterSheet.getRange(currentRow, 5).setValue(info.id);
-          masterSheet.getRange(currentRow, 6).setValue(info.name);
-          updatedStoreIdCount++;
-          break;
-        }
-      }
-    }
-
-    // 2. K열 보증금 빈칸 10,000원 채우기
-    if (!currentDeposit || String(currentDeposit).trim() === '') {
-      masterSheet.getRange(currentRow, 11).setValue(10000);
-      updatedDepositCount++;
-    }
-  }
-
-  SpreadsheetApp.getUi().alert(`✨ 자동 채우기 완료!\n\n• 점포 ID 자동 입력: ${updatedStoreIdCount}건\n• 보증금(10,000원) 채우기: ${updatedDepositCount}건`);
 }
 
 /********************************************************************
@@ -746,7 +682,7 @@ function sendTestEmailToStore() {
             <p style="margin: 4px 0; font-size: 13.5px;"><strong>■ 対象アドレス:</strong> ${targetEmail}</p>
           </div>
           <div style="text-align: center; margin-top: 24px; padding: 12px; background-color: #f1f3f5; border-radius: 8px; font-size: 12px; color: #6c757d; font-weight: 600;">
-            ※ 本メールに対する返信や確定手続きは不要です。
+            ※ 本メールに対する返信や確定手続き는 不要です。
           </div>
         </div>
       </div>`;

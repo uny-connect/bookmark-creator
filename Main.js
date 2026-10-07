@@ -34,7 +34,7 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1');
   }
   
-  // 3️⃣ 메일 직통 링크 예약 승인 엔진 분기
+// 3️⃣ 메일 직통 링크 예약 승인 엔진 분기
   if (mode === 'store_confirm') {
     let isAlreadyRequested = false; 
     
@@ -62,9 +62,24 @@ function doGet(e) {
         if (isFirstConfirm) {
           try {
             const currentRestaurantName = String(sheet.getRange(safeRow, 6).getValue() || '').trim(); 
+            const storeId = String(sheet.getRange(safeRow, 5).getValue() || '').trim().toUpperCase();
             const rawMemberCode = String(sheet.getRange(safeRow, 2).getValue() || '').trim();
             const currentMemberCode = rawMemberCode.replace(/['"\s]/g, '').toLowerCase();
             
+            // 🎯 일본어 점포명 조회 (Restaurant_List C열)
+            let storeNameJp = "";
+            const restSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Restaurant_List');
+            if (restSheet && storeId) {
+              const restData = restSheet.getDataRange().getValues();
+              for (let k = 2; k < restData.length; k++) {
+                if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
+                  storeNameJp = String(restData[k][2] || '').trim();
+                  break;
+                }
+              }
+            }
+            const finalStoreNameJp = storeNameJp || currentRestaurantName;
+
             const timeZone = Session.getScriptTimeZone();
             const rawVisitDate = sheet.getRange(safeRow, 8).getValue();
             const rawPeopleStr = String(sheet.getRange(safeRow, 9).getValue() || '1');
@@ -129,7 +144,7 @@ function doGet(e) {
                 });
               }
 
-              // ✉️ 2. 관리자 대상 실시간 일본어 모니터링 알림 발송
+              // ✉️ 2. 관리자 대상 실시간 일본어 모니터링 알림 발송 (점포명 일본어 & 인원수 '名' 적용)
               try {
                 const adminAlertEmails = getAdminAlertEmails();
                 if (adminAlertEmails) {
@@ -147,9 +162,9 @@ function doGet(e) {
                       </p>
                       <div style="background: #ffffff; border-radius: 12px; padding: 18px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
                         <p style="margin: 6px 0;"><b>・注文番号:</b> #${orderNo}</p>
-                        <p style="margin: 6px 0;"><b>・店舗名:</b> ${currentRestaurantName}</p>
+                        <p style="margin: 6px 0;"><b>・店舗名:</b> ${finalStoreNameJp}</p>
                         <p style="margin: 6px 0;"><b>・クリエイター:</b> ${currentMemberCode}</p>
-                        <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #2D6A4F; font-weight: bold;">${visitDateStr} (${pCount}명)</span></p>
+                        <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #2D6A4F; font-weight: bold;">${visitDateStr} (${pCount}名)</span></p>
                       </div>
                     </div>
                   `;
@@ -163,7 +178,7 @@ function doGet(e) {
           } catch (mailErr) {
             console.error("❌ doGet 메일 엔진 연산 실패: " + mailErr.toString());
           }
-        } // 🎯 if (isFirstConfirm) 끝
+        }
       }
     } catch(err) {
       console.error("❌ store_confirm 코어 에러: " + err.toString());

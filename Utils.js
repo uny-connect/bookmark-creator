@@ -527,7 +527,7 @@ function resendStoreBookingEmail() {
           <div style="background-color: #f8f9fa; border-left: 4px solid #C5A358; padding: 15px; border-radius: 4px; margin: 20px 0;">
             <p style="margin: 5px 0; font-size: 15px;"><strong>&#128100; クリエイター名:</strong> ${memberName}</p>
             <p style="margin: 5px 0; font-size: 15px;"><strong>&#9200; 訪問日時:</strong> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
-            <p style="margin: 5px 0; font-size: 15px;"><strong>&#128101; 訪問人数:</strong> <span style="color: #1A2B49; font-weight: bold;">${peopleStr}명</span></p>
+            <p style="margin: 5px 0; font-size: 15px;"><strong>&#128101; 訪問人数:</strong> <span style="color: #1A2B49; font-weight: bold;">${peopleStr}名</span></p>
             ${storeBenefitHtml}
             ${profileHtml}
           </div>

@@ -34,7 +34,7 @@
       margin-bottom: 20px;
     }
 
-    /* 🚨 [정밀 정렬 패치] 다른 로딩창(globalInitialLoading)과 스핀 상단 위치를 100% 일치화 */
+    /* 🚨 [정밀 정렬 패치] 다른 로딩창과 스핀 상단 위치 일치화 */
     #globalActionLoading {
       position: fixed;
       top: 0;
@@ -99,21 +99,15 @@
     .top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; width: 100%; }
     .badge { display: inline-flex; align-items: center; justify-content: center; height: 26px; padding: 0 8px; border-radius: 6px; font-weight: 700; font-size: 11px; }
     
-    /* 🚨 [신규 추가] 어드민 대시보드와 정밀 동기화한 보라색 일정조율필요 뱃지 스타일 */
     .status-adjustment { background-color: #7048e8 !important; color: #ffffff !important; }
-    
     .status-pending { background-color: #e9ecef; color: #495057; }
     .status-waiting { background-color: #dc3545; color: #fff; } 
     .status-verified { background-color: var(--sub-gold); color: #fff; }
     .status-submitted { background-color: var(--status-green); color: #fff; }
     .top-link { font-size: 12px; font-weight: 600; text-decoration: none; color: var(--status-gray); white-space: nowrap; margin-left: 8px;}
     .restaurant-name { font-size: 1.15rem; letter-spacing: -0.03em; font-weight: 700; margin-bottom: 12px; }
-    .upload-box { border: 2px dashed #dee2e6; border-radius: 14px; padding: 20px; text-align: center; background: #f8f9fa; pointer-events: auto; cursor: pointer; transition: 0.2s; margin-bottom: 10px;}
-    .upload-box:hover { border-color: var(--brand-navy); background: #f0f4f8; }
-    .upload-text { font-size: 13px; color: #6c757d; font-weight: 600; margin: 0; }
-    input[type="file"] { display: none; }
     
-    /* 🎯 [달력 그리드 찌그러짐 방지 완벽 패치 고정부] */
+    /* 🎯 달력 그리드 고정부 */
     .calendar-container {
       width: 100% !important;
       max-width: 100% !important;
@@ -182,20 +176,19 @@
     </div>
   </div>
 
- 
-  
-<!-- 🎯 공통 커스텀 알림 모달 (화면 상단 배치) -->
-<div class="modal fade" id="customAlert" tabindex="-1" style="z-index: 1060;">
-  <div class="modal-dialog mt-5">
-    <div class="modal-content border-0" style="border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-width: 320px; margin: auto;">
-      <div class="modal-body text-center" style="padding: 24px;">
-        <p class="fw-bold" id="alertMessage" style="font-size: 15px; color: var(--brand-navy); word-break: keep-all; line-height: 1.6; margin: 0 0 20px 0;"></p>
-        <button type="button" class="btn w-100" data-bs-dismiss="modal" style="border-radius: 14px; padding: 12px; font-weight: 700; background-color: var(--brand-navy); color: #fff; margin: 0;">확인</button>
+  <!-- 🎯 공통 커스텀 알림 모달 -->
+  <div class="modal fade" id="customAlert" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog mt-5">
+      <div class="modal-content border-0" style="border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-width: 320px; margin: auto;">
+        <div class="modal-body text-center" style="padding: 24px;">
+          <p class="fw-bold" id="alertMessage" style="font-size: 15px; color: var(--brand-navy); word-break: keep-all; line-height: 1.6; margin: 0 0 20px 0;"></p>
+          <button type="button" class="btn w-100" data-bs-dismiss="modal" style="border-radius: 14px; padding: 12px; font-weight: 700; background-color: var(--brand-navy); color: #fff; margin: 0;">확인</button>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
+  <!-- 매장 확인 모달 -->
   <div class="modal fade" id="staffModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content p-4 text-center border-0" style="border-radius:25px;">
@@ -229,7 +222,7 @@
   <script>
     var el = function(id) { return document.getElementById(id); };
     var staffModal = null; var alertModal = null; var alertCallback = null; 
-    var receiptData = {}; var editReceiptData = {}; window.selectedBooking = {}; 
+    window.selectedBooking = {}; 
 
     function showAlert(msg, callback) {
       try {
@@ -283,7 +276,7 @@
           return; 
         }
         
-        receiptData = {}; editReceiptData = {}; window.selectedBooking = {};
+        window.selectedBooking = {};
         el('loginSection').style.display = 'none'; el('missionSection').style.display = 'none'; 
         el('loading').style.display = 'block';
         
@@ -309,7 +302,7 @@
           })
           .withFailureHandler(function(err) {
             el('loading').style.display = 'none'; 
-            hideGlobalInitialLoading();
+            hideGlobalInitialLoading(); 
             el('globalActionLoading').style.display = 'none'; 
             el('loginSection').style.display = 'block'; 
             showAlert('서버 통신 오류: ' + err.message);
@@ -355,7 +348,6 @@
         var isRestaurant = (m.info && m.info.storeType !== 'RETAIL'); 
         var peopleSelectorHtml = '';
         if (isRestaurant) {
-          // 🎯 [수정] 4명 고정 대신 매장별 maxPeople 적용
           var maxAllowed = (m.info && m.info.maxPeople) ? parseInt(m.info.maxPeople, 10) : 4;
           var optionsHtml = '';
           for(var i = 1; i <= maxAllowed; i++) { 
@@ -372,39 +364,68 @@
       } 
       else if (status === '예약확인중') {
         action = `
-    <div class="d-flex align-items-center gap-2 mt-2 px-3 py-2.5" 
-         style="background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; min-height: 44px;">
-      <span class="spinner-border spinner-border-sm text-primary" 
-            style="width: 14px; height: 14px; border-width: 2px; color: var(--brand-navy) !important;"></span>
-      <div class="d-flex flex-wrap align-items-center gap-1" style="font-size: 13px; letter-spacing: -0.3px;">
-        <span class="fw-bold" style="color: var(--brand-navy);">매장 승인 대기 중</span>
-        <span class="text-muted" style="font-size: 12.5px;">· 현지 점포에서 예약을 확인 중입니다.</span>
-      </div>
-    </div>
-  `;
-}
+          <div class="d-flex align-items-center gap-2 mt-2 px-3 py-2.5" 
+               style="background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; min-height: 44px;">
+            <span class="spinner-border spinner-border-sm text-primary" 
+                  style="width: 14px; height: 14px; border-width: 2px; color: var(--brand-navy) !important;"></span>
+            <div class="d-flex flex-wrap align-items-center gap-1" style="font-size: 13px; letter-spacing: -0.3px;">
+              <span class="fw-bold" style="color: var(--brand-navy);">매장 승인 대기 중</span>
+              <span class="text-muted" style="font-size: 12.5px;">· 현지 점포에서 예약을 확인 중입니다.</span>
+            </div>
+          </div>
+        `;
+      }
       else if (status === '방문전' && hasVisitDate) {
         action = '<div class="text-center p-3 mt-2" style="background:#f8f9fa; border:1px solid #e9ecef; border-radius:12px; margin-bottom:12px;"><p style="font-size:12px; color:#8b95a1; margin-bottom:4px;">확정된 방문 일정</p><p class="fw-bold m-0" style="color:var(--brand-navy); font-size:15px;">📅 ' + m.visitDate + '</p></div><button class="btn btn-visit btn-custom" onclick="window.openStaffModal(' + m.row + ')">직원에게 확인받기 (방문인증)</button>';
       } 
       else if (status === '방문완료') {
-        var savedUrl = localStorage.getItem('tyche_draft_url_' + m.row) || ''; var savedGoogle = localStorage.getItem('tyche_draft_google_' + m.row) || ''; var savedReview = localStorage.getItem('tyche_draft_review_' + m.row) || '';
-        action = '<div class="mt-3 p-3" style="background: #fdfdfd; border: 1px solid #eee; border-radius: 14px;"><div class="d-flex justify-content-between align-items-center mb-2"><p class="fw-bold m-0" style="font-size:13px; color: #1A2B49;">미션 제출(모두 필수)</p><span style="font-size:10px; color:#8b95a1; background:#f1f3f5; padding:3px 6px; border-radius:4px; font-weight:bold;">💾 자동 임시저장</span></div><label for="receipt_' + m.row + '" class="upload-box w-100 py-2 mb-2" style="border-style: dashed; border-width: 1.5px; background: #fff;"><p class="upload-text" id="receiptName_' + m.row + '">📸 인증샷 (영수증 또는 매장 내부)</p></label><input type="file" id="receipt_' + m.row + '" accept="image/*" onchange="window.previewReceipt(' + m.row + ')"><input type="text" id="url_' + m.row + '" class="form-control mb-2 py-2" style="font-size: 12.5px;" placeholder="🔗 콘텐츠 리뷰 링크 (인스타/유튜브 등)" value="' + savedUrl + '" oninput="window.saveDraft(' + m.row + ', \'url\', this.value); window.checkSubmitReady(' + m.row + ')"><input type="text" id="google_' + m.row + '" class="form-control mb-2 py-2" style="font-size: 12.5px;" placeholder="📍 구글맵 리뷰 링크" value="' + savedGoogle + '" oninput="window.saveDraft(' + m.row + ', \'google\', this.value); window.checkSubmitReady(' + m.row + ')"><input type="text" id="shortReview_' + m.row + '" class="form-control mb-3 py-2" style="font-size: 12.5px;" placeholder="✍️ 매장 솔직 한 줄 후기(피드백)" value="' + savedReview + '" oninput="window.saveDraft(' + m.row + ', \'review\', this.value); window.checkSubmitReady(' + m.row + ')"><button id="finalBtn_' + m.row + '" class="btn btn-brand btn-custom py-2" onclick="window.submitFinal(' + m.row + ')" disabled>제출하기</button></div>';
+        var savedUrl = localStorage.getItem('tyche_draft_url_' + m.row) || ''; 
+        var savedGoogle = localStorage.getItem('tyche_draft_google_' + m.row) || ''; 
+        var savedReview = localStorage.getItem('tyche_draft_review_' + m.row) || '';
+        
+        // 🎯 사진 업로드 완전 제거: 링크 2개 + 한 줄 후기 전용 깔끔한 UI
+        action = '<div class="mt-3 p-3" style="background: #fdfdfd; border: 1px solid #eee; border-radius: 14px;">' +
+          '<div class="d-flex justify-content-between align-items-center mb-3">' +
+            '<p class="fw-bold m-0" style="font-size:13.5px; color: #1A2B49;">미션 제출 (링크 & 후기)</p>' +
+            '<span style="font-size:10px; color:#8b95a1; background:#f1f3f5; padding:3px 6px; border-radius:4px; font-weight:bold;">💾 자동 임시저장</span>' +
+          '</div>' +
+          '<input type="text" id="url_' + m.row + '" class="form-control mb-2 py-2" style="font-size: 13px;" placeholder="🔗 콘텐츠 리뷰 링크 (인스타/유튜브/블로그 등)" value="' + savedUrl + '" oninput="window.saveDraft(' + m.row + ', \'url\', this.value); window.checkSubmitReady(' + m.row + ')">' +
+          '<input type="text" id="google_' + m.row + '" class="form-control mb-2 py-2" style="font-size: 13px;" placeholder="📍 구글맵 리뷰 링크" value="' + savedGoogle + '" oninput="window.saveDraft(' + m.row + ', \'google\', this.value); window.checkSubmitReady(' + m.row + ')">' +
+          '<input type="text" id="shortReview_' + m.row + '" class="form-control mb-3 py-2" style="font-size: 13px;" placeholder="✍️ 매장 솔직 한 줄 후기 (피드백)" value="' + savedReview + '" oninput="window.saveDraft(' + m.row + ', \'review\', this.value); window.checkSubmitReady(' + m.row + ')">' +
+          '<button id="finalBtn_' + m.row + '" class="btn btn-brand btn-custom py-2" onclick="window.submitFinal(' + m.row + ')" disabled>제출하기</button>' +
+        '</div>';
       } 
       else if (status === '제출완료') {
-        var safeUrl = m.reviewUrl ? m.reviewUrl : ''; var safeGoogleUrl = m.googleMapUrl ? m.googleMapUrl : ''; var safeReceiptUrl = m.receiptUrl ? m.receiptUrl : ''; var safeShortReview = m.shortReview ? m.shortReview : ''; 
+        var safeUrl = m.reviewUrl ? m.reviewUrl : ''; 
+        var safeGoogleUrl = m.googleMapUrl ? m.googleMapUrl : ''; 
+        var safeShortReview = m.shortReview ? m.shortReview : ''; 
         var linkHtml = '';
         if(safeUrl) { linkHtml += '<a href="' + safeUrl + '" target="_blank" style="background: #fff; border: 1px solid #dee2e6; border-radius: 10px; font-weight: 600; font-size: 12px; color: #495057; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 6px; text-decoration: none;">🔗 콘텐츠 리뷰 <span style="color: #adb5bd; font-size: 10px;">이동 ❯</span></a>'; }
         if(safeGoogleUrl) { linkHtml += '<a href="' + safeGoogleUrl + '" target="_blank" style="background: #fff; border: 1px solid #dee2e6; border-radius: 10px; font-weight: 600; font-size: 12px; color: #495057; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 6px; text-decoration: none;">📍 구글맵 리뷰 <span style="color: #adb5bd; font-size: 10px;">이동 ❯</span></a>'; }
-        if(safeReceiptUrl) { linkHtml += '<a href="' + safeReceiptUrl + '" target="_blank" style="background: #fff; border: 1px solid #dee2e6; border-radius: 10px; font-weight: 600; font-size: 12px; color: #495057; display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 6px; text-decoration: none;">📸 인증샷 <span style="color: #adb5bd; font-size: 10px;">보기 ❯</span></a>'; }
         if(safeShortReview) { linkHtml += '<div style="background: #fff; border: 1px solid #dee2e6; border-radius: 10px; font-size: 12px; color: #495057; display: flex; align-items: center; padding: 8px 12px; margin-bottom: 6px; font-weight: 500;"><span style="margin-right:6px;">💬</span> <span style="flex:1;">' + safeShortReview + '</span></div>'; }
 
-        action = '<div id="viewMode_' + m.row + '" class="mt-3 p-3" style="background: #f8f9fa; border: none; border-radius: 14px; text-align: center;"><div class="d-flex justify-content-center align-items-center mb-2"><span style="font-size: 14px; margin-right: 6px;">🎉</span><p class="fw-bold m-0" style="font-size: 13.5px; color: #1A2B49;">제출이 완료되었습니다</p></div><div style="display: flex; flex-direction: column; margin-bottom: 8px; text-align: left;">' + linkHtml + '</div><button class="btn btn-custom" style="background: #e9ecef; color: #495057; padding: 10px; font-size: 12px;" onclick="window.toggleEdit(' + m.row + ', true)">✏️ 제출 내용 수정하기</button></div>' + '<div id="editMode_' + m.row + '" class="mt-2 p-3" style="background: #fff; border: 1px solid #dee2e6; border-radius: 14px; display: none;"><div class="d-flex justify-content-between align-items-center mb-2"><p class="fw-bold m-0" style="font-size: 13px; color: #d63384;">제출 내용 수정</p><button class="btn-close" style="font-size: 10px;" onclick="window.toggleEdit(' + m.row + ', false)"></button></div><div class="mb-2 text-start"><input type="text" id="editUrl_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeUrl + '" placeholder="🔗 콘텐츠 리뷰 링크"></div><div class="mb-2 text-start"><input type="text" id="editGoogle_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeGoogleUrl + '" placeholder="📍 구글맵 링크"></div><div class="mb-2 text-start"><input type="text" id="editShortReview_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeShortReview + '" placeholder="✍️ 한 줄 후기"></div><div class="mb-3 text-start"><label for="editReceipt_' + m.row + '" class="d-block text-center" style="background: #f8f9fa; border: 1px dashed #dee2e6; border-radius: 10px; padding: 8px; cursor: pointer; margin: 0;"><p class="m-0" id="editReceiptName_' + m.row + '" style="font-size: 11.5px; color: #339af0; font-weight: 700;">🔄 인증샷 재업로드</p></label><input type="file" id="editReceipt_' + m.row + '" accept="image/*" onchange="window.previewEditReceipt(' + m.row + ')" style="display:none;"></div><div class="d-flex gap-2"><button id="editBtn_' + m.row + '" class="btn btn-visit btn-custom py-2 flex-grow-1" style="font-size: 13px;" onclick="window.submitEdit(' + m.row + ')">수정 내용 저장</button></div></div>';
+        action = '<div id="viewMode_' + m.row + '" class="mt-3 p-3" style="background: #f8f9fa; border: none; border-radius: 14px; text-align: center;">' +
+          '<div class="d-flex justify-content-center align-items-center mb-2">' +
+            '<span style="font-size: 14px; margin-right: 6px;">🎉</span><p class="fw-bold m-0" style="font-size: 13.5px; color: #1A2B49;">제출이 완료되었습니다</p>' +
+          '</div>' +
+          '<div style="display: flex; flex-direction: column; margin-bottom: 8px; text-align: left;">' + linkHtml + '</div>' +
+          '<button class="btn btn-custom" style="background: #e9ecef; color: #495057; padding: 10px; font-size: 12px;" onclick="window.toggleEdit(' + m.row + ', true)">✏️ 제출 내용 수정하기</button>' +
+        '</div>' +
+        '<div id="editMode_' + m.row + '" class="mt-2 p-3" style="background: #fff; border: 1px solid #dee2e6; border-radius: 14px; display: none;">' +
+          '<div class="d-flex justify-content-between align-items-center mb-2">' +
+            '<p class="fw-bold m-0" style="font-size: 13px; color: #d63384;">제출 내용 수정</p>' +
+            '<button class="btn-close" style="font-size: 10px;" onclick="window.toggleEdit(' + m.row + ', false)"></button>' +
+          '</div>' +
+          '<div class="mb-2 text-start"><input type="text" id="editUrl_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeUrl + '" placeholder="🔗 콘텐츠 리뷰 링크"></div>' +
+          '<div class="mb-2 text-start"><input type="text" id="editGoogle_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeGoogleUrl + '" placeholder="📍 구글맵 링크"></div>' +
+          '<div class="mb-3 text-start"><input type="text" id="editShortReview_' + m.row + '" class="form-control py-2" style="font-size: 12px;" value="' + safeShortReview + '" placeholder="✍️ 한 줄 후기"></div>' +
+          '<div class="d-flex gap-2"><button id="editBtn_' + m.row + '" class="btn btn-visit btn-custom py-2 flex-grow-1" style="font-size: 13px;" onclick="window.submitEdit(' + m.row + ')">수정 내용 저장</button></div>' +
+        '</div>';
       }
       return '<div class="mission-card"><div class="top-row"><span class="badge ' + cl + '">' + st + '</span><div><a href="' + m.info.guide + '" target="_blank" class="top-link">가이드</a><a href="' + m.info.map + '" target="_blank" class="top-link text-primary">지도</a></div></div><h6 class="restaurant-name m-0">' + m.restaurant + '</h6><div id="action_' + m.row + '">' + action + '</div></div>';
     }
 
-    function initCalendars(missions) {
-      var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+function initCalendars(missions) {
       missions.forEach(function(m) {
         var hasVisitDate = m.visitDate && m.visitDate.length > 5;
         
@@ -413,8 +434,21 @@
           var staticDates = rawBlackouts.filter(function(item) { return /^\d{4}-\d{2}-\d{2}$/.test(item); });
           var dayMap = { 0: '日', 1: '月', 2: '火', 3: '水', 4: '木', 5: '金', 6: '土' };
 
+          // 🎯 [신규] 매장별 예약 오픈 시작일 / 종료일 계산
+          var minLead = (m.info && m.info.minDays !== undefined) ? parseInt(m.info.minDays, 10) : 1;
+          var maxLead = (m.info && m.info.maxDays !== undefined) ? parseInt(m.info.maxDays, 10) : 90;
+
+          var minSelectDate = new Date();
+          minSelectDate.setDate(minSelectDate.getDate() + minLead); // 예: 오늘 + 7일
+
+          var maxSelectDate = new Date();
+          maxSelectDate.setDate(maxSelectDate.getDate() + maxLead); // 예: 오늘 + 90일
+
           flatpickr("#cal_" + m.row, {
-            inline: true, minDate: tomorrow, locale: "ko",
+            inline: true,
+            minDate: minSelectDate, // 🎯 최소 오픈일 적용
+            maxDate: maxSelectDate, // 🎯 최대 오픈일 적용
+            locale: "ko",
             disable: [
               function(date) {
                 var currentDayString = dayMap[date.getDay()]; var dateNum = date.getDate(); var weekNum = Math.ceil(dateNum / 7);
@@ -538,18 +572,6 @@
       else { el('viewMode_' + row).style.display = 'block'; el('editMode_' + row).style.display = 'none'; }
     }
 
-    function compressImage(dataUrl, fileName, row, targetObj, callback) {
-      var img = new Image();
-      img.onload = function() {
-        var canvas = document.createElement('canvas'); var width = img.width; var height = img.height; var MAX_WIDTH = 800; 
-        if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
-        canvas.width = width; canvas.height = height; var ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
-        targetObj[row] = { data: canvas.toDataURL('image/jpeg', 0.6), name: fileName.split('.')[0] + '.jpg' };
-        if(callback) callback();
-      }
-      img.src = dataUrl;
-    }
-
     function openStaffModal(row) { el('targetRow').value = row; staffModal.show(); }
     
     function processVisit() {
@@ -564,59 +586,46 @@
         .confirmVisit(row);
     }
 
-    function previewReceipt(row) {
-      var file = el('receipt_'+row).files[0]; if(!file) { delete receiptData[row]; checkSubmitReady(row); return; }
-      var label = el('receiptName_'+row); label.innerText = "📸 인증샷 선택됨: " + file.name;
-      label.style.color = 'var(--brand-navy)'; label.style.fontWeight = 'bold';
-      var reader = new FileReader();
-      reader.onload = function(e) { compressImage(e.target.result, file.name, row, receiptData, function() { checkSubmitReady(row); }); }
-      reader.readAsDataURL(file);
-    }
-
+    // 🎯 텍스트 필드 3개만 검증하여 즉시 활성화
     function checkSubmitReady(row) {
-      var hasFile = (receiptData[row] !== undefined && receiptData[row] !== null && receiptData[row].data);
-      var blogUrl = el('url_'+row).value.trim(); var googleUrl = el('google_'+row).value.trim(); var shortRev = el('shortReview_'+row).value.trim();
+      var blogUrl = el('url_' + row).value.trim(); 
+      var googleUrl = el('google_' + row).value.trim(); 
+      var shortRev = el('shortReview_' + row).value.trim();
       var hasAllText = blogUrl.length > 5 && googleUrl.length > 5 && shortRev.length > 1;
-      el('finalBtn_'+row).disabled = !(hasFile && hasAllText);
+      el('finalBtn_' + row).disabled = !hasAllText;
     }
 
     function submitFinal(row) {
-      var url = el('url_'+row).value.trim(); var googleUrl = el('google_'+row).value.trim(); var shortRev = el('shortReview_'+row).value.trim();
+      var url = el('url_' + row).value.trim(); 
+      var googleUrl = el('google_' + row).value.trim(); 
+      var shortRev = el('shortReview_' + row).value.trim();
       if(!url || !googleUrl) return showAlert('콘텐츠 리뷰와 구글 리뷰 링크를 모두 입력해주세요.');
       if(!shortRev) return showAlert('솔직한 한 줄 후기를 입력해주세요.');
-      if(!receiptData[row] || !receiptData[row].data) return showAlert('인증샷(영수증 또는 매장사진)을 올려주세요.');
       
-      var btn = el('finalBtn_'+row); btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 제출 중...';
+      var btn = el('finalBtn_' + row); btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 제출 중...';
       
       google.script.run
         .withSuccessHandler(function(res) {
           btn.innerHTML = '제출 완료';
           if(res.success) {
-            localStorage.removeItem('tyche_draft_url_' + row); localStorage.removeItem('tyche_draft_google_' + row); localStorage.removeItem('tyche_draft_review_' + row);
+            localStorage.removeItem('tyche_draft_url_' + row); 
+            localStorage.removeItem('tyche_draft_google_' + row); 
+            localStorage.removeItem('tyche_draft_review_' + row);
             showAlert('완료되었습니다!<br>검수 후 보증금이 환급됩니다.', function() { executeLogin(); }); 
           } 
           else { showAlert('실패: ' + (res.error || '알 수 없는 오류')); btn.disabled = false; btn.innerText = '제출하기'; }
         })
         .withFailureHandler(function(err) { showAlert('서버 오류: ' + err.message); btn.disabled = false; btn.innerText = '제출하기'; })
-        .submitContent(row, url, receiptData[row].data, receiptData[row].name, googleUrl, shortRev); 
-    }
-
-    function previewEditReceipt(row) {
-      var file = el('editReceipt_'+row).files[0]; if(!file) { delete editReceiptData[row]; return; }
-      var label = el('editReceiptName_'+row); label.innerText = "📸 변경할 인증샷: " + file.name;
-      label.style.color = '#1A2B49'; label.style.fontWeight = 'bold';
-      var reader = new FileReader();
-      reader.onload = function(e) { compressImage(e.target.result, file.name, row, editReceiptData, function(){}); }
-      reader.readAsDataURL(file);
+        .submitContent(row, url, googleUrl, shortRev); 
     }
 
     function submitEdit(row) {
-      var url = el('editUrl_'+row).value.trim(); var googleUrl = el('editGoogle_'+row).value.trim(); var shortRev = el('editShortReview_'+row).value.trim();
+      var url = el('editUrl_' + row).value.trim(); 
+      var googleUrl = el('editGoogle_' + row).value.trim(); 
+      var shortRev = el('editShortReview_' + row).value.trim();
       if(!url || !googleUrl || !shortRev) { showAlert('링크와 한 줄 후기를 모두 입력해주세요.'); return; }
       
-      var btn = el('editBtn_'+row); btn.disabled = true; btn.innerText = '수정 중...';
-      var b64 = (editReceiptData[row] && editReceiptData[row].data) ? editReceiptData[row].data : "";
-      var fname = (editReceiptData[row] && editReceiptData[row].name) ? editReceiptData[row].name : "";
+      var btn = el('editBtn_' + row); btn.disabled = true; btn.innerText = '수정 중...';
 
       google.script.run
         .withSuccessHandler(function(res) {
@@ -625,12 +634,12 @@
           else { showAlert('실패: ' + (res.error || '오류')); btn.disabled = false; btn.innerText = '수정 내용 저장'; }
         })
         .withFailureHandler(function(err) { showAlert('서버 오류: ' + err.message); btn.disabled = false; btn.innerText = '수정 내용 저장'; })
-        .updateSubmission(row, url, b64, fname, googleUrl, shortRev); 
+        .updateSubmission(row, url, googleUrl, shortRev); 
     }
 
     window.executeLogin = executeLogin; window.logout = logout; window.openStaffModal = openStaffModal; window.processVisit = processVisit;
-    window.previewReceipt = previewReceipt; window.checkSubmitReady = checkSubmitReady; window.submitFinal = submitFinal;
-    window.previewEditReceipt = previewEditReceipt; window.submitEdit = submitEdit; window.toggleEdit = toggleEdit;
+    window.checkSubmitReady = checkSubmitReady; window.submitFinal = submitFinal;
+    window.submitEdit = submitEdit; window.toggleEdit = toggleEdit;
     window.selectTime = selectTime; window.submitBooking = submitBooking; window.saveDraft = saveDraft;
   </script>
 </body>

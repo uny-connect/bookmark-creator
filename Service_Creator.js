@@ -1,4 +1,4 @@
-/** [3] 미션 목록 조회 (전화번호 하이픈 무시 및 실시간 매칭 강화) */
+/** [3] 미션 목록 조회 (전화번호 하이픈 무시 및 실시간 매칭 강화 + minDays/maxDays 연동) */
 function getMissions(orderNo, phoneLast4) {
   try {
     const data = _getSheetsData(['Master_Log', 'User_DB', 'Restaurant_List']);
@@ -11,7 +11,7 @@ function getMissions(orderNo, phoneLast4) {
     // User_DB 스캔 (인덱스 1부터)
     for (let j = 1; j < data.User_DB.length; j++) {
       const uRow = data.User_DB[j]; 
-      if (!uRow || !uRow[0]) continue;
+      if (!uRow || !uRow[0]) continue; 
       
       const mCode = String(uRow[0]).trim();
       const mEmail = String(uRow[13] || '').trim();
@@ -28,11 +28,15 @@ function getMissions(orderNo, phoneLast4) {
     const restNameMap = new Map();
     for (let k = 1; k < data.Restaurant_List.length; k++) {
       const rRow = data.Restaurant_List[k]; 
-      if (!rRow || !rRow[0]) continue;
+      if (!rRow || !rRow[0]) continue; 
       const rId = String(rRow[0]).trim().toUpperCase();
       const rName = String(rRow[1] || '').trim();
       const storeType = String(rRow[7] || '').trim().toUpperCase();
       const maxPeople = parseInt(rRow[21], 10) || 4;
+
+      // 🎯 [신규] X열(인덱스 23): 최소 예약 여유일 (기본 1일) / Y열(인덱스 24): 최대 예약 오픈일 (기본 90일)
+      const minLeadDays = parseInt(rRow[23], 10) || 1;
+      const maxLeadDays = parseInt(rRow[24], 10) || 90;
 
       const rDetails = { 
         map: String(rRow[17] || '#').trim(),
@@ -40,6 +44,8 @@ function getMissions(orderNo, phoneLast4) {
         bookingUrl: (storeType === 'RETAIL') ? '' : String(rRow[20] || '').trim(), 
         storeType: storeType, 
         maxPeople: maxPeople,
+        minDays: minLeadDays, // 🎯 최소 오픈일
+        maxDays: maxLeadDays, // 🎯 최대 오픈일
         blackouts: getSafeBlackouts(rRow[13])
       };
       
@@ -52,10 +58,10 @@ function getMissions(orderNo, phoneLast4) {
 
     for (let i = 1; i < data.Master_Log.length; i++) {
       const mRow = data.Master_Log[i]; 
-      if (!mRow || !mRow[0]) continue;
+      if (!mRow || !mRow[0]) continue; 
       
       const status = String(mRow[11] || '').trim(); 
-      const sheetOrderNo = String(mRow[0]).replace(/['"\s]/g, '').trim();
+      const sheetOrderNo = String(mRow[0]).replace(/['"\s]/g, '').trim(); 
       
       if (status.includes('취소') || sheetOrderNo !== inputOrderNo) continue; 
 
@@ -73,7 +79,7 @@ function getMissions(orderNo, phoneLast4) {
         restInfo = restNameMap.get(restaurantName);
       }
       if (!restInfo) {
-        restInfo = { map: '#', guide: '#', bookingUrl: '', storeType: '', maxPeople: 4, blackouts: [] };
+        restInfo = { map: '#', guide: '#', bookingUrl: '', storeType: '', maxPeople: 4, minDays: 1, maxDays: 90, blackouts: [] };
       }
       
       const formatDate = (val, format) => (val instanceof Date) ? Utilities.formatDate(val, timeZone, format) : String(val || '');
@@ -117,7 +123,6 @@ function uploadCapture(row, base64Data, filename, orderNo, memberName) {
 }
 
 /** 현장 방문 확정 클릭 버튼 리스너 */
-/** [방문 확인 기능] 크리에이터가 현장에서 버튼을 클릭했을 때 실행 */
 function confirmVisit(row) {
   try {
     const safeRow = parseInt(row, 10); 
@@ -126,27 +131,18 @@ function confirmVisit(row) {
       return { success: false, error: "既に訪問確認済みか、対象外のステータスです。" };
     } 
     sheet.getRange(safeRow, 12).setValue('방문완료'); 
-    sheet.getRange(safeRow, 14).setValue('Y'); // N열방문확인
+    sheet.getRange(safeRow, 14).setValue('Y'); // N열 방문확인
     return { success: true };
   } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-/** 최종 리뷰 콘텐츠 및 영수증 제출 */
-function submitContent(row, reviewUrl, receiptBase64, receiptName, googleMapUrl, shortReview) {
+/** 최종 리뷰 콘텐츠 제출 (영수증 업로드 제외 버전) */
+function submitContent(row, reviewUrl, googleMapUrl, shortReview) {
   try {
     const safeRow = parseInt(row, 10); 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
-    
-    if (receiptBase64) {
-      const folder = DriveApp.getFoldersByName("bookmark_Receipts").hasNext() ? DriveApp.getFoldersByName("bookmark_Receipts").next() : DriveApp.createFolder("bookmark_Receipts");
-      const finalFileName = `${String(sheet.getRange(safeRow, 1).getValue()).trim()}_${String(sheet.getRange(safeRow, 5).getValue()).trim()}_${receiptName}`;
-      const splitData = receiptBase64.split(',');
-      const file = folder.createFile(Utilities.newBlob(Utilities.base64Decode(splitData[1]), splitData[0].split(':')[1].split(';')[0], finalFileName));
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); 
-      sheet.getRange(safeRow, 15).setValue(file.getUrl()); // O열 매장 영수증 적재 [15번째 열]
-    }
-    
     const fixUrl = (url) => { const u = String(url || '').trim(); return (u && !/^https?:\/\//i.test(u)) ? 'https://' + u : u; };
+
     sheet.getRange(safeRow, 16).setValue(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd")); // P열 제출일 [16]
     sheet.getRange(safeRow, 17).setValue(fixUrl(reviewUrl)); // Q열 콘텐츠 링크 [17]
     if (googleMapUrl) sheet.getRange(safeRow, 18).setValue(fixUrl(googleMapUrl)); // R열 구글맵 [18]
@@ -162,8 +158,8 @@ function submitContent(row, reviewUrl, receiptBase64, receiptName, googleMapUrl,
   } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-/** 수정 제출 처리 */
-function updateSubmission(row, newUrl, newReceiptBase64, newReceiptName, newGoogleUrl, newShortReview) {
+/** 수정 제출 처리 (영수증 업로드 제외 버전) */
+function updateSubmission(row, newUrl, newGoogleUrl, newShortReview) {
   try {
     const safeRow = parseInt(row, 10); 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
@@ -172,20 +168,11 @@ function updateSubmission(row, newUrl, newReceiptBase64, newReceiptName, newGoog
     sheet.getRange(safeRow, 17).setValue(fixUrl(newUrl)); // Q열 [17]
     sheet.getRange(safeRow, 18).setValue(fixUrl(newGoogleUrl)); // R열 [18]
     if(newShortReview !== undefined) sheet.getRange(safeRow, 19).setValue(String(newShortReview).trim()); // S열 [19]
-    
-    if (newReceiptBase64) {
-      const folder = DriveApp.getFoldersByName("bookmark_Receipts").hasNext() ? DriveApp.getFoldersByName("bookmark_Receipts").next() : DriveApp.createFolder("bookmark_Receipts");
-      const splitData = newReceiptBase64.split(',');
-      const file = folder.createFile(Utilities.newBlob(Utilities.base64Decode(splitData[1]), splitData[0].split(':')[1].split(';')[0], "temp"));
-      file.setName(`${String(sheet.getRange(safeRow, 1).getValue()).trim()}_${String(sheet.getRange(safeRow, 5).getValue()).trim()}_Edit_${newReceiptName}`);
-      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); 
-      sheet.getRange(safeRow, 15).setValue(file.getUrl()); // O열 [15]
-    }
     return { success: true };
   } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-/* ⚡ [속도 대폭 튜닝 + 요일별 유연 상한선] 고속 슬롯 필터 제너레이터 (오류 방어 완벽 강화) */
+/* ⚡ [속도 대폭 튜닝 + 요일별 유연 상한선] 고속 슬롯 필터 제너레이터 */
 function checkAvailability(storeId, targetDateStr) {
   try {
     const data = _getSheetsData(['Restaurant_List', 'Master_Log']);
@@ -194,14 +181,13 @@ function checkAvailability(storeId, targetDateStr) {
     const cleanInputId = String(storeId || '').trim().toUpperCase().replace(/['"]/g, '');
     const restList = data.Restaurant_List;
 
-    // 1️⃣ 매장 ID 또는 매장명으로 유연하게 매칭 (헤더 1~2행 제외 인덱스 1부터 탐색)
+    // 1️⃣ 매장 ID 또는 매장명으로 유연하게 매칭
     for (let i = 1; i < restList.length; i++) {
       const rowId = String(restList[i][0] || '').trim().toUpperCase().replace(/['"]/g, '');
       const rowNameKo = String(restList[i][1] || '').trim();
       const rowNameJp = String(restList[i][2] || '').trim();
 
       if (rowId === cleanInputId || (cleanInputId && (cleanInputId === rowNameKo || cleanInputId === rowNameJp))) {
-        // O열(인덱스 14) 영업시간 정규화: 작은따옴표, 전각 하이픈, 물결표 전부 표준 반각 하이픈(-)으로 변환
         let rawBiz = String(restList[i][14] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
 
         config = {
@@ -301,7 +287,7 @@ function checkAvailability(storeId, targetDateStr) {
       return { isAvailable: false, reason: "당일 체험 마감", availableSlots: [] };
     }
 
-    // 4️⃣ 시간대별 슬롯 생성 (브레이크타임 콤마 및 분 단위 안전 파싱)
+    // 4️⃣ 시간대별 슬롯 생성
     let allSlots = [];
     try {
       const parseTime = (t) => {
@@ -310,7 +296,6 @@ function checkAvailability(storeId, targetDateStr) {
         return parseInt(p[0], 10) * 60 + (p[1] ? parseInt(p[1], 10) : 0);
       };
 
-      // 콤마(,)가 포함된 복수 영업시간 구간도 지원 (예: "10:30-15:00, 17:00-21:00")
       const timeRanges = config.bizHours.split(',');
 
       const blocks = config.blockedTimes.map(b => {
@@ -376,7 +361,7 @@ function getAdminAlertEmails() {
   return "bookmarkjapan.info@gmail.com";
 }
 
-/** 확정 슬롯 타임 데이터베이스 픽싱 및 점주/운영진 동시 노티 엔진 (SNS 버튼 화살표 ↗ & 운영진 메일 완전 일본어화) */
+/** 확정 슬롯 타임 데이터베이스 픽싱 및 점주/운영진 동시 노티 엔진 */
 function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
   try {
     const safeRow = parseInt(row, 10);
@@ -450,7 +435,6 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
 
       if (isHttp || isDomainLike) {
         const fullUrl = isHttp ? creatorProfileUrl : "https://" + creatorProfileUrl;
-        // 🎯 ❯ -> ↗ 로 변경
         const btnText = (creatorProfileUrl.includes('drive.google.com') || creatorProfileUrl.includes('imweb') || creatorProfileUrl.match(/\.(jpg|jpeg|png|webp|gif)/i))
           ? "プロフィール確認↗" 
           : "SNSを見る↗";
@@ -518,7 +502,7 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
       sheet.getRange(safeRow, 25).setValue("❌ 실패: 점주 이메일 주소 없음");
     }
 
-    // 📧 2. 운영진/담당자 실시간 모니터링 알림 발송 (🎯 완전 일본어화)
+    // 📧 2. 운영진/담당자 실시간 모니터링 알림 발송 (완전 일본어화)
     try {
       if (adminAlertEmails) {
         const adminSubject = `【予約受付】${memberName}様 ➔ ${storeNameJp || storeNameKo} (${dateStr} ${timeStr})`;

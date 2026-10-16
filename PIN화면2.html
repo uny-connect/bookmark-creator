@@ -143,7 +143,6 @@
       min-width: 284px !important;
       max-width: 284px !important;
     }
-    /* 🎯 캘린더 선택 날짜를 브랜드 딥 네이비로 일치화 */
     .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange, 
     .flatpickr-day.selected.inRange, .flatpickr-day.selected:focus, 
     .flatpickr-day.selected:hover, .flatpickr-day.selected.prevMonthDay, 
@@ -185,10 +184,21 @@
     </div>
 
     <div id="missionSection" style="display:none">
-      <div class="d-flex justify-content-between align-items-center mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
         <h5 class="fw-bold m-0">미션 현황</h5>
         <button class="btn btn-sm" style="background:#e9ecef; color:#495057; font-weight:700; border-radius:8px; padding: 5px 12px; font-size: 12px;" onclick="window.logout()">로그아웃</button>
       </div>
+
+      <!-- 🎯 [상단 승인 채널 환영 배너] -->
+      <div id="creatorProfileBanner" class="p-3 mb-4 rounded" style="background: #ffffff; border: 1.5px solid #e2e8f0; box-shadow: 0 4px 14px rgba(26, 43, 73, 0.04); display: none; word-break: keep-all;">
+        <div class="d-flex align-items-center justify-content-between mb-1.5 flex-wrap gap-1">
+          <span style="font-size: 14px; font-weight: 800; color: #1A2B49;" id="bannerCreatorName">크리에이터님</span>
+          <span id="bannerChannelBadge" style="font-size: 11px; font-weight: 700; background: #f1f5f9; color: #1A2B49; padding: 3px 8px; border-radius: 6px; border: 1px solid #e2e8f0;"></span>
+        </div>
+        <p class="m-0 text-muted" id="bannerChannelDesc" style="font-size: 14px; line-height: 1.6; color: #495057;"></p>
+      </div>
+
+      <!-- 🎯 미션 카드들이 들어가는 컨테이너 -->
       <div id="missionList"></div>
     </div>
   </div>
@@ -240,6 +250,7 @@
     var el = function(id) { return document.getElementById(id); };
     var staffModal = null; var alertModal = null; var alertCallback = null; 
     window.selectedBooking = {}; 
+    window.currentSelectedChannel = {}; // 🎯 각 행별 선택된 승인 채널 기억
 
     function showAlert(msg, callback) {
       try {
@@ -310,12 +321,38 @@
             localStorage.setItem('tycheOrderNo', o); localStorage.setItem('tychePhone', p);
             el('missionSection').style.display = 'block';
             
+            // 🎯 [수정 반영] 상단 프로필 배너 세팅 (이모티콘 제거, 복수 채널 승인 표기, 멘트 간소화)
+            var firstM = data[0];
+            var chList = firstM.approvedChannels || [];
+            if (chList.length > 0) {
+              var pureNames = chList.map(function(c){ return c.name; }).join(', ');
+              el('bannerCreatorName').innerText = (firstM.tierEmoji || '🟡') + ' ' + firstM.member + ' 크리에이터님';
+              
+              if (chList.length > 1) {
+                el('bannerChannelBadge').innerText = '복수 채널 승인';
+              } else {
+                el('bannerChannelBadge').innerText = chList[0].name + ' 승인';
+              }
+              
+              el('bannerChannelDesc').innerHTML = '현재 <b>' + pureNames + '</b> 활동 승인 회원입니다. <br>매장 방문 시 승인 채널 규격에 맞춰 콘텐츠를 촬영해 주세요.';
+              el('creatorProfileBanner').style.display = 'block';
+            } else {
+              el('creatorProfileBanner').style.display = 'none';
+            }
+
             var htmlArray = [];
             for (var i = 0; i < data.length; i++) { htmlArray.push(buildCard(data[i])); }
             el('missionList').innerHTML = htmlArray.join('');
             
             initCalendars(data); 
-            for (var i = 0; i < data.length; i++) { if(data[i].status === '방문완료') { checkSubmitReady(data[i].row); } }
+            // 🎯 렌더링 완료 후 모든 행의 제출 버튼 활성화 상태 즉시 검사
+            setTimeout(function() {
+              for (var i = 0; i < data.length; i++) { 
+                if (data[i].status === '방문완료') { 
+                  checkSubmitReady(data[i].row); 
+                } 
+              }
+            }, 100);
           })
           .withFailureHandler(function(err) {
             el('loading').style.display = 'none'; 
@@ -351,7 +388,6 @@
       var action = '';
       
       if ((status === '예약대기' || status === '일정조율필요' || st === '예약대기') && !hasVisitDate) {
-        // 1️⃣ 외부 실시간 빈자리 링크
         var externalBookingBtn = '';
         if (m.info && m.info.bookingUrl && m.info.bookingUrl.length > 5) {
           externalBookingBtn = '<div class="mb-4">' +
@@ -362,7 +398,6 @@
             '</a></div>';
         }
 
-        // 2️⃣ 인원 선택 셀렉터
         var isRestaurant = (m.info && m.info.storeType !== 'RETAIL'); 
         var peopleSelectorHtml = '';
         if (isRestaurant) {
@@ -378,12 +413,10 @@
             '<p style="font-size: 11.5px; color: #e11d48; font-weight: 600; margin-top: 6px; margin-bottom: 12px; letter-spacing: -0.3px;">※ 동반 방문 희망 시 각자 예약 후 문의 필수</p>';
         } else { peopleSelectorHtml = '<input type="hidden" id="peopleCount_' + m.row + '" value="1">'; }
 
-        // 3️⃣ 일정 조율 필요 배너
         var adjustNotice = (status === '일정조율필요') 
           ? '<div class="p-3 mb-3 text-start" style="background:#fff1f2; border:1px solid #fecdd3; border-radius:12px;"><p class="m-0 fw-bold" style="font-size:13px; color:#e11d48;">매장 사정으로 일정 조율이 필요합니다.</p><p class="m-0 mt-1 text-muted" style="font-size:12px;">담당자가 연락 예정이며, 이후 변경된 일정으로 재예약 부탁드립니다.</p></div>'
           : '';
 
-        // 4️⃣ [개선] 사전 예약 안내 문구 (폰트 14.5px로 확대 + 강제 하단 여백 18px 부여)
         var minLead = (m.info && m.info.minDays !== undefined) ? parseInt(m.info.minDays, 10) : 1;
         var leadNotice = '';
         if (minLead > 1) {
@@ -392,7 +425,6 @@
             '</div>';
         }
 
-        // 5️⃣ 달력 및 액션 영역 결합 (타이틀 폰트 16px로 확대 + 달력과의 하단 여백 16px 부여)
         action = externalBookingBtn + 
           '<div class="pt-1 text-center">' +
             adjustNotice +
@@ -411,7 +443,7 @@
       else if (status === '예약확인중') {
         action = `
           <div class="d-flex align-items-center gap-2 mt-2 px-3 py-2.5" 
-               style="background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; min-height: 44px;">
+               style="background: #f8f9fa; border: 1px solid #f1f5f9; border-radius: 12px; min-height: 44px;">
             <span class="spinner-border spinner-border-sm text-primary" 
                   style="width: 14px; height: 14px; border-width: 2px; color: var(--brand-navy) !important;"></span>
             <div class="d-flex flex-wrap align-items-center gap-1" style="font-size: 13px; letter-spacing: -0.3px;">
@@ -429,12 +461,46 @@
         var savedGoogle = localStorage.getItem('tyche_draft_google_' + m.row) || ''; 
         var savedReview = localStorage.getItem('tyche_draft_review_' + m.row) || ''; 
         
+        // 🎯 승인된 활동 채널에 맞춤형 UI 구성
+        var channels = m.approvedChannels || [{ type: 'instagram', name: '인스타그램(릴스)', icon: '📸', placeholder: '인스타그램 릴스/게시물 URL' }];
+        
+        if (!window.currentSelectedChannel[m.row]) {
+          window.currentSelectedChannel[m.row] = channels[0].type;
+        }
+
+        var currentType = window.currentSelectedChannel[m.row];
+        var currentChannelObj = channels.find(function(c){ return c.type === currentType; }) || channels[0];
+        var placeholderText = currentChannelObj.placeholder;
+        var channelSelectHtml = '';
+
+        if (channels.length > 1) {
+          var btnGroup = channels.map(function(ch) {
+            var isAct = ch.type === currentType;
+            var style = isAct 
+              ? 'background-color: var(--brand-navy); color: #fff; border: 1px solid var(--brand-navy);' 
+              : 'background-color: #fff; color: #495057; border: 1px solid #dee2e6;';
+            return '<button type="button" class="btn btn-sm ch-tab-btn" style="border-radius:8px; font-size:11.5px; font-weight:700; ' + style + '" onclick="window.switchChannel(' + m.row + ', \'' + ch.type + '\', \'' + ch.name + '\', \'' + ch.placeholder + '\', this)">' + ch.icon + ' ' + ch.name + '</button>';
+          }).join(' ');
+
+          channelSelectHtml = '<div class="mb-2 text-start">' +
+            '<label class="form-label mb-1.5 ps-1" style="font-size:11.5px; font-weight:700; color:#64748b;">제출할 활동 채널 선택</label>' +
+            '<div class="d-flex flex-wrap gap-1">' + btnGroup + '</div>' +
+            '</div>';
+        } else {
+          channelSelectHtml = '<div class="mb-2 text-start">' +
+            '<span style="font-size:11px; font-weight:700; background:#eef2ff; color:#4338ca; padding:4px 8px; border-radius:6px;">' + channels[0].icon + ' ' + channels[0].name + ' 승인 크리에이터</span>' +
+            '</div>';
+        }
+
         action = '<div class="mt-3 p-3" style="background: #fdfdfd; border: 1px solid #eee; border-radius: 14px;">' +
           '<div class="d-flex justify-content-between align-items-center mb-3">' +
             '<p class="fw-bold m-0" style="font-size:13.5px; color: #1A2B49;">미션 제출 (링크 & 후기)</p>' +
             '<span style="font-size:10px; color:#8b95a1; background:#f1f3f5; padding:3px 6px; border-radius:4px; font-weight:bold;">자동 임시저장</span>' +
           '</div>' +
-          '<input type="text" id="url_' + m.row + '" class="form-control mb-2 py-2" style="font-size: 13px;" placeholder="콘텐츠 리뷰 링크 (인스타/유튜브/블로그 등)" value="' + savedUrl + '" oninput="window.saveDraft(' + m.row + ', \'url\', this.value); window.checkSubmitReady(' + m.row + ')">' +
+          channelSelectHtml +
+          '<div class="mb-2">' +
+            '<input type="text" id="url_' + m.row + '" class="form-control py-2" style="font-size: 13px;" placeholder="' + placeholderText + '" value="' + savedUrl + '" oninput="window.saveDraft(' + m.row + ', \'url\', this.value); window.checkSubmitReady(' + m.row + ')">' +
+          '</div>' +
           '<input type="text" id="google_' + m.row + '" class="form-control mb-2 py-2" style="font-size: 13px;" placeholder="구글맵 리뷰 링크" value="' + savedGoogle + '" oninput="window.saveDraft(' + m.row + ', \'google\', this.value); window.checkSubmitReady(' + m.row + ')">' +
           '<input type="text" id="shortReview_' + m.row + '" class="form-control mb-3 py-2" style="font-size: 13px;" placeholder="매장 솔직 한 줄 후기 (피드백)" value="' + savedReview + '" oninput="window.saveDraft(' + m.row + ', \'review\', this.value); window.checkSubmitReady(' + m.row + ')">' +
           '<button id="finalBtn_' + m.row + '" class="btn btn-brand btn-custom py-2" onclick="window.submitFinal(' + m.row + ')" disabled>제출하기</button>' +
@@ -467,7 +533,69 @@
           '<div class="d-flex gap-2"><button id="editBtn_' + m.row + '" class="btn btn-visit btn-custom py-2 flex-grow-1" style="font-size: 13px;" onclick="window.submitEdit(' + m.row + ')">수정 내용 저장</button></div>' +
         '</div>';
       }
-      return '<div class="mission-card"><div class="top-row"><span class="badge ' + cl + '">' + st + '</span><div><a href="' + m.info.guide + '" target="_blank" class="top-link">가이드</a><a href="' + m.info.map + '" target="_blank" class="top-link text-primary">지도</a></div></div><h6 class="restaurant-name">' + m.restaurant + '</h6><div id="action_' + m.row + '">' + action + '</div></div>';
+
+      // 🎯 매장명 아래 중복 안내 박스(cardGuideHtml)를 제거하여 여백과 타이틀만 깔끔하게 노출
+      return '<div class="mission-card">' +
+        '<div class="top-row"><span class="badge ' + cl + '">' + st + '</span><div><a href="' + m.info.guide + '" target="_blank" class="top-link">가이드</a><a href="' + m.info.map + '" target="_blank" class="top-link text-primary">지도</a></div></div>' +
+        '<h6 class="restaurant-name">' + m.restaurant + '</h6>' +
+        '<div id="action_' + m.row + '">' + action + '</div>' +
+      '</div>';
+    }
+
+    function switchChannel(row, chType, chName, placeholder, btnEl) {
+      window.currentSelectedChannel[row] = chType;
+      var inp = el('url_' + row);
+      if (inp) {
+        inp.placeholder = placeholder;
+        inp.focus();
+      }
+      var parent = btnEl.parentElement;
+      if (parent) {
+        var btns = parent.querySelectorAll('.ch-tab-btn');
+        btns.forEach(function(b) {
+          b.style.backgroundColor = '#fff';
+          b.style.color = '#495057';
+          b.style.borderColor = '#dee2e6';
+        });
+        btnEl.style.backgroundColor = 'var(--brand-navy)';
+        btnEl.style.color = '#ffffff';
+        btnEl.style.borderColor = 'var(--brand-navy)';
+      }
+      checkSubmitReady(row);
+    }
+
+    // 🎯 URL 적합성 검증 헬퍼
+    function validateReviewUrls(contentUrl, googleUrl, expectedType) {
+      var cUrl = String(contentUrl || '').trim().toLowerCase();
+      var gUrl = String(googleUrl || '').trim().toLowerCase();
+
+      if (!cUrl.startsWith('http://') && !cUrl.startsWith('https://')) {
+        return "콘텐츠 링크는 'https://'로 시작하는 올바른 주소여야 합니다.";
+      }
+      if (!gUrl.startsWith('http://') && !gUrl.startsWith('https://')) {
+        return "구글맵 리뷰 링크는 'https://'로 시작하는 올바른 주소여야 합니다.";
+      }
+      if (cUrl === gUrl) {
+        return "콘텐츠 리뷰 링크와 구글맵 리뷰 링크가 동일합니다.<br>각각 다른 링크를 입력해 주세요.";
+      }
+      if (!gUrl.includes('google.') && !gUrl.includes('goo.gl')) {
+        return "구글맵 리뷰 링크 칸에는 구글 지도 리뷰 주소(`google.com` 또는 `goo.gl`)를 입력해 주세요.";
+      }
+
+      if (expectedType === 'instagram' && !cUrl.includes('instagram.com')) {
+        return "인스타그램 승인 회원이므로 <b>인스타그램 링크(`instagram.com`)</b>를 입력해 주세요.";
+      }
+      if (expectedType === 'blog' && !cUrl.includes('naver.com')) {
+        return "네이버 블로그 승인 회원이므로 <b>네이버 블로그 링크(`naver.com`)</b>를 입력해 주세요.";
+      }
+      if (expectedType === 'youtube' && !cUrl.includes('youtube.com') && !cUrl.includes('youtu.be')) {
+        return "유튜브 승인 회원이므로 <b>유튜브 링크(`youtu.be`)</b>를 입력해 주세요.";
+      }
+      if (expectedType === 'tiktok' && !cUrl.includes('tiktok.com')) {
+        return "틱톡 승인 회원이므로 <b>틱톡 링크(`tiktok.com`)</b>를 입력해 주세요.";
+      }
+
+      return "";
     }
 
     function initCalendars(missions) {
@@ -636,11 +764,13 @@
     }
 
     function checkSubmitReady(row) {
-      var blogUrl = el('url_' + row).value.trim(); 
-      var googleUrl = el('google_' + row).value.trim(); 
-      var shortRev = el('shortReview_' + row).value.trim();
+      var blogUrl = el('url_' + row) ? el('url_' + row).value.trim() : ''; 
+      var googleUrl = el('google_' + row) ? el('google_' + row).value.trim() : ''; 
+      var shortRev = el('shortReview_' + row) ? el('shortReview_' + row).value.trim() : '';
       var hasAllText = blogUrl.length > 5 && googleUrl.length > 5 && shortRev.length > 1;
-      el('finalBtn_' + row).disabled = !hasAllText;
+      if (el('finalBtn_' + row)) {
+        el('finalBtn_' + row).disabled = !hasAllText;
+      }
     }
 
     function submitFinal(row) {
@@ -650,7 +780,16 @@
       if(!url || !googleUrl) return showAlert('콘텐츠 리뷰와 구글 리뷰 링크를 모두 입력해주세요.');
       if(!shortRev) return showAlert('솔직한 한 줄 후기를 입력해주세요.');
       
-      var btn = el('finalBtn_' + row); btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 제출 중...';
+      // 🎯 도메인 적합성 검사
+      var targetType = window.currentSelectedChannel[row] || 'instagram';
+      var validationError = validateReviewUrls(url, googleUrl, targetType);
+      if (validationError) {
+        return showAlert(validationError);
+      }
+
+      var btn = el('finalBtn_' + row); 
+      btn.disabled = true; 
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 제출 중...';
       
       google.script.run
         .withSuccessHandler(function(res) {
@@ -661,10 +800,18 @@
             localStorage.removeItem('tyche_draft_review_' + row);
             showAlert('완료되었습니다!<br>검수 후 보증금이 환급됩니다.', function() { executeLogin(); }); 
           } 
-          else { showAlert('실패: ' + (res.error || '알 수 없는 오류')); btn.disabled = false; btn.innerText = '제출하기'; }
+          else { 
+            showAlert('실패: ' + (res.error || '알 수 없는 오류')); 
+            btn.disabled = false; 
+            btn.innerText = '제출하기'; 
+          }
         })
-        .withFailureHandler(function(err) { showAlert('서버 오류: ' + err.message); btn.disabled = false; btn.innerText = '제출하기'; })
-        .submitContent(row, url, googleUrl, shortRev); 
+        .withFailureHandler(function(err) { 
+          showAlert('서버 오류: ' + err.message); 
+          btn.disabled = false; 
+          btn.innerText = '제출하기'; 
+        })
+        .submitContent(row, url, googleUrl, shortRev, targetType); 
     }
 
     function submitEdit(row) {
@@ -673,7 +820,15 @@
       var shortRev = el('editShortReview_' + row).value.trim();
       if(!url || !googleUrl || !shortRev) { showAlert('링크와 한 줄 후기를 모두 입력해주세요.'); return; }
       
-      var btn = el('editBtn_' + row); btn.disabled = true; btn.innerText = '수정 중...';
+      var targetType = window.currentSelectedChannel[row] || 'instagram';
+      var validationError = validateReviewUrls(url, googleUrl, targetType);
+      if (validationError) {
+        return showAlert(validationError);
+      }
+
+      var btn = el('editBtn_' + row); 
+      btn.disabled = true; 
+      btn.innerText = '수정 중...';
 
       google.script.run
         .withSuccessHandler(function(res) {
@@ -689,6 +844,7 @@
     window.checkSubmitReady = checkSubmitReady; window.submitFinal = submitFinal;
     window.submitEdit = submitEdit; window.toggleEdit = toggleEdit;
     window.selectTime = selectTime; window.submitBooking = submitBooking; window.saveDraft = saveDraft;
+    window.switchChannel = switchChannel;
   </script>
 </body>
 </html>

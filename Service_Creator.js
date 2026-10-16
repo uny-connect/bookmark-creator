@@ -312,7 +312,7 @@ function checkAvailability(storeId, targetDateStr) {
           let endMin = parseTime(times[1]);
           if (endMin < startMin) endMin += 1440;
 
-          for (let curr = startMin; curr <= endMin; curr += config.intervalMin) {
+          for (let curr = startMin; curr < endMin; curr += config.intervalMin) {
             const hit = blocks.some(b => b.type === 'exact' ? curr === b.time : (curr >= b.start && curr <= b.end));
             if (!hit) {
               const h = Math.floor(curr / 60) % 24;

@@ -126,17 +126,20 @@ function syncImwebUsers() {
     const email = getVal("이메일", "email");
     const adminMemo = getVal("관리자 메모", "메모");
 
-    // 케이스 1: 기존 유저 정보 업데이트
+// 케이스 1: 기존 유저 정보 업데이트
     if (existingUserRowMap.has(uniqueKey)) {
       const targetRow = existingUserRowMap.get(uniqueKey);
       if (englishName) userSheet.getRange(targetRow, 2).setValue(englishName);
       if (koreanName) userSheet.getRange(targetRow, 3).setValue(koreanName);
       if (formattedPhone) userSheet.getRange(targetRow, 4).setValue(formattedPhone);
-      if (blogUrl) userSheet.getRange(targetRow, 5).setValue(blogUrl);
-      if (instaUrl) userSheet.getRange(targetRow, 6).setValue(instaUrl);
-      if (youtubeUrl) userSheet.getRange(targetRow, 7).setValue(youtubeUrl);
-      if (tiktokUrl) userSheet.getRange(targetRow, 8).setValue(tiktokUrl);
-      if (googleGuide) userSheet.getRange(targetRow, 9).setValue(googleGuide);
+
+      // 🎯 [수정] 헤더 열이 엑셀에 존재한다면, 빈 칸이어도 시트에 그대로 반영(삭제) 처리
+      if (col("블로그", "blog", "네이버") !== -1) userSheet.getRange(targetRow, 5).setValue(blogUrl);
+      if (col("인스타", "insta", "instagram", "릴스") !== -1) userSheet.getRange(targetRow, 6).setValue(instaUrl);
+      if (col("유튜브", "youtube") !== -1) userSheet.getRange(targetRow, 7).setValue(youtubeUrl);
+      if (col("틱톡", "tiktok", "tictok") !== -1) userSheet.getRange(targetRow, 8).setValue(tiktokUrl);
+      if (col("구글", "로컬", "가이드") !== -1) userSheet.getRange(targetRow, 9).setValue(googleGuide);
+
       if (userGroup) userSheet.getRange(targetRow, 10).setValue(userGroup);
       if (email) userSheet.getRange(targetRow, 14).setValue(email);
       if (adminMemo) userSheet.getRange(targetRow, 16).setValue(adminMemo);

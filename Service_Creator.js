@@ -462,7 +462,7 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
   return { success: true };
 }
 
-/** 메일 발송 분리 함수 (주문번호 제거, 5개 항목 고정, 24시간 답변기한 경고, 깨짐 방지 table 구조) */
+/** 메일 발송 분리 함수 (주문번호 제거, 5개 항목 고정, 24시간 답변기한 경고, 깨짐 방지 table 구조, Y열 타임스탬프 기록) */
 function _sendBookingNotifications(p) {
   const data = _getSheetsData(['Restaurant_List', 'User_DB']);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
@@ -615,7 +615,9 @@ function _sendBookingNotifications(p) {
         from: "info@bookmarkfukuoka.jp",
         bcc: adminAlertEmails
       });
-      sheet.getRange(p.safeRow, 25).setValue("점주메일 발송완료");
+      // 🎯 발송 시각 타임스탬프를 함께 기록하여 Main.js의 24시간 연산 지원
+      const sentTimeStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+      sheet.getRange(p.safeRow, 25).setValue(`[${sentTimeStr}] 점주메일 발송완료`);
     } catch (mailErr) {
       console.error("점주 이메일 발송 실패: " + mailErr.toString());
       sheet.getRange(p.safeRow, 25).setValue("❌ 점주메일 실패: " + mailErr.toString());
@@ -646,7 +648,7 @@ function _sendBookingNotifications(p) {
             <p style="margin: 6px 0;"><b>・訪問店舗:</b> ${storeNameJp || storeNameKo} <span style="color:#8b95a1; font-size: 12px;">(${p.storeId})</span></p>
             <p style="margin: 6px 0;"><b>・提供内容:</b> <span style="color: #2D6A4F; font-weight: bold;">${storeBenefit || '店舗指定のクリエイター向け提供メニュー'}</span></p>
             <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #d63384; font-weight: bold;">${p.dateStr} ${p.timeStr}</span></p>
-            <p style="margin: 6px 0;"><b>・訪問人数:</b> <span style="font-weight: bold;">${p.safePeopleCount}名</span></p>
+            <p style="margin: 6px 0;"><b>・訪問人数:</b> <span style="font-weight: bold;">${p.safePeopleCount}명</span></p>
             ${adminSnsHtml}
             <p style="margin: 6px 0;"><b>・店舗受信メール:</b> <span style="color: #1a73e8;">${storeEmail || '未登録'}</span></p>
           </div>

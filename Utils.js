@@ -368,7 +368,7 @@ function fillMissingData() {
   SpreadsheetApp.getUi().alert(`✨ 자동 채우기 완료!\n\n총 ${updatedCount}개 행의 누락 데이터가 성공적으로 보정되었습니다.`);
 }
 
-/** [관리자 기능] 선택된 행 또는 주문번호로 점주 예약 안내 메일 재발송 (테이블 깨짐 방지 / 5개 항목 고정 / 24시간 기한 안내 / Y열 타임스탬프) */
+/** [관리자 기능] 선택된 행 또는 주문번호로 점주 예약 안내 메일 재발송 (모던 카드형 / 5대 항목 고정 / 24시간 기한 안내 / Y열 타임스탬프) */
 function resendStoreBookingEmail() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -478,11 +478,10 @@ function resendStoreBookingEmail() {
     const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
     const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${dateStr})`;
     
-    // 🎯 table 2열 구조, 주문번호 제거(5개 고정 항목), 24시간 답변 기한 안내 박스
     const htmlBody = `
       <meta charset="UTF-8">
       <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7;">
-        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #ffffff; border-radius: 14px; border: 1px solid #edf0f2; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden;">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #ffffff; border-radius: 16px; border: 1px solid #edf0f2; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden;">
           <tr>
             <td style="padding: 32px 24px;">
               
@@ -500,22 +499,27 @@ function resendStoreBookingEmail() {
                 <p style="color: #6c757d; font-size: 13px; margin: 0;">店舗管理者様</p>
               </div>
 
-              <p style="color: #495057; font-size: 13.5px; line-height: 1.65; margin: 16px 0;">
-                いつもお世話になっております。BOOKMARK CREATORS運営事務局です。<br><br>
-                クリエイターより来店予約の申請が届きました。<br>
+              <!-- 정돈된 본문 안내 멘트 -->
+              <p style="color: #495057; font-size: 13.5px; line-height: 1.65; margin: 16px 0 20px 0;">
+                BOOKMARK CREATORSより来店予約の申請が届きました。<br>
                 下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。
               </p>
 
-              <!-- 🚨 24시간 답변 기한 안내 공지 박스 -->
-              <div style="background-color: #fff5f5; border: 1px solid #ffc9c9; border-left: 4px solid #e03131; border-radius: 6px; padding: 12px 14px; margin-bottom: 18px;">
-                <p style="margin: 0; font-size: 12.5px; color: #c92a2a; line-height: 1.5; font-weight: 700;">
-                  ⏰ ご回答期限：本メール送信後 24時間以内<br>
-                  <span style="font-size: 11.5px; font-weight: 500; color: #495057;">※ 期限内にご回答（確定・日時変更）がない場合、自動的にキャンセル処理が行われ、未回答回数としてカウントされます。</span>
+              <!-- ✨ 모던 기한 안내 카드 (좌측 선 제거, 소프트 라운드) -->
+              <div style="background-color: #fbfbfc; border: 1px solid #f1f3f5; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; text-align: left;">
+                <div style="display: inline-block; background-color: #fff0f0; color: #e03131; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px; margin-bottom: 6px; letter-spacing: -0.2px;">
+                  回答期限
+                </div>
+                <p style="margin: 0; font-size: 13px; color: #1A2B49; font-weight: 700; line-height: 1.4;">
+                  本メール送信後 24時間以内
+                </p>
+                <p style="margin: 4px 0 0 0; font-size: 11.5px; color: #8b95a1; line-height: 1.45;">
+                  ※ 期限内にご回答がない場合、自動的にキャンセル処理が行われます。
                 </p>
               </div>
 
               <!-- 예약 상세 정보 테이블 (5개 항목 고정) -->
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
                 <tr>
                   <td style="padding: 6px 0; color: #495057; font-weight: 500;">
                     <strong>■ クリエイター名:</strong> ${memberName}
@@ -543,25 +547,17 @@ function resendStoreBookingEmail() {
                 </tr>
               </table>
 
-              <!-- 버튼 영역: 깨짐 방지 2열 table -->
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 auto 16px;">
+              <!-- 버튼 영역 (깨짐 방지 2열 구조) -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 auto;">
                 <tr>
                   <td align="center" width="50%" style="padding-right: 6px;">
-                    <a href="${confirmUrl}" target="_blank" style="display: block; background-color: #2D6A4F; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(45,106,79,0.2);">予約を確定する</a>
+                    <a href="${confirmUrl}" target="_blank" style="display: block; background-color: #2D6A4F; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(45,106,79,0.18);">予約を確定する</a>
                   </td>
                   <td align="center" width="50%" style="padding-left: 6px;">
-                    <a href="${feedbackUrl}" target="_blank" style="display: block; background-color: #1A2B49; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(26,43,73,0.2);">日時変更リクエスト</a>
+                    <a href="${feedbackUrl}" target="_blank" style="display: block; background-color: #1A2B49; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(26,43,73,0.15);">日時変更リクエスト</a>
                   </td>
                 </tr>
               </table>
-
-              <p style="color: #8b95a1; font-size: 11.5px; line-height: 1.5; text-align: center; margin: 14px 0 0 0;">
-                ※ ご都合が合わない場合は【日時変更リクエスト】より希望日程をお知らせください。
-              </p>
-
-              <div style="text-align: center; margin-top: 24px; padding: 10px; background-color: #f1f3f5; border-radius: 8px; font-size: 11.5px; color: #6c757d; font-weight: 600;">
-                BOOKMARK CREATORS 運営事務局 (<a href="mailto:info@bookmarkfukuoka.jp" style="color: #1a73e8; text-decoration: none;">info@bookmarkfukuoka.jp</a>)
-              </div>
 
             </td>
           </tr>
@@ -574,10 +570,10 @@ function resendStoreBookingEmail() {
       htmlBody: htmlBody,
       name: "BOOKMARK CREATORS",
       from: "info@bookmarkfukuoka.jp",
-      bcc: adminAlertEmails // 👈 관리자 숨은 참조 적용
+      bcc: adminAlertEmails
     });
 
-    // 🎯 Y열에 타임스탬프([YYYY-MM-DD HH:mm])를 포함하여 재발송 기록 저장
+    // 🎯 Y열에 발송 시각 타임스탬프 기록
     const nowTimeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
     logSheet.getRange(targetRow, 25).setValue(`[${nowTimeStr}] 점주메일 재발송완료`);
     

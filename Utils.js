@@ -368,7 +368,7 @@ function fillMissingData() {
   SpreadsheetApp.getUi().alert(`✨ 자동 채우기 완료!\n\n총 ${updatedCount}개 행의 누락 데이터가 성공적으로 보정되었습니다.`);
 }
 
-/** [관리자 기능] 선택된 행 또는 주문번호로 점주 예약 안내 메일 재발송 (이모지 정돈 B2B 양식) */
+/** [관리자 기능] 선택된 행 또는 주문번호로 점주 예약 안내 메일 재발송 (테이블 깨짐 방지 / 5개 항목 고정 / 24시간 기한 안내 / Y열 타임스탬프) */
 function resendStoreBookingEmail() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -461,97 +461,127 @@ function resendStoreBookingEmail() {
       }
     }
 
-    let profileHtmlClean = `<span style="color: #8b95a1; font-weight: 500;">当日確認 (당일 확인)</span>`;
+    let profileHtmlClean = `<span style="color: #8b95a1; font-weight: 500;">当日確認</span>`;
     if (creatorProfileUrl) {
       const isHttp = /^https?:\/\//i.test(creatorProfileUrl);
       const isDomainLike = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(creatorProfileUrl);
       if (isHttp || isDomainLike) {
         const fullUrl = isHttp ? creatorProfileUrl : "https://" + creatorProfileUrl;
-        profileHtmlClean = `<a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: 700; text-decoration: underline;">SNSを確認する ↗</a>`;
+        const btnText = (creatorProfileUrl.includes('drive.google.com') || creatorProfileUrl.includes('imweb') || creatorProfileUrl.match(/\.(jpg|jpeg|png|webp|gif)/i))
+          ? "プロフィール確認 ↗" : "SNSを見る ↗";
+        profileHtmlClean = `<a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;">${btnText}</a>`;
       } else {
-        profileHtmlClean = `<span style="color: #1A2B49; font-weight: 700;">Google Local Guides (${creatorProfileUrl})</span>`;
+        profileHtmlClean = `<span style="color: #1A2B49; font-weight: bold;">Google Local Guides (${creatorProfileUrl})</span>`;
       }
     }
 
     const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
     const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${dateStr})`;
     
+    // 🎯 table 2열 구조, 주문번호 제거(5개 고정 항목), 24시간 답변 기한 안내 박스
     const htmlBody = `
       <meta charset="UTF-8">
-      <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px 10px; background-color: #f4f5f7;">
-        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 14px; padding: 32px 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid #edf0f2;">
-          
-          <div style="text-align: center; margin-bottom: 20px;">
-            <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">RESERVATION REQUEST</span>
-            <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
-            <div style="width: 36px; height: 3px; background: #C5A358; margin: 10px auto 0;"></div>
-          </div>
+      <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7;">
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #ffffff; border-radius: 14px; border: 1px solid #edf0f2; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden;">
+          <tr>
+            <td style="padding: 32px 24px;">
+              
+              <!-- 상단 브랜딩 -->
+              <div style="text-align: center; margin-bottom: 20px;">
+                <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background-color: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">RESERVATION REQUEST</span>
+                <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
+                <div style="width: 36px; height: 3px; background-color: #C5A358; margin: 10px auto 0;"></div>
+              </div>
 
-          <h2 style="color: #1A2B49; margin-top: 18px; font-size: 16.5px; border-bottom: 1.5px solid #f1f3f5; padding-bottom: 14px; text-align: center; font-weight: 800;">来店予約の確認</h2>
+              <h2 style="color: #1A2B49; margin: 18px 0 0 0; font-size: 16.5px; border-bottom: 1.5px solid #f1f3f5; padding-bottom: 14px; text-align: center; font-weight: 800;">来店予約の確認</h2>
 
-          <div style="margin-top: 18px;">
-            <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 4px 0;">${storeNameJp}</p>
-            <p style="color: #6c757d; font-size: 13px; margin: 0;">店舗管理者様</p>
-          </div>
+              <div style="margin-top: 18px;">
+                <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 4px 0;">${storeNameJp}</p>
+                <p style="color: #6c757d; font-size: 13px; margin: 0;">店舗管理者様</p>
+              </div>
 
-          <p style="color: #495057; font-size: 13.5px; line-height: 1.65; margin: 16px 0;">
-            いつもお世話になっております。BOOKMARK CREATORS運営事務局です。<br><br>
-            クリエイターより来店予約の申請が届きました。<br>
-            下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。
-          </p>
+              <p style="color: #495057; font-size: 13.5px; line-height: 1.65; margin: 16px 0;">
+                いつもお世話になっております。BOOKMARK CREATORS運営事務局です。<br><br>
+                クリエイターより来店予約の申請が届きました。<br>
+                下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。
+              </p>
 
-          <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 16px 18px; margin: 20px 0;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
-              <tr>
-                <td style="width: 95px; color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 注文番号</td>
-                <td style="color: #495057; font-weight: 700; padding: 6px 0;">#${orderNo}</td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ クリエイター</td>
-                <td style="color: #1A2B49; font-weight: 700; padding: 6px 0;">${memberName}</td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 予約日時</td>
-                <td style="color: #d63384; font-weight: 800; font-size: 14.5px; padding: 6px 0;">${dateStr} ${timeStr}</td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 人数</td>
-                <td style="color: #495057; font-weight: 700; padding: 6px 0;">${peopleStr}名</td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 提供内容</td>
-                <td style="color: #2D6A4F; font-weight: 700; padding: 6px 0;">${benefitDisplay}</td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ SNS</td>
-                <td style="padding: 6px 0;">${profileHtmlClean}</td>
-              </tr>
-            </table>
-          </div>
+              <!-- 🚨 24시간 답변 기한 안내 공지 박스 -->
+              <div style="background-color: #fff5f5; border: 1px solid #ffc9c9; border-left: 4px solid #e03131; border-radius: 6px; padding: 12px 14px; margin-bottom: 18px;">
+                <p style="margin: 0; font-size: 12.5px; color: #c92a2a; line-height: 1.5; font-weight: 700;">
+                  ⏰ ご回答期限：本メール送信後 24時間以内<br>
+                  <span style="font-size: 11.5px; font-weight: 500; color: #495057;">※ 期限内にご回答（確定・日時変更）がない場合、自動的にキャンセル処理が行われ、未回答回数としてカウントされます。</span>
+                </p>
+              </div>
 
-          <div style="margin: 28px 0 16px; text-align: center; display: flex; gap: 8px; justify-content: center;">
-            <a href="${confirmUrl}" target="_blank" style="flex: 1; max-width: 190px; background-color: #2D6A4F; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; display: inline-block; box-shadow: 0 3px 10px rgba(45,106,79,0.18); text-align: center;">予約を確定する</a>
-            <a href="${feedbackUrl}" target="_blank" style="flex: 1; max-width: 190px; background-color: #1A2B49; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; display: inline-block; box-shadow: 0 3px 10px rgba(26,43,73,0.15); text-align: center;">日時変更リクエスト</a>
-          </div>
+              <!-- 예약 상세 정보 테이블 (5개 항목 고정) -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
+                <tr>
+                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                    <strong>■ クリエイター名:</strong> ${memberName}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                    <strong>■ 訪問日時:</strong> <span style="color: #d63384; font-weight: 800;">${dateStr} ${timeStr}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                    <strong>■ 訪問人数:</strong> ${peopleStr}名
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                    <strong>■ 提供内容:</strong> <span style="color: #2D6A4F; font-weight: 700;">${benefitDisplay}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                    <strong>■ SNS:</strong> ${profileHtmlClean}
+                  </td>
+                </tr>
+              </table>
 
-          <p style="color: #8b95a1; font-size: 11.5px; line-height: 1.5; text-align: center; margin: 16px 0 0 0;">
-            ※ ご都合が合わない場合は【日時変更リクエスト】より希望日程をお知らせください。
-          </p>
+              <!-- 버튼 영역: 깨짐 방지 2열 table -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 auto 16px;">
+                <tr>
+                  <td align="center" width="50%" style="padding-right: 6px;">
+                    <a href="${confirmUrl}" target="_blank" style="display: block; background-color: #2D6A4F; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(45,106,79,0.2);">予約を確定する</a>
+                  </td>
+                  <td align="center" width="50%" style="padding-left: 6px;">
+                    <a href="${feedbackUrl}" target="_blank" style="display: block; background-color: #1A2B49; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; text-align: center; box-shadow: 0 3px 8px rgba(26,43,73,0.2);">日時変更リクエスト</a>
+                  </td>
+                </tr>
+              </table>
 
-          <div style="text-align: center; margin-top: 24px; padding: 10px; background-color: #f1f3f5; border-radius: 8px; font-size: 11.5px; color: #6c757d; font-weight: 600;">
-            BOOKMARK CREATORS 運営事務局 (info@bookmarkfukuoka.jp)
-          </div>
-        </div>
+              <p style="color: #8b95a1; font-size: 11.5px; line-height: 1.5; text-align: center; margin: 14px 0 0 0;">
+                ※ ご都合が合わない場合は【日時変更リクエスト】より希望日程をお知らせください。
+              </p>
+
+              <div style="text-align: center; margin-top: 24px; padding: 10px; background-color: #f1f3f5; border-radius: 8px; font-size: 11.5px; color: #6c757d; font-weight: 600;">
+                BOOKMARK CREATORS 運営事務局 (<a href="mailto:info@bookmarkfukuoka.jp" style="color: #1a73e8; text-decoration: none;">info@bookmarkfukuoka.jp</a>)
+              </div>
+
+            </td>
+          </tr>
+        </table>
       </div>`;
+
+    const adminAlertEmails = (typeof getAdminAlertEmails === 'function') ? getAdminAlertEmails() : "bookmarkjapan.info@gmail.com";
 
     GmailApp.sendEmail(storeEmail, subject, "", {
       htmlBody: htmlBody,
       name: "BOOKMARK CREATORS",
-      from: "info@bookmarkfukuoka.jp"
+      from: "info@bookmarkfukuoka.jp",
+      bcc: adminAlertEmails // 👈 관리자 숨은 참조 적용
     });
 
-    logSheet.getRange(targetRow, 25).setValue("점주메일 재발송완료");
-    ui.alert(`✅ [재발송 성공]\n\n• 매장: ${storeNameJp}\n• 수신 메일: ${storeEmail}\n\n점주에게 예약 승인 메일이 성공적으로 전송되었습니다!`);
+    // 🎯 Y열에 타임스탬프([YYYY-MM-DD HH:mm])를 포함하여 재발송 기록 저장
+    const nowTimeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
+    logSheet.getRange(targetRow, 25).setValue(`[${nowTimeStr}] 점주메일 재발송완료`);
+    
+    ui.alert(`✅ [재발송 성공]\n\n• 매장: ${storeNameJp}\n• 수신 메일: ${storeEmail}\n• 관리자 bcc: ${adminAlertEmails}\n\n점주에게 예약 승인 메일이 성공적으로 전송되었습니다!`);
   } catch (err) {
     logSheet.getRange(targetRow, 25).setValue("❌ 재발송 실패: " + err.toString());
     ui.alert(`❌ 재발송 실패: ${err.toString()}`);

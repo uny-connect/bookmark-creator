@@ -286,7 +286,8 @@ function doGet(e) {
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('⚙️ BOOKMARK CREATORS 관리')
     .addItem('✨ 빈칸 자동 채우기 (점포ID/이름/마감일/보증금)', 'fillMissingData')
-    .addItem('📩 선택한 예약 건 점주 메일 재발송', 'resendStoreBookingEmail')
+    .addItem('📩 [재발송]선택한 예약 건 점주 메일', 'resendStoreBookingEmail')
+    .addItem('❌ [취소메일]선택한 예약 건 점주 취소 통지 메일', 'sendStoreCancellationEmail') // 👈 추가
     .addItem('🔑 매장별 고유 PIN 6자리 생성', 'generateStorePins') 
     .addItem('🚨 자동 노쇼 일괄 처리 (과거 날짜)', 'checkAndMarkNoShow')
     .addItem('👥 아임웹 신규 회원 동기화', 'syncImwebUsers')

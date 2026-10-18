@@ -512,7 +512,8 @@ function _sendBookingNotifications(p) {
     }
   }
 
-  let profileHtml = `<p style="margin: 5px 0; font-size: 15px; color: #8b95a1;"><strong>&#128279; <span>SNS:</span></strong> <span>当日確認</span></p>`;
+  // 🎯 이모지 없는 단정한 SNS 링크 서식
+  let profileHtmlClean = `<span style="color: #8b95a1; font-weight: 500;">当日確認 (당일 확인)</span>`;
   let adminSnsHtml = `<p style="margin: 6px 0;"><b>・SNS:</b> <span style="color: #8b95a1;">未登録 (当日確認)</span></p>`;
 
   if (creatorProfileUrl) {
@@ -521,58 +522,102 @@ function _sendBookingNotifications(p) {
     if (isHttp || isDomainLike) {
       const fullUrl = isHttp ? creatorProfileUrl : "https://" + creatorProfileUrl;
       const btnText = (creatorProfileUrl.includes('drive.google.com') || creatorProfileUrl.includes('imweb') || creatorProfileUrl.match(/\.(jpg|jpeg|png|webp|gif)/i))
-        ? "プロフィール確認↗" : "SNSを見る↗";
-      profileHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;"><span>${btnText}</span></a></p>`;
+        ? "プロフィール確認 ↗" : "SNSを確認する ↗";
+      profileHtmlClean = `<a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;">${btnText}</a>`;
       adminSnsHtml = `<p style="margin: 6px 0;"><b>・SNS:</b> <a href="${fullUrl}" target="_blank" style="color: #1a73e8; font-weight: bold; text-decoration: underline;">${fullUrl}</a></p>`;
     } else {
-      profileHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#128279; <span>SNS:</span></strong> <span style="color: #1A2B49; font-weight: bold;">Google Local Guides (${creatorProfileUrl})</span></p>`;
+      profileHtmlClean = `<span style="color: #1A2B49; font-weight: bold;">Google Local Guides (${creatorProfileUrl})</span>`;
       adminSnsHtml = `<p style="margin: 6px 0;"><b>・SNS:</b> <span style="color: #1A2B49; font-weight: bold;">Google Local Guides (${creatorProfileUrl})</span></p>`;
     }
   }
 
   const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
-  const storeBenefitHtml = `<p style="margin: 5px 0; font-size: 15px;"><strong>&#127873; <span>提供内容:</span></strong> <span style="color: #2D6A4F; font-weight: bold;">${benefitDisplay}</span></p>`;
 
-  // 1. 점주에게 일본어 예약 신청 메일 발송
+  // 1. 점주에게 일본어 예약 신청 메일 발송 (B2B 단정형 디자인 + 관리자 bcc 추가)
   if (storeEmail && storeEmail.includes("@")) {
     const scriptUrl = getActiveWebAppUrl();
     const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${p.safeRow}&o=${encodeURIComponent(p.orderNo)}`;
     const feedbackUrl = `${scriptUrl}?mode=feedback&row=${p.safeRow}&o=${encodeURIComponent(p.orderNo)}`;
 
-    const subject = `【BOOKMARK CREATORS】 クリエイター来店予約の確認(${p.dateStr})`;
+    const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${p.dateStr})`;
     const htmlBody = `
       <meta charset="UTF-8">
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #f4f5f7;">
-        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+      <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px 10px; background-color: #f4f5f7;">
+        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 14px; padding: 32px 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); border: 1px solid #edf0f2;">
+          
+          <!-- 상단 브랜딩 -->
           <div style="text-align: center; margin-bottom: 20px;">
-            <h1 style="color: #1A2B49; margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
-            <div style="width: 40px; height: 3px; background: #C5A358; margin: 10px auto;"></div>
+            <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">RESERVATION REQUEST</span>
+            <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
+            <div style="width: 36px; height: 3px; background: #C5A358; margin: 10px auto 0;"></div>
           </div>
-          <h2 style="color: #1A2B49; margin-top: 0; font-size: 18px; border-bottom: 2px solid #f1f3f5; padding-bottom: 15px; text-align: center;">&#128197; 来店予約の依頼</h2>
-          <div style="margin-top: 20px;">
-            <p style="color: #1A2B49; font-size: 16px; font-weight: bold; margin-bottom: 5px;">${storeNameJp}</p>
-            <p style="color: #495057; font-size: 14px; margin-top: 0;">店舗管理者様</p>
+
+          <h2 style="color: #1A2B49; margin-top: 18px; font-size: 16.5px; border-bottom: 1.5px solid #f1f3f5; padding-bottom: 14px; text-align: center; font-weight: 800;">来店予約の確認</h2>
+
+          <div style="margin-top: 18px;">
+            <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 4px 0;">${storeNameJp}</p>
+            <p style="color: #6c757d; font-size: 13px; margin: 0;">店舗管理者様</p>
           </div>
-          <p style="color: #495057; font-size: 14px; line-height: 1.6;">BOOKMARK CREATORSより、クリエイターの訪問予約申請が届きました。内容をご確認の上、以下のボタンより確定または日時変更のご対応をお願いいたします。</p>
-          <div style="background-color: #f8f9fa; border-left: 4px solid #C5A358; padding: 15px; border-radius: 4px; margin: 20px 0;">
-            <p style="margin: 5px 0; font-size: 15px;"><strong>&#128100; クリエイター名:</strong> ${p.memberName}</p>
-            <p style="margin: 5px 0; font-size: 15px;"><strong>&#9200; 訪問日時:</strong> <span style="color: #d63384; font-weight: bold;">${p.dateStr} ${p.timeStr}</span></p>
-            <p style="margin: 5px 0; font-size: 15px;"><strong>&#128101; 訪問人数:</strong> <span style="color: #1A2B49; font-weight: bold;">${p.safePeopleCount}名</span></p>
-            ${storeBenefitHtml}
-            ${profileHtml}
+
+          <p style="color: #495057; font-size: 13.5px; line-height: 1.65; margin: 16px 0;">
+            いつもお世話になっております。BOOKMARK CREATORS運営事務局です。<br><br>
+            クリエイターより来店予約の申請が届きました。<br>
+            下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。
+          </p>
+
+          <!-- 단정한 2열 명세 테이블 -->
+          <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 16px 18px; margin: 20px 0;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
+              <tr>
+                <td style="width: 95px; color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 注文番号</td>
+                <td style="color: #495057; font-weight: 700; padding: 6px 0;">#${p.orderNo}</td>
+              </tr>
+              <tr>
+                <td style="width: 95px; color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ クリエイター</td>
+                <td style="color: #1A2B49; font-weight: 700; padding: 6px 0;">${p.memberName}</td>
+              </tr>
+              <tr>
+                <td style="width: 95px; color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 予約日時</td>
+                <td style="color: #d63384; font-weight: 800; font-size: 14.5px; padding: 6px 0;">${p.dateStr} ${p.timeStr}</td>
+              </tr>
+              <tr>
+                <td style="width: 95px; color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 人数</td>
+                <td style="color: #495057; font-weight: 700; padding: 6px 0;">${p.safePeopleCount}名</td>
+              </tr>
+              <tr>
+                <td style="width: 95px; color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 提供内容</td>
+                <td style="color: #2D6A4F; font-weight: 700; padding: 6px 0;">${benefitDisplay}</td>
+              </tr>
+              <tr>
+                <td style="width: 95px; color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ SNS</td>
+                <td style="padding: 6px 0;">${profileHtmlClean}</td>
+              </tr>
+            </table>
           </div>
-          <div style="margin: 30px 0; text-align: center;">
-            <a href="${confirmUrl}" target="_blank" style="background-color: #2D6A4F; color: #ffffff; padding: 14px 20px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 10px; display: inline-block; margin-right: 10px; box-shadow: 0 4px 12px rgba(45,106,79,0.2);">&#9989; 予約を確定する</a>
-            <a href="${feedbackUrl}" target="_blank" style="background-color: #1A2B49; color: #ffffff; padding: 14px 20px; font-size: 14px; font-weight: bold; text-decoration: none; border-radius: 10px; display: inline-block; box-shadow: 0 4px 12px rgba(26,43,73,0.15);">&#128260; 日時変更をリクエスト</a>
+
+          <!-- 액션 버튼 -->
+          <div style="margin: 28px 0 16px; text-align: center; display: flex; gap: 8px; justify-content: center;">
+            <a href="${confirmUrl}" target="_blank" style="flex: 1; max-width: 190px; background-color: #2D6A4F; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; display: inline-block; box-shadow: 0 3px 10px rgba(45,106,79,0.18); text-align: center;">予約を確定する</a>
+            <a href="${feedbackUrl}" target="_blank" style="flex: 1; max-width: 190px; background-color: #1A2B49; color: #ffffff; padding: 13px 0; font-size: 13.5px; font-weight: 800; text-decoration: none; border-radius: 10px; display: inline-block; box-shadow: 0 3px 10px rgba(26,43,73,0.15); text-align: center;">日時変更リクエスト</a>
+          </div>
+
+          <p style="color: #8b95a1; font-size: 11.5px; line-height: 1.5; text-align: center; margin: 16px 0 0 0;">
+            ※ ご都合が合わない場合は【日時変更リクエスト】より希望日程をお知らせください。
+          </p>
+
+          <div style="text-align: center; margin-top: 24px; padding: 10px; background-color: #f1f3f5; border-radius: 8px; font-size: 11.5px; color: #6c757d; font-weight: 600;">
+            BOOKMARK CREATORS 運営事務局 (info@bookmarkfukuoka.jp)
           </div>
         </div>
       </div>`;
 
     try {
+      const adminAlertEmails = getAdminAlertEmails();
       GmailApp.sendEmail(storeEmail, subject, "", { 
         htmlBody: htmlBody, 
         name: "BOOKMARK CREATORS",
-        from: "info@bookmarkfukuoka.jp"
+        from: "info@bookmarkfukuoka.jp",
+        bcc: adminAlertEmails // 👈 점주 메일에도 관리자 bcc 포함
       });
       sheet.getRange(p.safeRow, 25).setValue("점주메일 발송완료");
     } catch (mailErr) {
@@ -583,14 +628,14 @@ function _sendBookingNotifications(p) {
     sheet.getRange(p.safeRow, 25).setValue("❌ 실패: 점주 이메일 주소 없음");
   }
 
-  // 2. 운영진/담당자 실시간 모니터링 알림 발송
+  // 2. 운영진/담당자 실시간 모니터링 알림 발송 (기존 유지)
   try {
     const adminAlertEmails = getAdminAlertEmails();
     if (adminAlertEmails) {
       const adminSubject = `【予約受付】${p.memberName}様 ➔ ${storeNameJp || storeNameKo} (${p.dateStr} ${p.timeStr})`;
       const adminHtml = `
         <meta charset="UTF-8">
-        <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 16px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
+        <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 14px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
           <div style="margin-bottom: 18px;">
             <span style="background: #1A2B49; color: #fff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px;">ADMIN NOTIFICATION</span>
             <h3 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 18px; font-weight: 800;">クリエイター来店予約の受付</h3>
@@ -599,7 +644,7 @@ function _sendBookingNotifications(p) {
             クリエイターより来店予約申請が届き、店舗管理者へ確認メールを送信しました。<br>
             現在、店舗側による【確定】または【日程変更】の対応待ちステータスです。
           </p>
-          <div style="background: #ffffff; border-radius: 12px; padding: 18px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
+          <div style="background: #ffffff; border-radius: 10px; padding: 18px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
             <p style="margin: 6px 0;"><b>・注文番号:</b> #${p.orderNo}</p>
             <p style="margin: 6px 0;"><b>・クリエイター:</b> ${p.memberName} <span style="color:#8b95a1; font-size: 12px;">(${p.memberCode})</span></p>
             <p style="margin: 6px 0;"><b>・訪問店舗:</b> ${storeNameJp || storeNameKo} <span style="color:#8b95a1; font-size: 12px;">(${p.storeId})</span></p>
@@ -609,9 +654,6 @@ function _sendBookingNotifications(p) {
             ${adminSnsHtml}
             <p style="margin: 6px 0;"><b>・店舗受信メール:</b> <span style="color: #1a73e8;">${storeEmail || '未登録'}</span></p>
           </div>
-          <p style="font-size: 11.5px; color: #8b95a1; margin: 0; line-height: 1.5;">
-            ※ 本メールは、Settingsシートの [ADMIN_NOTIFICATION_EMAILS] に登録された管理者宛てに自動送信されています。
-          </p>
         </div>
       `;
       GmailApp.sendEmail(adminAlertEmails, adminSubject, "", { 

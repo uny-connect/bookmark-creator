@@ -519,7 +519,7 @@ function _sendBookingNotifications(p) {
     const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${p.dateStr})`;
     const htmlBody = `
       <meta charset="UTF-8">
-      <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7; -webkit-font-smoothing: antialiased;">
         <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #ffffff; border-radius: 16px; border: 1px solid #edf0f2; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden;">
           <tr>
             <td style="padding: 32px 24px;">
@@ -533,60 +533,55 @@ function _sendBookingNotifications(p) {
 
               <h2 style="color: #1A2B49; margin: 18px 0 0 0; font-size: 16.5px; border-bottom: 1.5px solid #f1f3f5; padding-bottom: 14px; text-align: center; font-weight: 800;">来店予約の確認</h2>
 
+              <!-- 점포명 & 담당자 (하단 여백 최소화) -->
               <div style="margin-top: 18px;">
-                <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 4px 0;">${storeNameJp}</p>
-                <p style="color: #6c757d; font-size: 13px; margin: 0;">店舗管理者様</p>
+                <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 2px 0;">${storeNameJp}</p>
+                <p style="color: #6c757d; font-size: 13px; margin: 0 0 6px 0;">店舗管理者様</p>
               </div>
 
-              <!-- 정돈된 본문 안내 멘트 -->
-              <p style="color: #495057; font-size: 13.5px; line-height: 1.65; margin: 16px 0 20px 0;">
-                BOOKMARK CREATORSより来店予約の申請が届きました。<br>
-                下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。
-              </p>
+              <!-- 안내 문구 (상단 여백을 6px로 좁혀 밀착 배치) -->
+              <div style="margin: 6px 0 16px 0; color: #333333; font-size: 13.5px; line-height: 1.55;">
+                <p style="margin: 0 0 3px 0;">BOOKMARK CREATORSより来店予約の申請が届きました。</p>
+                <p style="margin: 0;">下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。</p>
+              </div>
 
-              <!-- ✨ 트렌디한 모던 기한 안내 카드 (좌측 선 제거, 소프트 라운드 & 틴트 컬러) -->
-              <div style="background-color: #fbfbfc; border: 1px solid #f1f3f5; border-radius: 12px; padding: 14px 16px; margin-bottom: 20px; text-align: left;">
-                <div style="display: inline-block; background-color: #fff0f0; color: #e03131; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 6px; margin-bottom: 6px; letter-spacing: -0.2px;">
-                  回答期限
-                </div>
-                <p style="margin: 0; font-size: 13px; color: #1A2B49; font-weight: 700; line-height: 1.4;">
-                  本メール送信後 24時間以内
-                </p>
-                <p style="margin: 4px 0 0 0; font-size: 11.5px; color: #8b95a1; line-height: 1.45;">
-                  ※ 期限内にご回答がない場合、自動的にキャンセル処理が行われます。
+              <!-- 24시간 기한 안내 (차분하고 선명한 딥레드 #c92a2a 적용) -->
+              <div style="background-color: #fbfbfc; border: 1px solid #edf0f2; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; text-align: left;">
+                <p style="margin: 0; font-size: 12.5px; color: #c92a2a; line-height: 1.5; font-weight: 700;">
+                  ※ 本メール送信後24時間以内にご回答がない場合、自動的にキャンセル処理が行われます。
                 </p>
               </div>
 
-              <!-- 예약 상세 정보 테이블 (5개 항목 고정) -->
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
+              <!-- 예약 상세 정보 테이블 (5대 필수 항목) -->
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff; border: 1.5px solid #edf0f2; border-radius: 12px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ クリエイター名:</strong> ${p.memberName}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ 訪問日時:</strong> <span style="color: #d63384; font-weight: 800;">${p.dateStr} ${p.timeStr}</span>
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ 訪問人数:</strong> ${p.safePeopleCount}名
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ 提供内容:</strong> <span style="color: #2D6A4F; font-weight: 700;">${benefitDisplay}</span>
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ SNS:</strong> ${profileHtmlClean}
                   </td>
                 </tr>
               </table>
 
-              <!-- 버튼 영역 (깨짐 방지 2열 구조) -->
+              <!-- 버튼 영역 (2열 정렬) -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 auto;">
                 <tr>
                   <td align="center" width="50%" style="padding-right: 6px;">

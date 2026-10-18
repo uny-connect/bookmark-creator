@@ -49,9 +49,9 @@ function doPost(e) {
         }
         if (!exists) {
           const newUserRow = new Array(16).fill("");
-          newUserRow[0] = newMemberUid;                   // A: 고유키(이메일UID)
-          newUserRow[1] = "新規会員";         // B: 이름
-          newUserRow[13] = newMemberUid;                  // N: 이메일
+          newUserRow[0] = newMemberUid;                  // A: 고유키(이메일UID)
+          newUserRow[1] = "新規会員";                     // B: 이름
+          newUserRow[13] = newMemberUid;                 // N: 이메일
           userSheet.appendRow(newUserRow);
         }
       }
@@ -128,9 +128,9 @@ function doPost(e) {
     }
     restIdList.sort((a, b) => b.nameKo.length - a.nameKo.length);
 
-    // 6️⃣ Master_Log 기존 데이터를 단 1번만 로드하여 고속 매핑 배열 구축 (동일 매장 복수 구매 대응)
+    // 6️⃣ Master_Log 기존 데이터를 단 1번만 로드하여 고속 매핑 배열 구축
     const logData = logSheet.getDataRange().getValues();
-    const existingOrderRows = []; // 기존에 적재된 동일 주문번호 행 정보
+    const existingOrderRows = [];
 
     for (let i = 2; i < logData.length; i++) {
       const sheetOrder = String(logData[i][0] || '').replace(/['"\s]/g, '');
@@ -142,6 +142,7 @@ function doPost(e) {
           rowNum: i + 1,
           storeId: sheetStoreId,
           storeName: sheetStoreName,
+          status: String(logData[i][11] || '').trim(),
           used: false
         });
       }
@@ -185,7 +186,7 @@ function doPost(e) {
           if ((targetStoreId && ex.storeId === targetStoreId) || 
               (matchedStoreName && ex.storeName === matchedStoreName)) {
             matchedExisting = ex;
-            ex.used = true; // 동일 루프 재사용 방지
+            ex.used = true;
             break;
           }
         }
@@ -197,9 +198,16 @@ function doPost(e) {
       }
 
       if (matchedExisting) {
-        // 이미 생성된 행이면 상태만 업데이트
-        logSheet.getRange(matchedExisting.rowNum, 12).setValue(status);
+        // 🔒 [치명적 덮어쓰기 방어 락] 이미 방문완료/제출완료이거나 이미 취소된 건은 절대 건드리지 않음
+        const currentSheetStatus = matchedExisting.status;
+        if (currentSheetStatus === '방문완료' || currentSheetStatus === '제출완료' || currentSheetStatus.includes('취소')) {
+          return;
+        }
+
+        // 방문 전이나 미신청 대기 상태인 행만 안전하게 취소 처리
         if (status === "취소완료") {
+          logSheet.getRange(matchedExisting.rowNum, 12).setValue("취소(아임웹)");
+          logSheet.getRange(matchedExisting.rowNum, 8, 1, 3).clearContent();
           logSheet.getRange(matchedExisting.rowNum, 21).setValue("취소환불");
         }
       } else {
@@ -229,19 +237,17 @@ function doPost(e) {
 
         logSheet.appendRow(newRow);
         
-        // 추가된 행을 기록하여 동일 배치 내 동일 식당 2개 이상 주문 건도 완벽 지원
         existingOrderRows.push({
           rowNum: logSheet.getLastRow(),
           storeId: targetStoreId,
           storeName: matchedStoreName,
+          status: status,
           used: true
         });
       }
     });
 
-    // 모든 루프 종료 후 시트에 1회 일괄 반영
     SpreadsheetApp.flush();
-
     return ContentService.createTextOutput(JSON.stringify({ result: "success" })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
@@ -252,7 +258,7 @@ function doPost(e) {
   }
 }
 
-/** 🎯 아임웹 주문 취소 시트 반영 엔진 (오프셋 오류 원천 차단 및 범위 방어) */
+/** 🎯 아임웹 취소/환불 연동 (체험 완료 건 보호 락 탑재) */
 function handleImwebCancellation(orderNo, reason) {
   try {
     if (!orderNo) return { success: false, error: "주문번호 누락" };
@@ -266,30 +272,34 @@ function handleImwebCancellation(orderNo, reason) {
     if (lastRow < 3) return { success: false, error: "검사할 데이터 행이 없습니다." };
 
     const totalDataRows = lastRow - 2;
-    const orderValues = sheet.getRange(3, 1, totalDataRows, 1).getValues();
+    // A열(주문번호), L열(상태), M열(메모) 데이터 로드
+    const logData = sheet.getRange(3, 1, totalDataRows, 13).getValues();
     const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
     const timeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
     let canceledCount = 0;
 
     for (let i = 0; i < totalDataRows; i++) {
-      const sheetOrder = String(orderValues[i][0] || '').trim().replace(/['"\s]/g, '');
+      const sheetOrder = String(logData[i][0] || '').trim().replace(/['"\s]/g, '');
+      const currentStatus = String(logData[i][11] || '').trim();
+
       if (sheetOrder === targetOrderNo) {
-        const targetRow = i + 3; // 3행부터 시작하므로 정확한 행 번호 보장
+        // 🔒 [치명적 버그 방어 락]
+        // 이미 '방문완료', '제출완료'이거나 이미 '취소'된 건은 절대로 건드리지 않음!
+        if (currentStatus === '방문완료' || currentStatus === '제출완료' || currentStatus.includes('취소')) {
+          continue; 
+        }
 
+        // 방문 전이거나 승인 대기 중인 행만 안전하게 취소 처리
+        const targetRow = i + 3;
         sheet.getRange(targetRow, 12).setValue('취소(아임웹)');
-        sheet.getRange(targetRow, 8, 1, 3).clearContent(); // 슬롯 반환 (H~J열)
+        sheet.getRange(targetRow, 8, 1, 3).clearContent(); // H~J열 슬롯 반환
 
-        const prevMemo = String(sheet.getRange(targetRow, 13).getValue() || '').trim();
+        const prevMemo = String(logData[i][12] || '').trim();
         const cancelNote = `[${timeStr} 아임웹 취소: ${reason}]`;
         sheet.getRange(targetRow, 13).setValue(prevMemo ? `${prevMemo} | ${cancelNote}` : cancelNote);
 
         canceledCount++;
       }
-    }
-
-    if (canceledCount === 0) {
-      console.warn(`[취소 실패] Master_Log에서 주문번호 #${targetOrderNo} 를 찾을 수 없음`);
-      return { success: false, error: `주문번호 #${targetOrderNo} 없음` };
     }
 
     SpreadsheetApp.flush();

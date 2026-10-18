@@ -37,23 +37,26 @@ function doGet(e) {
 // 3️⃣ 메일 직통 링크 예약 승인 엔진 분기
   if (mode === 'store_confirm') {
     let isAlreadyRequested = false; 
-    let isExpired = false; // 👈 24시간 초과 만료 플래그 추가
+    let isExpired = false; // 24시간 만료 플래그
     
     try {
       const safeRow = parseInt(e.parameter.row, 10);
       const orderNo = e.parameter.o;
-      const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet = ss.getSheetByName('Master_Log');
+      const restSheet = ss.getSheetByName('Restaurant_List');
       
       const sheetOrderNo = String(sheet.getRange(safeRow, 1).getValue()).trim().replace(/'/g, '');
       const currentStatus = String(sheet.getRange(safeRow, 12).getValue()).trim();
+      const storeId = String(sheet.getRange(safeRow, 5).getValue() || '').trim().toUpperCase();
 
-      // 🚨 1. 이미 다른 상태로 변경된 건 방어
+      // 🚨 1. 이미 다른 상태로 처리된 건인지 검사
       if (currentStatus === '일정조율필요' || currentStatus.includes('취소') || currentStatus.includes('노쇼')) {
         isAlreadyRequested = true; 
       } 
       else if (safeRow && sheetOrderNo === String(orderNo).trim().replace(/'/g, '')) {
         
-        // 🚨 2. 24시간 답변 기한 만료 체크 (Y열 시스템 로그의 메일 발송 시각 기준 검사)
+        // 🚨 2. Y열 시스템 로그의 타임스탬프 검사 ([YYYY-MM-DD HH:mm] 형태 추출)
         const sysLog = String(sheet.getRange(safeRow, 25).getValue() || '');
         const logMatch = sysLog.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
         
@@ -62,16 +65,30 @@ function doGet(e) {
           const now = new Date();
           const diffHours = (now.getTime() - sentTime.getTime()) / (1000 * 60 * 60);
           
+          // 24시간 초과 시 만료 처리
           if (diffHours >= 24) {
             isExpired = true;
-            // 24시간 초과 시 마스터로그를 '취소(기한만료)'로 전환하고 슬롯 반환
+            
+            // ① Master_Log 슬롯 회수 및 상태 취소 변경
             sheet.getRange(safeRow, 12).setValue('취소(기한만료)');
-            sheet.getRange(safeRow, 8, 1, 3).clearContent();
-            sheet.getRange(safeRow, 25).setValue(sysLog + " | [시스템] 점주 24시간 미답변 자동취소");
+            sheet.getRange(safeRow, 8, 1, 3).clearContent(); // H~J열 슬롯 반환
+            sheet.getRange(safeRow, 25).setValue(sysLog + " | [시스템] 점주 24시간 미답변 만료");
+
+            // ② 🎯 Restaurant_List Z열(26번째 열) 무응답 카운트 +1 누적
+            if (restSheet && storeId) {
+              const restData = restSheet.getDataRange().getValues();
+              for (let k = 2; k < restData.length; k++) {
+                if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
+                  const currentCount = parseInt(restData[k][25], 10) || 0; // Z열(index 25)
+                  restSheet.getRange(k + 1, 26).setValue(currentCount + 1);
+                  break;
+                }
+              }
+            }
           }
         }
 
-        // 🔒 [중복 발송 방어 락] 기한 내이고 최초 승인일 때만 메일 엔진 동작
+        // 🔒 [중복 발송 방어 락] 기한 내이고 최초 1회 승인일 때만 메일 엔진 동작
         const isFirstConfirm = (currentStatus !== '방문전');
 
         if (!isExpired) {
@@ -83,12 +100,10 @@ function doGet(e) {
           if (isFirstConfirm) {
             try {
               const currentRestaurantName = String(sheet.getRange(safeRow, 6).getValue() || '').trim(); 
-              const storeId = String(sheet.getRange(safeRow, 5).getValue() || '').trim().toUpperCase();
               const rawMemberCode = String(sheet.getRange(safeRow, 2).getValue() || '').trim();
               const currentMemberCode = rawMemberCode.replace(/['"\s]/g, '').toLowerCase();
               
               let storeNameJp = "";
-              const restSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Restaurant_List');
               if (restSheet && storeId) {
                 const restData = restSheet.getDataRange().getValues();
                 for (let k = 2; k < restData.length; k++) {
@@ -107,7 +122,7 @@ function doGet(e) {
               const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
               if (currentMemberCode) {
-                const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('User_DB');
+                const userSheet = ss.getSheetByName('User_DB');
                 const userData = userSheet.getDataRange().getValues();
                 let creatorEmail = "";
                 
@@ -119,7 +134,7 @@ function doGet(e) {
                   }
                 }
 
-                // ✉ 1. 크리에이터 확정 안내 발송
+                // ✉️ 크리에이터 확정 안내 메일
                 if (creatorEmail && creatorEmail.includes("@")) {
                   const subject = "[BOOKMARK CREATORS] 방문 예약 확정 안내";
                   const htmlBody = `
@@ -158,13 +173,10 @@ function doGet(e) {
                       </div>
                     </div>`;
 
-                  GmailApp.sendEmail(creatorEmail, subject, "", { 
-                    htmlBody: htmlBody, 
-                    name: "BOOKMARK CREATORS"
-                  });
+                  GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
                 }
 
-                // ✉️ 2. 관리자 알림 발송
+                // ✉️ 관리자 알림 발송
                 try {
                   const adminAlertEmails = getAdminAlertEmails();
                   if (adminAlertEmails) {
@@ -188,10 +200,7 @@ function doGet(e) {
                         </div>
                       </div>
                     `;
-                    GmailApp.sendEmail(adminAlertEmails, adminSubject, "", { 
-                      htmlBody: adminHtml, 
-                      name: "BOOKMARK NOTI" 
-                    });
+                    GmailApp.sendEmail(adminAlertEmails, adminSubject, "", { htmlBody: adminHtml, name: "BOOKMARK NOTI" });
                   }
                 } catch(e) {}
               }
@@ -205,7 +214,7 @@ function doGet(e) {
       console.error("❌ store_confirm 코어 에러: " + err.toString());
     }
     
-    // 🚨 1. 24시간 기한 만료 안내 화면
+    // 🚨 [결과 화면 1] 24시간 답변 기한 만료 화면
     if (isExpired) {
       return HtmlService.createHtmlOutput(`
         <!DOCTYPE html>
@@ -246,7 +255,7 @@ function doGet(e) {
       `).setTitle('BOOKMARK CREATORS | 期限切れ').addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
-    // 🚨 2. 이미 일정조율/취소된 경우 안내 화면
+    // 🚨 [결과 화면 2] 이미 일정조율/취소된 경우 화면
     if (isAlreadyRequested) {
       return HtmlService.createHtmlOutput(`
         <!DOCTYPE html>
@@ -287,7 +296,7 @@ function doGet(e) {
       `).setTitle('BOOKMARK CREATORS | 確定不可').addMetaTag('viewport', 'width=device-width, initial-scale=1');
     }
 
-    // 3. 정상 확정 완료 화면
+    // [결과 화면 3] 정상 확정 완료 화면
     return HtmlService.createHtmlOutput(`
         <!DOCTYPE html>
         <html>

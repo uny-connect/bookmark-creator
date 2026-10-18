@@ -554,3 +554,155 @@ function resendStoreBookingEmail() {
     ui.alert(`❌ 재발송 실패: ${err.toString()}`);
   }
 }
+
+/**
+ * ❌ [운영자 수동 기능] 점주 대상 예약 취소 알림 메일 발송 및 슬롯 초기화
+ */
+function sendStoreCancellationEmail() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const logSheet = ss.getSheetByName("Master_Log");
+  const restSheet = ss.getSheetByName("Restaurant_List");
+
+  if (!logSheet || !restSheet) return ui.alert("❌ Master_Log 또는 Restaurant_List 시트를 찾을 수 없습니다.");
+
+  let targetRow = logSheet.getActiveRange().getRow();
+  
+  // Master_Log 시트가 아니거나 헤더 행을 찍었을 경우 수동 입력 프롬프트 제공
+  if (ss.getActiveSheet().getName() !== "Master_Log" || targetRow < 3) {
+    const promptRes = ui.prompt(
+      "❌ 점주 예약 취소 메일 발송",
+      "취소 통보할 [행 번호] 또는 [주문번호]를 입력하세요:\n(예: 5 또는 20261018123456)",
+      ui.ButtonSet.OK_CANCEL
+    );
+    if (promptRes.getSelectedButton() !== ui.Button.OK) return;
+    const inputVal = promptRes.getResponseText().trim();
+    if (!inputVal) return ui.alert("입력값이 없습니다.");
+
+    if (!isNaN(inputVal) && parseInt(inputVal, 10) < 1000) {
+      targetRow = parseInt(inputVal, 10);
+    } else {
+      const data = logSheet.getDataRange().getValues();
+      for (let i = 2; i < data.length; i++) {
+        if (String(data[i][0]).replace(/['\s]/g, '') === inputVal.replace(/['\s]/g, '')) {
+          targetRow = i + 1;
+          break;
+        }
+      }
+    }
+  }
+
+  const rowData = logSheet.getRange(targetRow, 1, 1, 25).getValues()[0];
+  const orderNo = String(rowData[0] || '').replace(/'/g, '').trim();
+  const creatorName = String(rowData[2] || '').trim();
+  const storeId = String(rowData[4] || '').trim().toUpperCase();
+  const storeNameKo = String(rowData[5] || '').trim();
+  const rawVisitDate = rowData[7];
+  const peopleStr = String(rowData[8] || '1명').replace(/[^0-9]/g, '') || '1';
+
+  if (!orderNo) {
+    return ui.alert(`❌ ${targetRow}행에 주문번호가 없습니다.`);
+  }
+
+  const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
+  const dateStr = (rawVisitDate instanceof Date) 
+    ? Utilities.formatDate(rawVisitDate, timeZone, "yyyy-MM-dd") 
+    : String(rawVisitDate || '').substring(0, 10);
+  const timeStr = (rawVisitDate instanceof Date) 
+    ? Utilities.formatDate(rawVisitDate, timeZone, "HH:mm") 
+    : String(rawVisitDate || '').substring(11, 16);
+  const visitDisplay = (dateStr && timeStr) ? `${dateStr} ${timeStr}` : (dateStr || "未定 (미정)");
+
+  // 매장 정보 (이메일, 일본어 매장명) 조회
+  let storeEmail = "", storeNameJp = "";
+  const restData = restSheet.getDataRange().getValues();
+  for (let k = 2; k < restData.length; k++) {
+    if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
+      storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
+      storeEmail = String(restData[k][10] || '').trim();
+      break;
+    }
+  }
+  const finalStoreName = storeNameJp || storeNameKo || storeId;
+
+  if (!storeEmail || !storeEmail.includes("@")) {
+    return ui.alert(`❌ 매장 이메일이 등록되어 있지 않습니다.\nRestaurant_List 시트의 [${storeId}] 매장 K열을 확인해 주세요.`);
+  }
+
+  // 발송 전 확인 팝업
+  const confirm = ui.alert(
+    "⚠️ 점주 취소 알림 메일 발송",
+    `[취소 통보 매장 및 예약 정보]\n• 주문번호: #${orderNo}\n• 매장: ${finalStoreName} (${storeId})\n• 크리에이터: ${creatorName}\n• 기존 예약일시: ${visitDisplay} (${peopleStr}명)\n• 수신 이메일: ${storeEmail}\n\n점주에게 '예약 취소 안내 메일'을 발송하고 시트 상태를 취소로 변경하시겠습니까?`,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirm !== ui.Button.YES) return;
+
+  try {
+    const todayStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
+    const subject = `【予約キャンセル】 クリエイター来店予約キャンセルのご案内 (${finalStoreName})`;
+    
+    const htmlBody = `
+      <meta charset="UTF-8">
+      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 20px; background-color: #f4f5f7;">
+        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+          
+          <div style="text-align: center; margin-bottom: 20px;">
+            <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #dc3545; padding: 4px 10px; border-radius: 6px; display: inline-block;">CANCELLATION</span>
+            <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
+            <div style="width: 40px; height: 3px; background: #dc3545; margin: 10px auto;"></div>
+          </div>
+
+          <h2 style="color: #dc3545; margin-top: 0; font-size: 17px; border-bottom: 2px solid #f1f3f5; padding-bottom: 15px; text-align: center;">&#10060; ご来店予約キャンセルのご連絡</h2>
+
+          <div style="margin-top: 20px;">
+            <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin-bottom: 5px;">${finalStoreName}</p>
+            <p style="color: #495057; font-size: 13.5px; margin-top: 0;">店舗管理者様</p>
+          </div>
+
+          <p style="color: #495057; font-size: 13.5px; line-height: 1.6;">
+            いつもお世話になっております。BOOKMARK CREATORS運営事務局です。<br><br>
+            予定されておりました下記のクリエイター来店予約につきまして、<b>クリエイター側の都合（日程調整・キャンセル）により、予約がキャンセルとなりました</b>のでご案内申し上げます。<br>
+            ご準備やお席の確保は不要となります。直前のご連絡となり大変恐縮ですが、何卒ご了承いただけますようお願い申し上げます。
+          </p>
+
+          <div style="background-color: #f8f9fa; border-left: 4px solid #dc3545; padding: 15px; border-radius: 4px; margin: 20px 0; font-size: 13.5px;">
+            <p style="margin: 4px 0;"><strong>■ 注文番号:</strong> #${orderNo}</p>
+            <p style="margin: 4px 0;"><strong>■ クリエイター名:</strong> ${creatorName}</p>
+            <p style="margin: 4px 0;"><strong>■ 予約日時:</strong> <span style="color: #dc3545; font-weight: bold; text-decoration: line-through;">${visitDisplay}</span></p>
+            <p style="margin: 4px 0;"><strong>■ 予約人数:</strong> ${peopleStr}名</p>
+          </div>
+
+          <p style="color: #6c757d; font-size: 12.5px; line-height: 1.5;">
+            ※ 本キャンセルに関する店舗様側のご対応（確認ボタンの押下等）は一切不要です。<br>
+            ※ 今後、新たな日程で再予約が入る場合がございます。その際は改めてご連絡いたします。
+          </p>
+
+          <div style="text-align: center; margin-top: 24px; padding: 12px; background-color: #f1f3f5; border-radius: 8px; font-size: 12px; color: #6c757d; font-weight: 600;">
+            BOOKMARK CREATORS 運営事務局 (info@bookmarkfukuoka.jp)
+          </div>
+
+        </div>
+      </div>
+    `;
+
+    GmailApp.sendEmail(storeEmail, subject, "", {
+      htmlBody: htmlBody,
+      name: "BOOKMARK CREATORS",
+      from: "info@bookmarkfukuoka.jp"
+    });
+
+    // 시트 상태 반영: L열 상태 변경, H~J열 슬롯/마감일 초기화, 로그 남기기
+    logSheet.getRange(targetRow, 12).setValue("취소(운영자)");
+    logSheet.getRange(targetRow, 8, 1, 3).clearContent(); // H, I, J열 슬롯 반환
+
+    const currentLog = String(logSheet.getRange(targetRow, 25).getValue() || '').trim();
+    const newLog = `[${todayStr}] 점주 취소메일 발송완료`;
+    logSheet.getRange(targetRow, 25).setValue(currentLog ? `${currentLog} | ${newLog}` : newLog);
+
+    ui.alert(`✅ [취소 통보 완료]\n\n• 매장명: ${finalStoreName}\n• 수신처: ${storeEmail}\n\n점주에게 취소 메일이 발송되었으며, 슬롯이 정상 반환되었습니다.`);
+
+  } catch (err) {
+    ui.alert(`❌ 발송 실패 에러:\n${err.toString()}`);
+  }
+}

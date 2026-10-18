@@ -336,8 +336,68 @@ function doGet(e) {
       `).setTitle('BOOKMARK CREATORS | 確定完了').addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
 
-  // 4️⃣ 점주 피드백 입력 분기
+  // 4️⃣ 점주 피드백 입력 분기 (24시간 만료 및 취소 건 방어 로직 탑재)
   if (mode === 'feedback') {
+    const safeRow = parseInt(e?.parameter?.row, 10);
+    const orderNo = e?.parameter?.o;
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('Master_Log');
+
+    if (safeRow && sheet) {
+      const currentStatus = String(sheet.getRange(safeRow, 12).getValue() || '').trim();
+      const sysLog = String(sheet.getRange(safeRow, 25).getValue() || '');
+      const logMatch = sysLog.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
+
+      let isExpired = false;
+      if (logMatch) {
+        const sentTime = new Date(logMatch[1].replace(/-/g, '/'));
+        const now = new Date();
+        const diffHours = (now.getTime() - sentTime.getTime()) / (1000 * 60 * 60);
+        if (diffHours >= 24) isExpired = true;
+      }
+
+      // 🚨 24시간 초과이거나 이미 취소/노쇼/조율 중인 경우 변경 요청 화면 진입 차단
+      if (isExpired || currentStatus.includes('취소') || currentStatus.includes('노쇼') || currentStatus === '일정조율필요') {
+        return HtmlService.createHtmlOutput(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <base target="_top">
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+            <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+            <style>
+              body { background: #f4f5f7; font-family: 'Pretendard', 'Noto Sans JP', sans-serif; margin: 0; padding: 0 !important; color: #333; }
+              .container { max-width: 380px; padding: 40px 20px; margin: auto; text-align: center; }
+              .card { border-radius: 18px; border: none; box-shadow: 0 8px 24px rgba(0,0,0,0.02); background: #ffffff; padding: 24px 20px; margin-top: 5px; }
+              .badge-partner { font-size: 10px; letter-spacing: 0.8px; padding: 5px 10px; border-radius: 6px; background-color: #1A2B49 !important; color: #fff; display: inline-block; font-weight: 700; }
+              .brand-title { color: #1A2B49; font-weight: 700; margin-top: 10px; margin-bottom: 20px; font-size: 22px; letter-spacing: -0.5px; }
+              .fail-status { color: #dc3545; font-weight: 700; font-size: 15px; margin-top: 0; margin-bottom: 16px; display: block; text-align: center; }
+              .desc-text { color: #495057; font-size: 12.5px; line-height: 1.6; margin: 0; font-weight: 500; text-align: center; word-break: break-all; overflow-wrap: break-word; padding: 0 4px; }
+              .notice-box { margin-top: 24px; padding: 14px; background-color: #f8f9fa; border-radius: 12px; border: 1px dashed #cfd4da; color: #495057; font-size: 13px; font-weight: 700; text-align: center; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div style="margin-bottom: 10px; margin-top: 10px;"><span class="badge-partner">PARTNER CENTER</span></div>
+              <h2 class="brand-title">BOOKMARK CREATORS</h2>
+              <div class="card">
+                <span class="fail-status">⚠️ 回答期限切れ</span>
+                <p class="desc-text">
+                  本予約はご回答期限（<b>24時間</b>）を経過したため、<br>
+                  自動的にキャンセル処理が行われました。<br><br>
+                  日時変更リクエストの送信は行えません。
+                </p>
+                <div class="notice-box">このままページを閉じてください。</div>
+              </div>
+            </div>
+          </body>
+          </html>
+        `).setTitle('BOOKMARK CREATORS | 期限切れ').addMetaTag('viewport', 'width=device-width, initial-scale=1');
+      }
+    }
+
     const template = HtmlService.createTemplateFromFile('Feedback');
     template.row = e?.parameter?.row || '';
     template.orderNo = e?.parameter?.o || '';

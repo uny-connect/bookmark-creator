@@ -34,14 +34,14 @@ function submitStoreFeedback(row, orderNo, msg) {
     const creatorName = String(rowData[2]).trim();      // C열 크리에이터 성함
     const currentMemberCode = String(rowData[1]).trim(); // B열 크리에이터 코드
 
-    // Restaurant_List 시트를 크로스 대조하여 일본어 매장명(storeNameJp)을 실시간 파싱
+    // Restaurant_List 시트 3행(k=REST_DATA_START_INDEX)부터 대조하여 일본어 매장명(storeNameJp) 파싱
     let storeNameJp = "";
     const restSheet = ss.getSheetByName('Restaurant_List');
     if (restSheet) {
       const restData = restSheet.getDataRange().getValues();
       const storeId = String(rowData[4] || '').trim().toUpperCase(); // E열: 매장 ID
       
-      for (let k = 2; k < restData.length; k++) {
+      for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
         if (String(restData[k][0]).trim().toUpperCase() === storeId) {
           storeNameJp = String(restData[k][2] || '').trim(); // C열: 일본어 매장명
           break;
@@ -214,7 +214,8 @@ function loginStoreByPin(pin) {
 
     const restData = restSheet.getDataRange().getValues();
     
-    for (let i = 2; i < restData.length; i++) {
+    // 3행부터 순회
+    for (let i = REST_DATA_START_INDEX; i < restData.length; i++) {
       const sheetPin = String(restData[i][8] || '').trim().toUpperCase();
       if (sheetPin === pinClean) {
         const storeId = String(restData[i][0]).trim(); 
@@ -238,7 +239,8 @@ function getStoreData(storeId) {
     let storeNameJp = "";
     
     const restList = data.Restaurant_List;
-    for (let k = 2; k < restList.length; k++) {
+    // 3행부터 순회
+    for (let k = REST_DATA_START_INDEX; k < restList.length; k++) {
       if (String(restList[k][0]).trim().toUpperCase() === String(storeId).toUpperCase()) {
         storeName = String(restList[k][1] || '').trim(); 
         storeNameJp = String(restList[k][2] || '').trim(); 
@@ -314,7 +316,8 @@ function getStoreConfig(storeId) {
     const sheet = ss.getSheetByName('Restaurant_List');
     const data = sheet.getDataRange().getValues();
 
-    for (let i = 2; i < data.length; i++) {
+    // 3행부터 순회
+    for (let i = REST_DATA_START_INDEX; i < data.length; i++) {
       if (String(data[i][0]).trim().toUpperCase() === String(storeId).toUpperCase()) {
         return {
           success: true,
@@ -468,7 +471,8 @@ function findStoreSimple(storeId) {
     const data = restSheet.getDataRange().getValues();
     const cleanId = String(storeId).trim().toUpperCase();
 
-    for (let i = 1; i < data.length; i++) {
+    // 3행부터 순회
+    for (let i = REST_DATA_START_INDEX; i < data.length; i++) {
       if (String(data[i][0]).trim().toUpperCase() === cleanId) {
         return {
           success: true,
@@ -499,7 +503,8 @@ function saveStoreEmailAndSendTest(storeId, email) {
     let rowIndex = -1;
     let storeNameJp = "";
 
-    for (let i = 1; i < data.length; i++) {
+    // 3행부터 순회
+    for (let i = REST_DATA_START_INDEX; i < data.length; i++) {
       if (String(data[i][0]).trim().toUpperCase() === cleanId) {
         rowIndex = i + 1;
         storeNameJp = String(data[i][2] || '').trim() || String(data[i][1] || '').trim();
@@ -589,7 +594,9 @@ function adminCancelAndNotifyStore(row) {
 
     let storeEmail = "", storeNameJp = "";
     const restData = restSheet.getDataRange().getValues();
-    for (let k = 2; k < restData.length; k++) {
+    
+    // 3행부터 순회 (k=2)
+    for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
       if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
         storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
         storeEmail = String(restData[k][10] || '').trim();
@@ -631,7 +638,7 @@ function adminCancelAndNotifyStore(row) {
 
           <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-left: 4px solid #dc3545; padding: 16px; border-radius: 8px; margin: 20px 0; font-size: 13.5px;">
             <p style="margin: 5px 0;"><strong>■ 注文番号:</strong> #${orderNo}</p>
-            <p style="margin: 5px 0;"><strong>■ クリエイター名:</strong> ${creatorName}</p>
+            <p style="margin: 5px 0;"><strong>■ クリエ이터名:</strong> ${creatorName}</p>
             <p style="margin: 5px 0;"><strong>■ 予約日時:</strong> <span style="color: #dc3545; font-weight: 800;">${visitDisplay}</span></p>
             <p style="margin: 5px 0;"><strong>■ 予約人数:</strong> ${peopleStr}名</p>
           </div>
@@ -655,11 +662,13 @@ function adminCancelAndNotifyStore(row) {
       htmlBody: htmlBody,
       name: "BOOKMARK CREATORS",
       from: "info@bookmarkfukuoka.jp",
-      bcc: adminAlertEmails // 👈 관리자 숨은 참조 적용
+      bcc: adminAlertEmails
     });
 
+    // 🎯 [정합성 보정] L열: 취소(운영자), H~J열 슬롯 비움, U열(21번째): 취소환불
     logSheet.getRange(safeRow, 12).setValue("취소(운영자)");
     logSheet.getRange(safeRow, 8, 1, 3).clearContent();
+    logSheet.getRange(safeRow, 21).setValue("취소환불");
 
     const currentLog = String(logSheet.getRange(safeRow, 25).getValue() || '').trim();
     const newLog = `[${todayStr}] 점주 취소메일 발송완료(어드민)`;
@@ -668,5 +677,59 @@ function adminCancelAndNotifyStore(row) {
     return { success: true };
   } catch (err) {
     return { success: false, error: err.toString() };
+  }
+}
+
+/**
+ * ❌ [시트 메뉴용] 마우스로 선택한 행 자동 감지 + 취소 통지 메일 발송
+ */
+function sendStoreCancellationEmail() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const activeSheet = ss.getActiveSheet();
+
+  // 1. 현재 시트가 Master_Log인지 확인
+  if (activeSheet.getName() !== "Master_Log") {
+    return ui.alert("⚠️ 'Master_Log' 시트로 이동한 후 취소할 행을 클릭하고 실행해주세요.");
+  }
+
+  // 2. 현재 마우스 커서가 올라가 있는 행 번호 취득
+  const targetRow = activeSheet.getActiveRange().getRow();
+
+  // 3. 헤더 행(1, 2행) 클릭 방어
+  if (targetRow < 3) {
+    return ui.alert("⚠️ 취소하려는 예약 데이터 행(3행 이후)을 마우스로 클릭한 뒤 실행해주세요.");
+  }
+
+  const orderNo = String(activeSheet.getRange(targetRow, 1).getValue() || '').replace(/'/g, '').trim();
+  const creatorName = String(activeSheet.getRange(targetRow, 3).getValue() || '').trim();
+  const storeName = String(activeSheet.getRange(targetRow, 6).getValue() || '').trim();
+  const currentStatus = String(activeSheet.getRange(targetRow, 12).getValue() || '').trim();
+
+  if (!orderNo) {
+    return ui.alert(`⚠️ 선택하신 ${targetRow}행에는 주문 데이터가 없습니다.`);
+  }
+
+  // 4. 클릭한 대상 정보 확인창 띄우기 (실수 방지)
+  const confirm = ui.alert(
+    "⚠️ 점주 취소 통지 확인",
+    `[선택된 예약 정보]\n` +
+    `• 행 번호: ${targetRow}행\n` +
+    `• 주문번호: #${orderNo}\n` +
+    `• 크리에이터: ${creatorName}\n` +
+    `• 매장명: ${storeName}\n` +
+    `• 현재상태: ${currentStatus}\n\n` +
+    `점주에게 예약 취소 안내 메일을 발송하고 상태를 '취소(운영자)'로 변경하시겠습니까?`,
+    ui.ButtonSet.YES_NO
+  );
+
+  if (confirm !== ui.Button.YES) return;
+
+  const result = adminCancelAndNotifyStore(targetRow);
+
+  if (result.success) {
+    ui.alert(`✅ [취소 완료]\n\n#${orderNo} (${storeName}) 예약 취소 메일이 점주에게 발송되었습니다.`);
+  } else {
+    ui.alert(`❌ [처리 실패]\n\n사유: ${result.error}`);
   }
 }

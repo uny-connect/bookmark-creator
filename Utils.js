@@ -1,3 +1,12 @@
+/*****************************************************************************************
+ * 📌 시스템 표준 시트 행 인덱스 설정
+ * - Master_Log: 1~2행 헤더, 3행부터 데이터 (인덱스 i = 2, 행 번호 row = 3)
+ * - Restaurant_List: 1~2행 헤더, 3행부터 데이터 (인덱스 k = 2, 행 번호 row = 3)
+ * - User_DB: 1행 헤더, 2행부터 데이터 (인덱스 u = 1, 행 번호 row = 2)
+ ****************************************************************************************/
+const REST_DATA_START_INDEX = 2; // Restaurant_List 시트 3행부터 순회 (k = 2)
+const MASTER_LOG_START_ROW = 3;  // Master_Log 실제 데이터 시작 행 번호
+
 /** 🎯 현재 활성화된 웹 앱 URL 안전 취득 (Settings 시트 우선 참조 및 ScriptApp 폴백) */
 function getActiveWebAppUrl() {
   try {
@@ -281,7 +290,7 @@ function fillMissingData() {
   }
 
   const lastRow = logSheet.getLastRow();
-  if (lastRow < 3) {
+  if (lastRow < MASTER_LOG_START_ROW) {
     SpreadsheetApp.getUi().alert("⚠️ 검사할 데이터가 없습니다.");
     return;
   }
@@ -300,7 +309,8 @@ function fillMissingData() {
   const idToNameMap = new Map();
   const nameToIdMap = new Map();
 
-  for (let k = 2; k < restData.length; k++) {
+  // 3행(k=2)부터 순회
+  for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
     const sId = String(restData[k][0] || '').trim().toUpperCase();
     const sNameKo = String(restData[k][1] || '').trim();
     const sNameJp = String(restData[k][2] || '').trim();
@@ -368,19 +378,21 @@ function fillMissingData() {
   SpreadsheetApp.getUi().alert(`✨ 자동 채우기 완료!\n\n총 ${updatedCount}개 행의 누락 데이터가 성공적으로 보정되었습니다.`);
 }
 
-/** [관리자 기능] 선택된 행 또는 주문번호로 점주 예약 안내 메일 재발송 (모던 카드형 / 5대 항목 고정 / 24시간 기한 안내 / Y열 타임스탬프) */
+/** [관리자 기능] 선택된 행(또는 입력)으로 점주 예약 안내 메일 재발송 */
 function resendStoreBookingEmail() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const activeSheet = ss.getActiveSheet();
   const logSheet = ss.getSheetByName("Master_Log");
   const restSheet = ss.getSheetByName("Restaurant_List");
   const userSheet = ss.getSheetByName("User_DB");
 
-  if (!logSheet || !restSheet || !userSheet) return ui.alert("❌ 시트 확인 필요");
+  if (!logSheet || !restSheet || !userSheet) return ui.alert("❌ 시트 확인 필요: Master_Log, Restaurant_List, User_DB");
 
-  let targetRow = logSheet.getActiveRange().getRow();
-  
-  if (ss.getActiveSheet().getName() !== "Master_Log" || targetRow < 3) {
+  let targetRow = activeSheet.getActiveRange().getRow();
+
+  // Master_Log 시트의 데이터 행(3행 이후)을 선택하지 않았을 경우에만 입력 프롬프트 노출
+  if (activeSheet.getName() !== "Master_Log" || targetRow < MASTER_LOG_START_ROW) {
     const promptRes = ui.prompt(
       "📧 점주 메일 재발송",
       "메일을 재발송할 [행 번호] 또는 [주문번호]를 입력하세요:\n(예: 3 또는 202609297282617)",
@@ -403,6 +415,10 @@ function resendStoreBookingEmail() {
     }
   }
 
+  if (isNaN(targetRow) || targetRow < MASTER_LOG_START_ROW) {
+    return ui.alert("⚠️ 올바른 데이터 행 번호를 선택하거나 입력해주세요.");
+  }
+
   const rowData = logSheet.getRange(targetRow, 1, 1, 25).getValues()[0];
   const orderNo = String(rowData[0] || '').replace(/'/g, '').trim();
   const memberCode = String(rowData[1] || '').trim();
@@ -421,7 +437,9 @@ function resendStoreBookingEmail() {
 
   let storeEmail = "", storeNameJp = "", storeBenefit = "";
   const restData = restSheet.getDataRange().getValues();
-  for (let k = 2; k < restData.length; k++) {
+  
+  // 3행부터 순회 (k = 2)
+  for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
     if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
       storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
       storeEmail = String(restData[k][10] || '').trim();
@@ -436,7 +454,7 @@ function resendStoreBookingEmail() {
 
   const confirm = ui.alert(
     "📧 점주 예약 메일 재발송",
-    `[재발송 대상 정보]\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
+    `[재발송 대상 정보]\n• 행 번호: ${targetRow}행\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;
@@ -476,7 +494,7 @@ function resendStoreBookingEmail() {
     }
 
     const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
-    const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${p.dateStr})`;
+    const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${dateStr})`;
     const htmlBody = `
       <meta charset="UTF-8">
       <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7;">
@@ -493,40 +511,40 @@ function resendStoreBookingEmail() {
 
               <h2 style="color: #1A2B49; margin: 18px 0 0 0; font-size: 16.5px; border-bottom: 1.5px solid #f1f3f5; padding-bottom: 14px; text-align: center; font-weight: 800;">来店予約の確認</h2>
 
-              <!-- 점포명 & 담당자 (하단 여백 최소화) -->
+              <!-- 점포명 & 담당자 -->
               <div style="margin-top: 18px;">
                 <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 2px 0;">${storeNameJp}</p>
                 <p style="color: #6c757d; font-size: 13px; margin: 0 0 6px 0;">店舗管理者様</p>
               </div>
 
-              <!-- 안내 문구 (상단 여백을 6px로 좁혀 밀착 배치) -->
+              <!-- 안내 문구 -->
               <div style="margin: 6px 0 16px 0; color: #333333; font-size: 13.5px; line-height: 1.55;">
                 <p style="margin: 0 0 3px 0;">BOOKMARK CREATORSより来店予約の申請が届きました。</p>
                 <p style="margin: 0;">下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。</p>
               </div>
 
-              <!-- 24시간 기한 안내 (차분하고 선명한 딥레드 #c92a2a 적용) -->
+              <!-- 24시간 기한 안내 -->
               <div style="background-color: #fbfbfc; border: 1px solid #edf0f2; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; text-align: left;">
                 <p style="margin: 0; font-size: 12.5px; color: #c92a2a; line-height: 1.5; font-weight: 700;">
                   ※ 本メール送信後24時間以内にご回答がない場合、自動的にキャンセル処理が行われます。
                 </p>
               </div>
 
-              <!-- 예약 상세 정보 테이블 (5개 항목 고정) -->
+              <!-- 예약 상세 정보 테이블 -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
                 <tr>
                   <td style="padding: 6px 0; color: #495057; font-weight: 500;">
-                    <strong>■ クリエイター名:</strong> ${p.memberName}
+                    <strong>■ クリエイター名:</strong> ${memberName}
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 6px 0; color: #495057; font-weight: 500;">
-                    <strong>■ 訪問日時:</strong> <span style="color: #d63384; font-weight: 800;">${p.dateStr} ${p.timeStr}</span>
+                    <strong>■ 訪問日時:</strong> <span style="color: #d63384; font-weight: 800;">${dateStr} ${timeStr}</span>
                   </td>
                 </tr>
                 <tr>
                   <td style="padding: 6px 0; color: #495057; font-weight: 500;">
-                    <strong>■ 訪問人数:</strong> ${p.safePeopleCount}名
+                    <strong>■ 訪問人数:</strong> ${peopleStr}名
                   </td>
                 </tr>
                 <tr>
@@ -541,7 +559,7 @@ function resendStoreBookingEmail() {
                 </tr>
               </table>
 
-              <!-- 버튼 영역 (깨짐 방지 2열 구조) -->
+              <!-- 버튼 영역 -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 auto;">
                 <tr>
                   <td align="center" width="50%" style="padding-right: 6px;">
@@ -568,7 +586,6 @@ function resendStoreBookingEmail() {
       bcc: adminAlertEmails
     });
 
-    // 🎯 Y열에 발송 시각 타임스탬프 기록
     const nowTimeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
     logSheet.getRange(targetRow, 25).setValue(`[${nowTimeStr}] 점주메일 재발송완료`);
     

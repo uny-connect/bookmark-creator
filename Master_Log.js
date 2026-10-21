@@ -155,7 +155,7 @@ function doPost(e) {
     items.forEach(function(item) {
       const rawProdName = (item.productInfo && item.productInfo.prodName) || item.product_name || item.name || "식당명 없음";
       
-      // 🎯 [실제 페이로드 대응] 옵션 텍스트 원본 추출
+      // 🎯 [수정 후] 아임웹 optionInfo 객체 파싱 및 원본 옵션명 보존
       let rawOption = "";
       if (item.productInfo && item.productInfo.optionInfo) {
         rawOption = Object.values(item.productInfo.optionInfo).join(' ');
@@ -167,7 +167,7 @@ function doPost(e) {
         rawOption = item.options.map(o => o.value || o.name || '').join(' ');
       }
 
-      // 🎯 [유연한 옵션명 보존] A코스, B코스, 런치, 디너 등 고객이 선택한 옵션명을 온전히 유지
+      // 원본 옵션명 우선 보존 (비어있을 때만 상품명에서 런치/디너 추출)
       let mealOption = rawOption.trim();
       if (!mealOption) {
         const lowerProd = rawProdName.toLowerCase();

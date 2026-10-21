@@ -208,7 +208,7 @@ function checkAvailability(storeId, targetDateStr, mealOption) {
 
       if (rowId === cleanInputId || (cleanInputId && (cleanInputId === rowNameKo || cleanInputId === rowNameJp))) {
         // 1. 기본 운영시간 (O열: 인덱스 14)
-        let rawBiz = String(restList[i][14] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
+        let rawBiz = toHalfWidth(restList[i][14] || '');
 
         // 2. 동적 옵션 시간대 1 (AA: 매칭키워드[인덱스 26], AB: 운영시간[인덱스 27])
         const opt1Keywords = String(restList[i][26] || '').trim().toLowerCase();

@@ -229,8 +229,8 @@ function checkAndMarkNoShow() {
       const rowNum = i + 1;
 
       const orderNo = String(row[0] || '').trim().replace(/'/g, ''); 
-      const status = String(row[11] || '').trim();                   
-      const visitDateRaw = row[7];                                   
+      const status = String(row[11] || '').trim();                    
+      const visitDateRaw = row[7];                                    
 
       if (!orderNo || status !== '방문전') continue;
 
@@ -309,7 +309,6 @@ function fillMissingData() {
   const idToNameMap = new Map();
   const nameToIdMap = new Map();
 
-  // 3행(k=2)부터 순회
   for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
     const sId = String(restData[k][0] || '').trim().toUpperCase();
     const sNameKo = String(restData[k][1] || '').trim();
@@ -378,7 +377,7 @@ function fillMissingData() {
   SpreadsheetApp.getUi().alert(`✨ 자동 채우기 완료!\n\n총 ${updatedCount}개 행의 누락 데이터가 성공적으로 보정되었습니다.`);
 }
 
-/** [관리자 기능] 선택된 행(또는 입력)으로 점주 예약 안내 메일 재발송 */
+/** [관리자 기능] 선택된 행(또는 입력)으로 점주 예약 안내 메일 재발송 (구매옵션 포함 완결본) */
 function resendStoreBookingEmail() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -391,7 +390,6 @@ function resendStoreBookingEmail() {
 
   let targetRow = activeSheet.getActiveRange().getRow();
 
-  // Master_Log 시트의 데이터 행(3행 이후)을 선택하지 않았을 경우에만 입력 프롬프트 노출
   if (activeSheet.getName() !== "Master_Log" || targetRow < MASTER_LOG_START_ROW) {
     const promptRes = ui.prompt(
       "📧 점주 메일 재발송",
@@ -424,6 +422,7 @@ function resendStoreBookingEmail() {
   const memberCode = String(rowData[1] || '').trim();
   const memberName = String(rowData[2] || '').trim();
   const storeId = String(rowData[4] || '').trim().toUpperCase();
+  const mealOption = String(rowData[6] || '').trim(); // 🎯 G열 구매옵션 연동
   const rawVisitDate = rowData[7];
   const peopleStr = String(rowData[8] || '1명').replace(/[^0-9]/g, '') || '1';
 
@@ -438,7 +437,6 @@ function resendStoreBookingEmail() {
   let storeEmail = "", storeNameJp = "", storeBenefit = "";
   const restData = restSheet.getDataRange().getValues();
   
-  // 3행부터 순회 (k = 2)
   for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
     if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
       storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
@@ -454,7 +452,7 @@ function resendStoreBookingEmail() {
 
   const confirm = ui.alert(
     "📧 점주 예약 메일 재발송",
-    `[재발송 대상 정보]\n• 행 번호: ${targetRow}행\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
+    `[재발송 대상 정보]\n• 행 번호: ${targetRow}행\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 플랜: ${mealOption || '기본'}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;
@@ -494,15 +492,15 @@ function resendStoreBookingEmail() {
     }
 
     const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
+    const optionDisplayJp = mealOption ? `${mealOption} プラン` : '通常プラン (일반)';
     const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${dateStr})`;
     const htmlBody = `
       <meta charset="UTF-8">
-      <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7; -webkit-font-smoothing: antialiased;">
         <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 500px; background-color: #ffffff; border-radius: 16px; border: 1px solid #edf0f2; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden;">
           <tr>
             <td style="padding: 32px 24px;">
               
-              <!-- 상단 브랜딩 -->
               <div style="text-align: center; margin-bottom: 20px;">
                 <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background-color: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">RESERVATION REQUEST</span>
                 <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
@@ -511,55 +509,55 @@ function resendStoreBookingEmail() {
 
               <h2 style="color: #1A2B49; margin: 18px 0 0 0; font-size: 16.5px; border-bottom: 1.5px solid #f1f3f5; padding-bottom: 14px; text-align: center; font-weight: 800;">来店予約の確認</h2>
 
-              <!-- 점포명 & 담당자 -->
               <div style="margin-top: 18px;">
                 <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 2px 0;">${storeNameJp}</p>
-                <p style="color: #6c757d; font-size: 13px; margin: 0 0 6px 0;">店舗管理者様</p>
+                <p style="color: #6c757d; font-size: 14px; margin: 0 0 6px 0;">店舗管理者様</p>
               </div>
 
-              <!-- 안내 문구 -->
-              <div style="margin: 6px 0 16px 0; color: #333333; font-size: 13.5px; line-height: 1.55;">
+              <div style="margin: 6px 0 16px 0; color: #333333; font-size: 14px; line-height: 1.55;">
                 <p style="margin: 0 0 3px 0;">BOOKMARK CREATORSより来店予約の申請が届きました。</p>
                 <p style="margin: 0;">下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。</p>
               </div>
 
-              <!-- 24시간 기한 안내 -->
               <div style="background-color: #fbfbfc; border: 1px solid #edf0f2; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; text-align: left;">
-                <p style="margin: 0; font-size: 12.5px; color: #c92a2a; line-height: 1.5; font-weight: 700;">
+                <p style="margin: 0; font-size: 13px; color: #c92a2a; line-height: 1.55; font-weight: 700;">
                   ※ 本メール送信後24時間以内にご回答がない場合、自動的にキャンセル処理が行われます。
                 </p>
               </div>
 
-              <!-- 예약 상세 정보 테이블 -->
-              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 12px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff; border: 1.5px solid #edf0f2; border-radius: 12px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ クリエイター名:</strong> ${memberName}
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
+                    <strong>■ 予約プラン:</strong> <span style="color: #1A2B49; font-weight: 800;">${optionDisplayJp}</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ 訪問日時:</strong> <span style="color: #d63384; font-weight: 800;">${dateStr} ${timeStr}</span>
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ 訪問人数:</strong> ${peopleStr}名
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ 提供内容:</strong> <span style="color: #2D6A4F; font-weight: 700;">${benefitDisplay}</span>
                   </td>
                 </tr>
                 <tr>
-                  <td style="padding: 6px 0; color: #495057; font-weight: 500;">
+                  <td style="padding: 6px 0; color: #333333;">
                     <strong>■ SNS:</strong> ${profileHtmlClean}
                   </td>
                 </tr>
               </table>
 
-              <!-- 버튼 영역 -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 auto;">
                 <tr>
                   <td align="center" width="50%" style="padding-right: 6px;">
@@ -589,7 +587,7 @@ function resendStoreBookingEmail() {
     const nowTimeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
     logSheet.getRange(targetRow, 25).setValue(`[${nowTimeStr}] 점주메일 재발송완료`);
     
-    ui.alert(`✅ [재발송 성공]\n\n• 매장: ${storeNameJp}\n• 수신 메일: ${storeEmail}\n• 관리자 bcc: ${adminAlertEmails}\n\n점주에게 예약 승인 메일이 성공적으로 전송되었습니다!`);
+    ui.alert(`✅ [재발송 성공]\n\n• 매장: ${storeNameJp}\n• 수신 메일: ${storeEmail}\n• 플랜: ${mealOption || '기본'}\n\n점주에게 예약 안내 메일이 재전송되었습니다!`);
   } catch (err) {
     logSheet.getRange(targetRow, 25).setValue("❌ 재발송 실패: " + err.toString());
     ui.alert(`❌ 재발송 실패: ${err.toString()}`);

@@ -215,7 +215,7 @@
     </div>
   </div>
 
-<!-- 매장 확인 모달 -->
+  <!-- 매장 확인 모달 -->
   <div class="modal fade" id="staffModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content p-4 text-center border-0" style="border-radius:25px;">
@@ -233,7 +233,6 @@
             </p>
           </div>
 
-          <!-- 🎯 [수정] 스태프 안내문: 타이틀급 크기(15.5px) + 굵기 강화 + 가독성 높은 색상 적용 -->
           <div class="mb-4" style="line-height: 1.6; word-break: keep-all;">
             <p class="m-0 fw-bold" style="font-size: 16px; color: #111827; letter-spacing: -0.3px;">スタッフの方へ</p>
             <p class="m-0 mt-1" style="font-size: 14.5px; color: #374151; font-weight: 600;">
@@ -244,7 +243,6 @@
 
           <input type="hidden" id="targetRow">
 
-          <!-- 🎯 [수정] 확인완료 버튼: BOOKMARK CREATORS 타이틀급 폰트(18px) + 볼드(800) + 시원한 터치 높이 -->
           <button type="button" id="confirmBtn" class="btn btn-brand btn-custom mb-3" 
                   style="font-size: 18px; font-weight: 800; letter-spacing: 1px; padding: 15px; border-radius: 14px; box-shadow: 0 4px 14px rgba(26,43,73,0.22);" 
                   onclick="window.processVisit()">
@@ -266,7 +264,7 @@
     var el = function(id) { return document.getElementById(id); };
     var staffModal = null; var alertModal = null; var alertCallback = null; 
     window.selectedBooking = {}; 
-    window.currentSelectedChannel = {}; // 🎯 각 행별 선택된 승인 채널 기억
+    window.currentSelectedChannel = {};
 
     function showAlert(msg, callback) {
       try {
@@ -337,7 +335,6 @@
             localStorage.setItem('tycheOrderNo', o); localStorage.setItem('tychePhone', p);
             el('missionSection').style.display = 'block';
             
-            // 🎯 [수정 반영] 상단 프로필 배너 세팅 (이모티콘 제거, 복수 채널 승인 표기, 멘트 간소화)
             var firstM = data[0];
             var chList = firstM.approvedChannels || [];
             if (chList.length > 0) {
@@ -361,7 +358,6 @@
             el('missionList').innerHTML = htmlArray.join('');
             
             initCalendars(data); 
-            // 🎯 렌더링 완료 후 모든 행의 제출 버튼 활성화 상태 즉시 검사
             setTimeout(function() {
               for (var i = 0; i < data.length; i++) { 
                 if (data[i].status === '방문완료') { 
@@ -400,6 +396,12 @@
       else if(status === '방문전' && hasVisitDate) { st = '방문전'; cl = 'status-pending'; }
       else if(status === '노쇼') { st = '노쇼'; cl = 'status-pending'; }
       else { st = '예약대기'; cl = 'status-waiting'; }
+
+      // 🎯 [신규] 구매 옵션 뱃지 생성 (G열 mealOption 연동)
+      var optionBadge = '';
+      if (m.mealOption) {
+        optionBadge = ' <span style="font-size:11.5px; font-weight:800; background:#f1f5f9; color:var(--brand-navy); border:1px solid #cbd5e1; padding:2px 7px; border-radius:6px; vertical-align:middle; margin-left:4px;">' + m.mealOption + '</span>';
+      }
 
       var action = '';
       
@@ -477,7 +479,6 @@
         var savedGoogle = localStorage.getItem('tyche_draft_google_' + m.row) || ''; 
         var savedReview = localStorage.getItem('tyche_draft_review_' + m.row) || ''; 
         
-        // 🎯 승인된 활동 채널에 맞춤형 UI 구성
         var channels = m.approvedChannels || [{ type: 'instagram', name: '인스타그램(릴스)', icon: '📸', placeholder: '인스타그램 릴스/게시물 URL' }];
         
         if (!window.currentSelectedChannel[m.row]) {
@@ -550,10 +551,10 @@
         '</div>';
       }
 
-      // 🎯 매장명 아래 중복 안내 박스(cardGuideHtml)를 제거하여 여백과 타이틀만 깔끔하게 노출
+      // 🎯 매장명 옆에 구매 옵션 뱃지 결합
       return '<div class="mission-card">' +
         '<div class="top-row"><span class="badge ' + cl + '">' + st + '</span><div><a href="' + m.info.guide + '" target="_blank" class="top-link">가이드</a><a href="' + m.info.map + '" target="_blank" class="top-link text-primary">지도</a></div></div>' +
-        '<h6 class="restaurant-name">' + m.restaurant + '</h6>' +
+        '<h6 class="restaurant-name">' + m.restaurant + optionBadge + '</h6>' +
         '<div id="action_' + m.row + '">' + action + '</div>' +
       '</div>';
     }
@@ -580,7 +581,6 @@
       checkSubmitReady(row);
     }
 
-    // 🎯 URL 적합성 검증 헬퍼
     function validateReviewUrls(contentUrl, googleUrl, expectedType) {
       var cUrl = String(contentUrl || '').trim().toLowerCase();
       var gUrl = String(googleUrl || '').trim().toLowerCase();
@@ -652,13 +652,15 @@
               },
               ...staticDates
             ],
-            onChange: function(selectedDates, dateStr) { fetchAvailableTimes(m.row, m.restId, dateStr); }
+            // 🎯 [핵심] m.mealOption 함께 전달
+            onChange: function(selectedDates, dateStr) { fetchAvailableTimes(m.row, m.restId, dateStr, m.mealOption); }
           });
         }
       });
     }
 
-    function fetchAvailableTimes(row, storeId, dateStr) {
+    // 🎯 [핵심] mealOption 매개변수 수신 및 checkAvailability 전달
+    function fetchAvailableTimes(row, storeId, dateStr, mealOption) {
       var container = el('timeSlots_' + row); var confirmDiv = el('bookConfirm_' + row);
       confirmDiv.classList.add('d-none');
       container.innerHTML = '<span class="spinner-border spinner-border-sm text-primary"></span><span style="font-size:13px; font-weight:600; margin-left:8px; color:#8b95a1;">빈자리를 찾고 있습니다...</span>';
@@ -674,7 +676,7 @@
           container.innerHTML = html;
         })
         .withFailureHandler(function() { container.innerHTML = '<p class="text-danger fw-bold" style="font-size:13px;">조회 실패. 다시 시도해주세요.</p>'; })
-        .checkAvailability(storeId, dateStr);
+        .checkAvailability(storeId, dateStr, mealOption); // 🎯 mealOption 전달
     }
 
     function selectTime(row, dateStr, timeStr) {
@@ -796,7 +798,6 @@
       if(!url || !googleUrl) return showAlert('콘텐츠 리뷰와 구글 리뷰 링크를 모두 입력해주세요.');
       if(!shortRev) return showAlert('솔직한 한 줄 후기를 입력해주세요.');
       
-      // 🎯 도메인 적합성 검사
       var targetType = window.currentSelectedChannel[row] || 'instagram';
       var validationError = validateReviewUrls(url, googleUrl, targetType);
       if (validationError) {

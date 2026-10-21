@@ -215,7 +215,7 @@
     </div>
   </div>
 
-  <!-- 매장 확인 모달 -->
+<!-- 매장 확인 모달 -->
   <div class="modal fade" id="staffModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content p-4 text-center border-0" style="border-radius:25px;">
@@ -232,10 +232,26 @@
               <span style="color: #333; font-size: 13px;">매장 확인 없이는 모든 서비스가 제한됩니다.</span>
             </p>
           </div>
-          <p class="text-muted mb-4" style="font-size: 12px; line-height: 1.5;">スタッフの方へ<br>お客様のご来店を確認後<br>下の【確認完了】ボタンを押してください。</p>
+
+          <!-- 🎯 [수정] 스태프 안내문: 타이틀급 크기(15.5px) + 굵기 강화 + 가독성 높은 색상 적용 -->
+          <div class="mb-4" style="line-height: 1.6; word-break: keep-all;">
+            <p class="m-0 fw-bold" style="font-size: 16px; color: #111827; letter-spacing: -0.3px;">スタッフの方へ</p>
+            <p class="m-0 mt-1" style="font-size: 14.5px; color: #374151; font-weight: 600;">
+              お客様のご来店を確認後<br>
+              下の【<b style="color: var(--brand-navy);">確認完了</b>】ボタンを押してください。
+            </p>
+          </div>
+
           <input type="hidden" id="targetRow">
-          <button type="button" id="confirmBtn" class="btn btn-brand btn-custom mb-2" onclick="window.processVisit()">確認完了</button>
-          <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none" data-bs-dismiss="modal">閉じる(닫기)</button>
+
+          <!-- 🎯 [수정] 확인완료 버튼: BOOKMARK CREATORS 타이틀급 폰트(18px) + 볼드(800) + 시원한 터치 높이 -->
+          <button type="button" id="confirmBtn" class="btn btn-brand btn-custom mb-3" 
+                  style="font-size: 18px; font-weight: 800; letter-spacing: 1px; padding: 15px; border-radius: 14px; box-shadow: 0 4px 14px rgba(26,43,73,0.22);" 
+                  onclick="window.processVisit()">
+            確認完了
+          </button>
+
+          <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none" data-bs-dismiss="modal" style="font-size: 13px;">閉じる (닫기)</button>
         </div>
       </div>
     </div>

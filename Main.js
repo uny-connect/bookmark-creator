@@ -901,26 +901,7 @@ function generateStorePins() {
  * 🔐 [어드민 인증 및 챌린지 설정 엔진 + 알림 이메일 로더]
  ********************************************************************/
 
-/** 🎯 Settings 시트에서 운영진 알림 수신 이메일 목록 불러오기 도우미 */
-function getAdminAlertEmails() {
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("Settings");
-    if (!sheet) return "bookmarkjapan.info@gmail.com";
 
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      const key = String(data[i][0] || '').trim().toUpperCase();
-      if (key === "ADMIN_NOTIFICATION_EMAILS") {
-        const emails = String(data[i][1] || '').trim();
-        return emails || "bookmarkjapan.info@gmail.com";
-      }
-    }
-  } catch (e) {
-    Logger.log("getAdminAlertEmails 에러: " + e.toString());
-  }
-  return "bookmarkjapan.info@gmail.com";
-}
 
 /** [1] 관리자 패스워드 검증 함수 (공백 무시 및 강력한 정규화) */
 function verifyAdminPassword(inputPw) {

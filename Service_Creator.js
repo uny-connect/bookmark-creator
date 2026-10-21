@@ -1,4 +1,4 @@
-/** [3] 미션 목록 조회 (승인 채널 목록 approvedChannels 및 minDays/maxDays 연동) */
+/** [3] 미션 목록 조회 (승인 채널 목록 approvedChannels, minDays/maxDays, G열 구매옵션 연동) */
 function getMissions(orderNo, phoneLast4) {
   try {
     const data = _getSheetsData(['Master_Log', 'User_DB', 'Restaurant_List']);
@@ -100,6 +100,7 @@ function getMissions(orderNo, phoneLast4) {
       mList.push({
         row: i + 1, orderNo: inputOrderNo, restId, memberCode,
         member: String(mRow[2] || ''), restaurant: restaurantName, status,
+        mealOption: String(mRow[6] || '').trim(), // 🎯 G열 구매옵션 (인덱스 6)
         captureUrl: String(mRow[6] || ''), 
         verified: String(mRow[13] || ''),  
         receiptUrl: String(mRow[14] || ''), 
@@ -177,7 +178,7 @@ function submitContent(row, reviewUrl, googleMapUrl, shortReview, channelType) {
 
     sheet.getRange(safeRow, 16).setValue(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd"));
     sheet.getRange(safeRow, 17).setValue(cleanReviewUrl);
-    if (cleanGoogleUrl) sheet.getRange(safeRow, 18).setValue(cleanGoogleUrl);
+    if (cleanGoogleUrl) sheet.getRange(safeRow, 18).setValue(cleanGoogleUrl); 
     
     const safeReview = String(shortReview || '').trim();
     if (safeReview) {
@@ -204,13 +205,14 @@ function updateSubmission(row, newUrl, newGoogleUrl, newShortReview) {
   } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-/* 고속 슬롯 필터 제너레이터 */
-function checkAvailability(storeId, targetDateStr) {
+/* 고속 슬롯 필터 제너레이터 (AA열: 런치 가능시간, AB열: 디너 가능시간 분기) */
+function checkAvailability(storeId, targetDateStr, mealOption) {
   try {
     const data = _getSheetsData(['Restaurant_List', 'Master_Log']);
     let config = null;
 
     const cleanInputId = String(storeId || '').trim().toUpperCase().replace(/['"]/g, '');
+    const cleanOption = String(mealOption || '').trim();
     const restList = data.Restaurant_List;
 
     for (let i = 1; i < restList.length; i++) {
@@ -219,7 +221,18 @@ function checkAvailability(storeId, targetDateStr) {
       const rowNameJp = String(restList[i][2] || '').trim();
 
       if (rowId === cleanInputId || (cleanInputId && (cleanInputId === rowNameKo || cleanInputId === rowNameJp))) {
-        let rawBiz = String(restList[i][14] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
+        let rawBiz = String(restList[i][14] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim(); // O열 기본
+        
+        // 🎯 Z열(25: 무응답 횟수)을 피해 AA열(인덱스 26: 런치), AB열(인덱스 27: 디너) 참조
+        const lunchBiz = String(restList[i][26] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
+        const dinnerBiz = String(restList[i][27] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
+
+        // 고객 구매 옵션("런치" / "디너")에 맞춰 영업시간 범위 스위칭 (없을 시 기본 rawBiz 유지)
+        if (cleanOption.includes("런치") && lunchBiz) {
+          rawBiz = lunchBiz;
+        } else if (cleanOption.includes("디너") && dinnerBiz) {
+          rawBiz = dinnerBiz;
+        }
 
         config = {
           maxPerSlot: parseInt(restList[i][11], 10) || 1,
@@ -339,6 +352,7 @@ function checkAvailability(storeId, targetDateStr) {
           let endMin = parseTime(times[1]);
           if (endMin < startMin) endMin += 1440;
 
+          // 🎯 curr < endMin (< 미만 적용: 마감 정각 슬롯 생성 제외)
           for (let curr = startMin; curr < endMin; curr += config.intervalMin) {
             const hit = blocks.some(b => b.type === 'exact' ? curr === b.time : (curr >= b.start && curr <= b.end));
             if (!hit) {
@@ -412,8 +426,11 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
     }
 
     const storeId = String(sheet.getRange(safeRow, 5).getValue()).trim();
+    // 🎯 G열(7번째 열) 구매옵션 읽기
+    const mealOption = String(sheet.getRange(safeRow, 7).getValue() || '').trim();
 
-    const avail = checkAvailability(storeId, dateStr);
+    // 🎯 옵션을 포함하여 슬롯 유효성 검사 수행
+    const avail = checkAvailability(storeId, dateStr, mealOption);
     if (!avail.isAvailable || !avail.availableSlots.includes(timeStr)) {
       return { 
         success: false, 
@@ -439,6 +456,7 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
       memberCode: String(sheet.getRange(safeRow, 2).getValue()).trim(),
       memberName: String(sheet.getRange(safeRow, 3).getValue()).trim(),
       orderNo: String(sheet.getRange(safeRow, 1).getValue()).trim().replace(/'/g, ''),
+      mealOption: mealOption, // 🎯 메일 발송 페이로드에 구매옵션 포함
       dateStr: dateStr,
       timeStr: timeStr,
       safePeopleCount: safePeopleCount,
@@ -462,7 +480,7 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
   return { success: true };
 }
 
-/** 메일 발송 분리 함수 (주문번호 제거, 5개 항목 고정, 24시간 답변기한 경고, 깨짐 방지 table 구조, Y열 타임스탬프 기록) */
+/** 메일 발송 분리 함수 (주문번호 제거, 5대 항목 고정, 24시간 답변기한 경고, 깨짐 방지 table 구조, Y열 타임스탬프 기록) */
 function _sendBookingNotifications(p) {
   const data = _getSheetsData(['Restaurant_List', 'User_DB']);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
@@ -509,6 +527,8 @@ function _sendBookingNotifications(p) {
   }
 
   const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
+  // 🎯 구매 옵션 일본어 표기 생성
+  const optionDisplayJp = p.mealOption ? (p.mealOption === '런치' ? 'ランチ (런치)' : (p.mealOption === '디너' ? 'ディナー (디너)' : p.mealOption)) : '通常プラン (일반)';
 
   // 1. 점주에게 일본어 예약 신청 메일 발송
   if (storeEmail && storeEmail.includes("@")) {
@@ -533,30 +553,35 @@ function _sendBookingNotifications(p) {
 
               <h2 style="color: #1A2B49; margin: 18px 0 0 0; font-size: 16.5px; border-bottom: 1.5px solid #f1f3f5; padding-bottom: 14px; text-align: center; font-weight: 800;">来店予約の確認</h2>
 
-              <!-- 점포명 & 담당자 (하단 여백 최소화) -->
+              <!-- 점포명 & 담당자 -->
               <div style="margin-top: 18px;">
                 <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 2px 0;">${storeNameJp}</p>
                 <p style="color: #6c757d; font-size: 14px; margin: 0 0 6px 0;">店舗管理者様</p>
               </div>
 
-              <!-- 안내 문구 (상단 여백을 6px로 좁혀 밀착 배치) -->
+              <!-- 안내 문구 -->
               <div style="margin: 6px 0 16px 0; color: #333333; font-size: 14px; line-height: 1.55;">
                 <p style="margin: 0 0 3px 0;">BOOKMARK CREATORSより来店予約の申請が届きました。</p>
                 <p style="margin: 0;">下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。</p>
               </div>
 
-              <!-- 24시간 기한 안내 (차분하고 선명한 딥레드 #c92a2a 적용) -->
+              <!-- 24시간 기한 안내 -->
               <div style="background-color: #fbfbfc; border: 1px solid #edf0f2; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; text-align: left;">
                 <p style="margin: 0; font-size: 13px; color: #c92a2a; line-height: 1.55; font-weight: 700;">
                   ※ 本メール送信後24時間以内にご回答がない場合、自動的にキャンセル処理が行われます。
                 </p>
               </div>
 
-              <!-- 예약 상세 정보 테이블 (5대 필수 항목) -->
+              <!-- 예약 상세 정보 테이블 (옵션 플랜 행 추가) -->
               <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff; border: 1.5px solid #edf0f2; border-radius: 12px; padding: 14px 16px; margin-bottom: 24px; font-size: 13.5px;">
                 <tr>
                   <td style="padding: 6px 0; color: #333333;">
                     <strong>■ クリエイター名:</strong> ${p.memberName}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 6px 0; color: #333333;">
+                    <strong>■ 予約プラン:</strong> <span style="color: #1A2B49; font-weight: 800;">${optionDisplayJp}</span>
                   </td>
                 </tr>
                 <tr>
@@ -603,11 +628,10 @@ function _sendBookingNotifications(p) {
       const adminAlertEmails = getAdminAlertEmails();
       GmailApp.sendEmail(storeEmail, subject, "", { 
         htmlBody: htmlBody, 
-        name: "BOOKMARK CREATORS",
+        name: "BOOKMARK CREATORS", 
         from: "info@bookmarkfukuoka.jp",
         bcc: adminAlertEmails
       });
-      // 🎯 발송 시각 타임스탬프를 함께 기록하여 Main.js의 24시간 연산 지원
       const sentTimeStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
       sheet.getRange(p.safeRow, 25).setValue(`[${sentTimeStr}] 점주메일 발송완료`);
     } catch (mailErr) {
@@ -622,7 +646,7 @@ function _sendBookingNotifications(p) {
   try {
     const adminAlertEmails = getAdminAlertEmails();
     if (adminAlertEmails) {
-      const adminSubject = `【予約受付】${p.memberName}様 ➔ ${storeNameJp || storeNameKo} (${p.dateStr} ${p.timeStr})`;
+      const adminSubject = `【予約受付】${p.memberName}様 ➔ ${storeNameJp || storeNameKo} (${p.dateStr} ${p.timeStr}) [${p.mealOption || '일반'}]`;
       const adminHtml = `
         <meta charset="UTF-8">
         <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 14px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
@@ -638,6 +662,7 @@ function _sendBookingNotifications(p) {
             <p style="margin: 6px 0;"><b>・注文番号:</b> #${p.orderNo}</p>
             <p style="margin: 6px 0;"><b>・クリエイター:</b> ${p.memberName} <span style="color:#8b95a1; font-size: 12px;">(${p.memberCode})</span></p>
             <p style="margin: 6px 0;"><b>・訪問店舗:</b> ${storeNameJp || storeNameKo} <span style="color:#8b95a1; font-size: 12px;">(${p.storeId})</span></p>
+            <p style="margin: 6px 0;"><b>・購入オプション:</b> <span style="color: #1A2B49; font-weight: bold;">${p.mealOption || '기본'}</span></p>
             <p style="margin: 6px 0;"><b>・提供内容:</b> <span style="color: #2D6A4F; font-weight: bold;">${storeBenefit || '店舗指定のクリエイター向け提供メニュー'}</span></p>
             <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #d63384; font-weight: bold;">${p.dateStr} ${p.timeStr}</span></p>
             <p style="margin: 6px 0;"><b>・訪問人数:</b> <span style="font-weight: bold;">${p.safePeopleCount}명</span></p>

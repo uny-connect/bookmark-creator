@@ -205,14 +205,14 @@ function updateSubmission(row, newUrl, newGoogleUrl, newShortReview) {
   } catch (e) { return { success: false, error: e.toString() }; }
 }
 
-/* 고속 슬롯 필터 제너레이터 (AA열: 런치 가능시간, AB열: 디너 가능시간 분기) */
+/* 🎯 [동적 키워드 매칭] 고속 슬롯 필터 제너레이터 */
 function checkAvailability(storeId, targetDateStr, mealOption) {
   try {
     const data = _getSheetsData(['Restaurant_List', 'Master_Log']);
     let config = null;
 
     const cleanInputId = String(storeId || '').trim().toUpperCase().replace(/['"]/g, '');
-    const cleanOption = String(mealOption || '').trim();
+    const userOption = String(mealOption || '').trim().toLowerCase();
     const restList = data.Restaurant_List;
 
     for (let i = 1; i < restList.length; i++) {
@@ -221,17 +221,27 @@ function checkAvailability(storeId, targetDateStr, mealOption) {
       const rowNameJp = String(restList[i][2] || '').trim();
 
       if (rowId === cleanInputId || (cleanInputId && (cleanInputId === rowNameKo || cleanInputId === rowNameJp))) {
-        let rawBiz = String(restList[i][14] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim(); // O열 기본
-        
-        // 🎯 Z열(25: 무응답 횟수)을 피해 AA열(인덱스 26: 런치), AB열(인덱스 27: 디너) 참조
-        const lunchBiz = String(restList[i][26] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
-        const dinnerBiz = String(restList[i][27] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
+        // 1. 기본 운영시간 (O열: 인덱스 14)
+        let rawBiz = String(restList[i][14] || '').replace(/['"]/g, '').replace(/[~～－—]/g, '-').trim();
 
-        // 고객 구매 옵션("런치" / "디너")에 맞춰 영업시간 범위 스위칭 (없을 시 기본 rawBiz 유지)
-        if (cleanOption.includes("런치") && lunchBiz) {
-          rawBiz = lunchBiz;
-        } else if (cleanOption.includes("디너") && dinnerBiz) {
-          rawBiz = dinnerBiz;
+        // 2. 동적 옵션 시간대 1 (AA: 매칭키워드[인덱스 26], AB: 운영시간[인덱스 27])
+        const opt1Keywords = String(restList[i][26] || '').trim().toLowerCase();
+        const opt1Hours    = String(restList[i][27] || '').replace(/[~～－—]/g, '-').trim();
+
+        // 3. 동적 옵션 시간대 2 (AC: 매칭키워드[인덱스 28], AD: 운영시간[인덱스 29])
+        const opt2Keywords = String(restList[i][28] || '').trim().toLowerCase();
+        const opt2Hours    = String(restList[i][29] || '').replace(/[~～－—]/g, '-').trim();
+
+        // 🎯 [핵심] 유저 옵션 문자열이 시트 키워드 목록 중 하나라도 포함하는지 대조
+        if (userOption) {
+          const match1 = opt1Keywords && opt1Keywords.split(',').some(k => k.trim() && userOption.includes(k.trim()));
+          const match2 = opt2Keywords && opt2Keywords.split(',').some(k => k.trim() && userOption.includes(k.trim()));
+
+          if (match1 && opt1Hours) {
+            rawBiz = opt1Hours;
+          } else if (match2 && opt2Hours) {
+            rawBiz = opt2Hours;
+          }
         }
 
         config = {
@@ -527,8 +537,8 @@ function _sendBookingNotifications(p) {
   }
 
   const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
-  // 🎯 구매 옵션 일본어 표기 생성
-  const optionDisplayJp = p.mealOption ? (p.mealOption === '런치' ? 'ランチ (런치)' : (p.mealOption === '디너' ? 'ディナー (디너)' : p.mealOption)) : '通常プラン (일반)';
+  // 🎯 구매 옵션 문자열을 있는 그대로 플랜명에 반영
+  const optionDisplayJp = p.mealOption ? `${p.mealOption} プラン` : '通常プラン (일반)';
 
   // 1. 점주에게 일본어 예약 신청 메일 발송
   if (storeEmail && storeEmail.includes("@")) {
@@ -659,7 +669,7 @@ function _sendBookingNotifications(p) {
             現在、店舗側による【確定】または【日程変更】の対応待ちステータスです。
           </p>
           <div style="background: #ffffff; border-radius: 10px; padding: 18px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
-            <p style="margin: 6px 0;"><b>・注文番号:</b> #${p.orderNo}</p>
+            <p style="margin: 6px 0;"><b>・注文번호:</b> #${p.orderNo}</p>
             <p style="margin: 6px 0;"><b>・クリエイター:</b> ${p.memberName} <span style="color:#8b95a1; font-size: 12px;">(${p.memberCode})</span></p>
             <p style="margin: 6px 0;"><b>・訪問店舗:</b> ${storeNameJp || storeNameKo} <span style="color:#8b95a1; font-size: 12px;">(${p.storeId})</span></p>
             <p style="margin: 6px 0;"><b>・購入オプション:</b> <span style="color: #1A2B49; font-weight: bold;">${p.mealOption || '기본'}</span></p>

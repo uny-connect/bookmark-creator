@@ -536,18 +536,18 @@ function _sendBookingNotifications(p) {
               <!-- 점포명 & 담당자 (하단 여백 최소화) -->
               <div style="margin-top: 18px;">
                 <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 2px 0;">${storeNameJp}</p>
-                <p style="color: #6c757d; font-size: 13px; margin: 0 0 6px 0;">店舗管理者様</p>
+                <p style="color: #6c757d; font-size: 14px; margin: 0 0 6px 0;">店舗管理者様</p>
               </div>
 
               <!-- 안내 문구 (상단 여백을 6px로 좁혀 밀착 배치) -->
-              <div style="margin: 6px 0 16px 0; color: #333333; font-size: 13.5px; line-height: 1.55;">
+              <div style="margin: 6px 0 16px 0; color: #333333; font-size: 14px; line-height: 1.55;">
                 <p style="margin: 0 0 3px 0;">BOOKMARK CREATORSより来店予約の申請が届きました。</p>
                 <p style="margin: 0;">下記の内容をご確認いただき、<b>【確定】</b>または<b>【日時変更】</b>のご対応をお願い申し上げます。</p>
               </div>
 
               <!-- 24시간 기한 안내 (차분하고 선명한 딥레드 #c92a2a 적용) -->
               <div style="background-color: #fbfbfc; border: 1px solid #edf0f2; border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; text-align: left;">
-                <p style="margin: 0; font-size: 12.5px; color: #c92a2a; line-height: 1.5; font-weight: 700;">
+                <p style="margin: 0; font-size: 13px; color: #c92a2a; line-height: 1.55; font-weight: 700;">
                   ※ 本メール送信後24時間以内にご回答がない場合、自動的にキャンセル処理が行われます。
                 </p>
               </div>

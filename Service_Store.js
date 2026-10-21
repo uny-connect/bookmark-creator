@@ -264,7 +264,7 @@ function getStoreData(storeId) {
     const timeZone = Session.getScriptTimeZone();
     const masterLog = data.Master_Log;
 
-    const webAppUrl = ScriptApp.getService().getUrl();
+    const webAppUrl = getActiveWebAppUrl();
 
     for (let i = masterLog.length - 1; i >= 2; i--) {
       const mRow = masterLog[i];

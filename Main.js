@@ -93,9 +93,12 @@ function doGet(e) {
 
         if (!isExpired) {
           sheet.getRange(safeRow, 12).setValue('방문전'); 
-          if (String(sheet.getRange(safeRow, 7).getValue() || '').trim() === '') {
-            sheet.getRange(safeRow, 7).setValue('점주_직접_링크확정');
-          }
+          
+          // 🎯 [G열 비우기] Y열(25열)에 기존 로그 보존하며 누적 기록
+          const prevLogY = String(sheet.getRange(safeRow, 25).getValue() || '').trim();
+          const confirmTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+          const appendLog = `[${confirmTime}] 점주_직접_링크확정`;
+          sheet.getRange(safeRow, 25).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
 
           if (isFirstConfirm) {
             try {
@@ -630,8 +633,12 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
         sheet.getRange(safeRow, 10).setValue(dDate);  
         if(!sheet.getRange(safeRow, 11).getValue()) sheet.getRange(safeRow, 11).setValue(10000); 
       }
-      if (newStatus === '방문전' && String(sheet.getRange(safeRow, 7).getValue() || '').trim() === '') {
-        sheet.getRange(safeRow, 7).setValue('어드민_강제승인_패스');
+      if (newStatus === '방문전') {
+        // 🎯 [G열 비우기] Y열(25열)에 기존 로그 보존하며 누적 기록
+        const prevLogY = String(sheet.getRange(safeRow, 25).getValue() || '').trim();
+        const adminTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+        const appendLog = `[${adminTime}] 어드민_강제승인_패스`;
+        sheet.getRange(safeRow, 25).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
       }
     }
     

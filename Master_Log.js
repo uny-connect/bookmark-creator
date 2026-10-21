@@ -155,7 +155,7 @@ function doPost(e) {
     items.forEach(function(item) {
       const rawProdName = (item.productInfo && item.productInfo.prodName) || item.product_name || item.name || "식당명 없음";
       
-      // 🎯 [실제 페이로드 완벽 대응] 아임웹 optionInfo 객체 파싱 (예: {"예약 시간": "런치"})
+      // 🎯 [실제 페이로드 대응] 옵션 텍스트 원본 추출
       let rawOption = "";
       if (item.productInfo && item.productInfo.optionInfo) {
         rawOption = Object.values(item.productInfo.optionInfo).join(' ');
@@ -167,13 +167,12 @@ function doPost(e) {
         rawOption = item.options.map(o => o.value || o.name || '').join(' ');
       }
 
-      // 🎯 옵션 정규화: "런치" 또는 "디너" 판별 (상품명 또는 옵션명 검사)
-      let mealOption = "";
-      const combinedText = (rawProdName + " " + rawOption).toLowerCase();
-      if (combinedText.includes("런치") || combinedText.includes("lunch")) {
-        mealOption = "런치";
-      } else if (combinedText.includes("디너") || combinedText.includes("dinner")) {
-        mealOption = "디너";
+      // 🎯 [유연한 옵션명 보존] A코스, B코스, 런치, 디너 등 고객이 선택한 옵션명을 온전히 유지
+      let mealOption = rawOption.trim();
+      if (!mealOption) {
+        const lowerProd = rawProdName.toLowerCase();
+        if (lowerProd.includes("런치") || lowerProd.includes("lunch")) mealOption = "런치";
+        else if (lowerProd.includes("디너") || lowerProd.includes("dinner")) mealOption = "디너";
       }
 
       const cleanProd = rawProdName.replace(/\[.*?\]/g, '').replace(/\s+/g, '').toLowerCase();
@@ -225,7 +224,7 @@ function doPost(e) {
       }
 
       if (matchedExisting) {
-        // 🔒 [치명적 덮어쓰기 방어 락] 이미 방문완료/제출완료이거나 이미 취소된 건은 절대 건드리지 않음
+        // 🔒 [치명적 덮어쓰기 방어 락] 이미 방문완료/제출완료이거나 이미 취소된 건은 건드리지 않음
         const currentSheetStatus = matchedExisting.status;
         if (currentSheetStatus === '방문완료' || currentSheetStatus === '제출완료' || currentSheetStatus.includes('취소')) {
           return;
@@ -246,7 +245,7 @@ function doPost(e) {
         newRow[3] = "";                      // D: 참여 채널
         newRow[4] = targetStoreId;           // E: 점포 ID
         newRow[5] = matchedStoreName;        // F: 점포명
-        newRow[6] = mealOption;              // 🎯 G: 구매옵션 ("런치" / "디너" / "")
+        newRow[6] = mealOption;              // 🎯 G: 구매옵션 (A코스, 런치, B코스 등 있는 그대로 기록)
         newRow[7] = "";                      // H: 방문예정일시
         newRow[8] = "";                      // I: 방문인원
         newRow[9] = "";                      // J: 리뷰 마감 기한
@@ -311,8 +310,7 @@ function handleImwebCancellation(orderNo, reason) {
       const currentStatus = String(logData[i][11] || '').trim();
 
       if (sheetOrder === targetOrderNo) {
-        // 🔒 [치명적 버그 방어 락]
-        // 이미 '방문완료', '제출완료'이거나 이미 '취소'된 건은 절대로 건드리지 않음!
+        // 🔒 [치명적 버그 방어 락] 이미 방문완료/제출완료/취소 건 방어
         if (currentStatus === '방문완료' || currentStatus === '제출완료' || currentStatus.includes('취소')) {
           continue; 
         }

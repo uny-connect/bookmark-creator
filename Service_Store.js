@@ -373,9 +373,12 @@ function storeDirectConfirm(row, orderNo) {
     }
     
     sheet.getRange(safeRow, 12).setValue('방문전');
-    if (String(sheet.getRange(safeRow, 7).getValue() || '').trim() === '') {
-      sheet.getRange(safeRow, 7).setValue('점주_대시보드_직접확정');
-    }
+    
+    // 🎯 [G열 비우기] Y열(25열)에 기존 로그 보존하며 누적 기록
+    const prevLogY = String(sheet.getRange(safeRow, 25).getValue() || '').trim();
+    const directTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+    const appendLog = `[${directTime}] 점주_대시보드_직접확정`;
+    sheet.getRange(safeRow, 25).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
 
     try {
       const currentRestaurantName = String(sheet.getRange(safeRow, 6).getValue() || '').trim(); 

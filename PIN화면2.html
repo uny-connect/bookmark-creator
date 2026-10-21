@@ -397,7 +397,7 @@
       else if(status === '노쇼') { st = '노쇼'; cl = 'status-pending'; }
       else { st = '예약대기'; cl = 'status-waiting'; }
 
-      // 🎯 [신규] 구매 옵션 뱃지 생성 (G열 mealOption 연동)
+      // 🎯 [신규] 구매 옵션 뱃지 생성 (A코스, 런치, 디너 등 G열 mealOption 연동)
       var optionBadge = '';
       if (m.mealOption) {
         optionBadge = ' <span style="font-size:11.5px; font-weight:800; background:#f1f5f9; color:var(--brand-navy); border:1px solid #cbd5e1; padding:2px 7px; border-radius:6px; vertical-align:middle; margin-left:4px;">' + m.mealOption + '</span>';
@@ -860,7 +860,7 @@
     window.executeLogin = executeLogin; window.logout = logout; window.openStaffModal = openStaffModal; window.processVisit = processVisit;
     window.checkSubmitReady = checkSubmitReady; window.submitFinal = submitFinal;
     window.submitEdit = submitEdit; window.toggleEdit = toggleEdit;
-    window.selectTime = selectTime; window.submitBooking = submitBooking; 
+    window.selectTime = selectTime; window.submitBooking = submitBooking; window.saveDraft = saveDraft;
     window.switchChannel = switchChannel;
   </script>
 </body>

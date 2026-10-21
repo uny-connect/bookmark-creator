@@ -1,5 +1,5 @@
 /*****************************************************************************************
- * ⚡ [엔진 완전 최적화] 아임웹 실제 수신 페이로드 정합성 100% 동기화 시스템 (주문/가입/취소 통합)
+ * ⚡ [엔진 완전 최적화] 아임웹 실제 수신 페이로드 정합성 100% 동기화 시스템 (주문/가입/취소/구매옵션 통합)
  ****************************************************************************************/
 function doPost(e) {
   // 🔒 웹훅 동시 인입(ORDER_CREATE & ORDER_PAY_COMPLETE 동시 도달) 시 중복 등록 방지 Lock
@@ -50,8 +50,8 @@ function doPost(e) {
         if (!exists) {
           const newUserRow = new Array(16).fill("");
           newUserRow[0] = newMemberUid;                  // A: 고유키(이메일UID)
-          newUserRow[1] = "新規会員";                     // B: 이름
-          newUserRow[13] = newMemberUid;                 // N: 이메일
+          newUserRow[1] = "新規会員";                      // B: 이름
+          newUserRow[13] = newMemberUid;                  // N: 이메일
           userSheet.appendRow(newUserRow);
         }
       }
@@ -136,12 +136,14 @@ function doPost(e) {
       const sheetOrder = String(logData[i][0] || '').replace(/['"\s]/g, '');
       const sheetStoreId = String(logData[i][4] || '').trim().toUpperCase();
       const sheetStoreName = String(logData[i][5] || '').trim();
+      const sheetOption = String(logData[i][6] || '').trim(); // 🎯 G열 구매옵션
 
       if (sheetOrder === cleanOrderNo) {
         existingOrderRows.push({
           rowNum: i + 1,
           storeId: sheetStoreId,
           storeName: sheetStoreName,
+          option: sheetOption,
           status: String(logData[i][11] || '').trim(),
           used: false
         });
@@ -152,6 +154,28 @@ function doPost(e) {
 
     items.forEach(function(item) {
       const rawProdName = (item.productInfo && item.productInfo.prodName) || item.product_name || item.name || "식당명 없음";
+      
+      // 🎯 [실제 페이로드 완벽 대응] 아임웹 optionInfo 객체 파싱 (예: {"예약 시간": "런치"})
+      let rawOption = "";
+      if (item.productInfo && item.productInfo.optionInfo) {
+        rawOption = Object.values(item.productInfo.optionInfo).join(' ');
+      } else if (item.optionInfo) {
+        rawOption = Object.values(item.optionInfo).join(' ');
+      } else if (item.selectedOption && item.selectedOption.name) {
+        rawOption = item.selectedOption.name;
+      } else if (item.options && Array.isArray(item.options)) {
+        rawOption = item.options.map(o => o.value || o.name || '').join(' ');
+      }
+
+      // 🎯 옵션 정규화: "런치" 또는 "디너" 판별 (상품명 또는 옵션명 검사)
+      let mealOption = "";
+      const combinedText = (rawProdName + " " + rawOption).toLowerCase();
+      if (combinedText.includes("런치") || combinedText.includes("lunch")) {
+        mealOption = "런치";
+      } else if (combinedText.includes("디너") || combinedText.includes("dinner")) {
+        mealOption = "디너";
+      }
+
       const cleanProd = rawProdName.replace(/\[.*?\]/g, '').replace(/\s+/g, '').toLowerCase();
 
       let targetStoreId = "";
@@ -179,12 +203,15 @@ function doPost(e) {
         }
       }
 
-      // 기존 행 중 매칭되는 빈 행 탐색 (재수신 웹훅 방어)
+      // 🔒 [중복 검사] 주문번호 + 매장 + 구매옵션까지 일치해야 동일 건으로 인식
       let matchedExisting = null;
       for (let ex of existingOrderRows) {
         if (!ex.used) {
-          if ((targetStoreId && ex.storeId === targetStoreId) || 
-              (matchedStoreName && ex.storeName === matchedStoreName)) {
+          const isStoreMatch = (targetStoreId && ex.storeId === targetStoreId) || 
+                               (matchedStoreName && ex.storeName === matchedStoreName);
+          const isOptionMatch = (!mealOption && !ex.option) || (mealOption === ex.option);
+
+          if (isStoreMatch && isOptionMatch) {
             matchedExisting = ex;
             ex.used = true;
             break;
@@ -219,7 +246,7 @@ function doPost(e) {
         newRow[3] = "";                      // D: 참여 채널
         newRow[4] = targetStoreId;           // E: 점포 ID
         newRow[5] = matchedStoreName;        // F: 점포명
-        newRow[6] = "";                      // G: 예약 캡처 URL
+        newRow[6] = mealOption;              // 🎯 G: 구매옵션 ("런치" / "디너" / "")
         newRow[7] = "";                      // H: 방문예정일시
         newRow[8] = "";                      // I: 방문인원
         newRow[9] = "";                      // J: 리뷰 마감 기한
@@ -241,6 +268,7 @@ function doPost(e) {
           rowNum: logSheet.getLastRow(),
           storeId: targetStoreId,
           storeName: matchedStoreName,
+          option: mealOption,
           status: status,
           used: true
         });

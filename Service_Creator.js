@@ -120,20 +120,6 @@ function getMissions(orderNo, phoneLast4) {
   }
 }
 
-/** 캡처본 업로드 */
-function uploadCapture(row, base64Data, filename, orderNo, memberName) {
-  try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
-    const folder = DriveApp.getFoldersByName("bookmark_Captures").hasNext() ? DriveApp.getFoldersByName("bookmark_Captures").next() : DriveApp.createFolder("bookmark_Captures");
-    const splitData = base64Data.split(',');
-    const blob = Utilities.newBlob(Utilities.base64Decode(splitData[1]), splitData[0].split(':')[1].split(';')[0], `${orderNo}_${memberName}_${filename}`);
-    const file = folder.createFile(blob).setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    sheet.getRange(parseInt(row, 10), 7).setValue(file.getUrl()); 
-    sheet.getRange(parseInt(row, 10), 12).setValue('예약확인중'); 
-    return { success: true };
-  } catch (e) { return { success: false, error: e.toString() }; }
-}
-
 /** 현장 방문 확정 클릭 버튼 리스너 */
 function confirmVisit(row) {
   try {

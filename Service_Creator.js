@@ -57,7 +57,8 @@ function getMissions(orderNo, phoneLast4) {
         maxPeople: maxPeople,
         minDays: minLeadDays,
         maxDays: maxLeadDays,
-        blackouts: getSafeBlackouts(rRow[13])
+        blackouts: getSafeBlackouts(rRow[13]),
+        benefit: String(rRow[22] || '').trim() // 🎯 [추가] W열(23번째 열, index 22) 제공 메뉴/혜택
       };
       
       if (rId) restMap.set(rId, rDetails);

@@ -218,37 +218,60 @@
   <!-- 매장 확인 모달 -->
   <div class="modal fade" id="staffModal" tabindex="-1">
     <div class="modal-dialog">
-      <div class="modal-content p-4 text-center border-0" style="border-radius:25px;">
+      <div class="modal-content p-4 text-center border-0" style="border-radius:24px; max-width: 340px !important;">
         <div class="modal-body p-0">
-          <div class="mb-4 mt-2">
-            <span class="badge bg-dark mb-2" style="font-size: 10px; letter-spacing: 1px;">PREMIUM SERVICE</span>
-            <h4 class="fw-extrabold m-0" style="color: var(--brand-navy); font-weight: 900; letter-spacing: -0.3px;">BOOKMARK CREATORS</h4>
-            <div style="width: 40px; height: 3px; background: var(--sub-gold); margin: 10px auto;"></div>
+          
+          <!-- 상단 브랜딩 (PREMIUM SERVICE 삭제) -->
+          <div class="mb-3 mt-1">
+            <h4 class="fw-extrabold m-0" style="color: var(--brand-navy); font-weight: 900; letter-spacing: -0.3px; font-size: 21px;">BOOKMARK CREATORS</h4>
+            <div style="width: 36px; height: 3px; background: var(--sub-gold); margin: 8px auto 0;"></div>
           </div>
-          <h6 class="fw-bold mb-3" style="font-size: 17px;">店舗確認 (매장 확인)</h6>
-          <div class="p-3 mb-4" style="background: #f8f9fa; border-radius: 15px; border: 1px solid #eee;">
-            <p class="m-0 fw-bold" style="font-size: 14px; color: #d63384; line-height: 1.6;">
+
+          <!-- 한국어 크리에이터 안내 (유지) -->
+          <div class="p-2.5 mb-3" style="background: #fff1f2; border-radius: 12px; border: 1px solid #ffe4e6;">
+            <p class="m-0 fw-bold" style="font-size: 13.5px; color: #e11d48; line-height: 1.5;">
               직원에게 이 화면을 보여주세요.<br>
-              <span style="color: #333; font-size: 13px;">매장 확인 없이는 모든 서비스가 제한됩니다.</span>
+              <span style="color: #4b5563; font-size: 12px; font-weight: 500;">매장 확인 없이는 모든 서비스가 제한됩니다.</span>
             </p>
           </div>
 
-          <div class="mb-4" style="line-height: 1.6; word-break: keep-all;">
-            <p class="m-0 fw-bold" style="font-size: 16px; color: #111827; letter-spacing: -0.3px;">スタッフの方へ</p>
-            <p class="m-0 mt-1" style="font-size: 14.5px; color: #374151; font-weight: 600;">
-              お客様のご来店を確認後<br>
-              下の【<b style="color: var(--brand-navy);">確認完了</b>】ボタンを押してください。
+          <!-- 일본어 취재 방문 안내 박스 -->
+          <div class="p-2.5 mb-3 text-start" style="background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 12.5px; line-height: 1.6; color: #334155;">
+            <p class="m-0" style="font-size: 11px; color: #64748b; font-weight: 600;">運営会社：株式会社lib.</p>
+            <p class="m-0 mt-0.5 fw-bold" style="color: #0f172a;">
+              ブックマーククリエイターとして取材・撮影のため来店しました。
+            </p>
+          </div>
+
+          <!-- 🎯 업체별 제공 메뉴 연동 (Restaurant_List W열) -->
+          <div class="p-3 mb-3 text-start" style="background: #f0fdf4; border-radius: 12px; border: 1.5px solid #bbf7d0;">
+            <p class="m-0 mb-1 fw-bold" style="font-size: 12px; color: #166534; display: flex; align-items: center; gap: 4px;">
+              <span>🍽️</span> <span>店舗確認 (매장 확인)</span>
+            </p>
+            <p id="staffModalBenefit" class="m-0 fw-bold" style="font-size: 13.5px; color: #15803d; line-height: 1.5; word-break: keep-all;">
+              -
+            </p>
+          </div>
+
+          <!-- 스태프 안내문 -->
+          <div class="mb-3.5 text-center" style="line-height: 1.6; word-break: keep-all;">
+            <p class="m-0 fw-bold" style="font-size: 14.5px; color: #0f172a; letter-spacing: -0.3px;">店舗スタッフの方へ</p>
+            <p class="m-0 mt-1" style="font-size: 13px; color: #475569; font-weight: 500;">
+              ご来店を確認後、下の【<b>確認完了</b>】ボタンを押してください。<br>
+              <span style="font-size: 11.5px; color: #64748b;">※ボタンを押すとチェックインが完了します。</span>
             </p>
           </div>
 
           <input type="hidden" id="targetRow">
 
-          <button type="button" id="confirmBtn" class="btn btn-brand btn-custom mb-3" 
-                  style="font-size: 18px; font-weight: 800; letter-spacing: 1px; padding: 15px; border-radius: 14px; box-shadow: 0 4px 14px rgba(26,43,73,0.22);" 
+          <!-- 🎯 확인 버튼 문구: 来店確認完了 -->
+          <button type="button" id="confirmBtn" class="btn btn-brand btn-custom mb-2.5" 
+                  style="font-size: 16.5px; font-weight: 800; letter-spacing: 0.5px; padding: 14px; border-radius: 14px; box-shadow: 0 4px 14px rgba(26,43,73,0.2);" 
                   onclick="window.processVisit()">
-            確認完了
+            来店確認完了
           </button>
 
+          <!-- 닫기 버튼 (기존 코드 유지) -->
           <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none" data-bs-dismiss="modal" style="font-size: 13px;">閉じる (닫기)</button>
         </div>
       </div>
@@ -332,6 +355,10 @@
               showAlert('일치하는 미션 정보가 없습니다.'); el('loginSection').style.display = 'block'; 
               localStorage.removeItem('tycheOrderNo'); localStorage.removeItem('tychePhone'); return; 
             }
+            
+            // 🎯 [추가] 미션 데이터 전역 캐싱 (모달에서 혜택 참조용)
+            window.globalMissionsData = data;
+
             localStorage.setItem('tycheOrderNo', o); localStorage.setItem('tychePhone', p);
             el('missionSection').style.display = 'block';
             
@@ -767,17 +794,29 @@
       else { el('viewMode_' + row).style.display = 'block'; el('editMode_' + row).style.display = 'none'; }
     }
 
-    function openStaffModal(row) { el('targetRow').value = row; staffModal.show(); }
+    function openStaffModal(row) {
+      el('targetRow').value = row;
+      
+      var mission = window.globalMissionsData ? window.globalMissionsData.find(function(item) { return item.row === row; }) : null;
+      var benefitText = (mission && mission.info && mission.info.benefit) ? mission.info.benefit : "店舗指定の提供メニュー (매장 지정 제공 메뉴)";
+      
+      var benefitEl = el('staffModalBenefit');
+      if (benefitEl) {
+        benefitEl.innerText = benefitText;
+      }
+      
+      staffModal.show();
+    }
     
     function processVisit() {
       var row = el('targetRow').value; var btn = el('confirmBtn');
       btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
       google.script.run
         .withSuccessHandler(function(res) {
-          btn.disabled = false; btn.innerText = '確認完了 (확인 완료)';
+          btn.disabled = false; btn.innerText = '来店確認完了'; // 🎯 새 버튼 명칭으로 일치
           if (res.success) { staffModal.hide(); executeLogin(); } else { showAlert('오류가 발생했습니다.'); }
         })
-        .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = '確認完了 (확인 완료)'; showAlert('서버 오류: ' + err.message); })
+        .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = '来店確認完了'; showAlert('서버 오류: ' + err.message); })
         .confirmVisit(row);
     }
 

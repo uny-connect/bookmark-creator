@@ -3,7 +3,8 @@
 /********************************************************************
  * [3] 어드민 코어 백엔드 API 연산 엔진
  ********************************************************************/
-function getAdminData() {
+function getAdminData(token) {
+  requireToken_(token, 'admin');
   try {
     const data = _getSheetsData([SHEET.MASTER, SHEET.REST, SHEET.USER]);
     let stats = { total: 0, pending: 0, verified: 0, submitted: 0, waitingReview: 0 };
@@ -65,7 +66,8 @@ function getAdminData() {
   } catch (e) { throw new Error(e.toString()); }
 }
 
-function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDate, newGoogleLink, newShortReview) {
+function adminUpdateMission(token, row, newStatus, newLink, newRefundStatus, newVisitDate, newGoogleLink, newShortReview) {
+  requireToken_(token, 'admin');
   try {
     const safeRow = parseInt(row, 10); 
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);
@@ -182,7 +184,7 @@ function sendTestEmailToStore() {
     if (!inputVal) return ui.alert('⚠️ 점포 ID를 입력해주세요.');
 
     const restData = restSheet.getDataRange().getValues();
-    for (let i = 1; i < restData.length; i++) {
+    for (let i = REST_DATA_START_INDEX; i < restData.length; i++) {
       const sheetStoreId = String(restData[i][IDX_REST.ID] || '').trim().toUpperCase();
       if (sheetStoreId === inputVal.toUpperCase()) {
         storeId = sheetStoreId;
@@ -254,14 +256,18 @@ function generateStorePins() {
 
 
 
-/** [1] 관리자 패스워드 검증 함수 (공백 무시 및 강력한 정규화) */
+/** [1] 관리자 패스워드 검증 (공백 무시 및 강력한 정규화) → 성공 시 세션 토큰, 실패 시 '' */
 function verifyAdminPassword(inputPw) {
   try {
+    if (isLoginLocked_('admin')) {
+      Logger.log("⚠️ 관리자 로그인 실패 한도 초과 — 잠시 후 다시 시도");
+      return '';
+    }
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET.SETTINGS);
     if (!sheet) {
       Logger.log("❌ Settings 시트를 찾을 수 없습니다.");
-      return false;
+      return '';
     }
 
     const cleanInput = String(inputPw || '').replace(/[\s\uFEFF\xA0]+/g, ''); // 모든 공백 제거
@@ -272,16 +278,20 @@ function verifyAdminPassword(inputPw) {
       // 'ADMINPASSWORD' 또는 'ADMINPW' 키 매칭
       if (key === "ADMINPASSWORD" || key === "ADMINPW") {
         const savedPw = String(data[i][IDX_SETTINGS.VALUE] || '').replace(/[\s\uFEFF\xA0]+/g, '');
-        Logger.log(`[비밀번호 검증] 시트저장값: [${savedPw}] vs 입력값: [${cleanInput}]`);
-        return savedPw === cleanInput;
+        if (savedPw && savedPw === cleanInput) {
+          clearLoginFailures_('admin');
+          return issueToken_('admin', 'admin');
+        }
+        recordLoginFailure_('admin');
+        return '';
       }
     }
     
     Logger.log("❌ Settings 시트에서 ADMIN_PASSWORD 항목을 찾지 못했습니다.");
-    return false;
+    return '';
   } catch (e) {
     Logger.log("verifyAdminPassword 에러: " + e.toString());
-    return false;
+    return '';
   }
 }
 
@@ -315,7 +325,8 @@ function getChallengeSettings() {
 }
 
 /** [3] 챌린지 시즌 설정 저장하기 */
-function saveChallengeSettings(startDate, endDate, targetCount) {
+function saveChallengeSettings(token, startDate, endDate, targetCount) {
+  requireToken_(token, 'admin');
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET.SETTINGS);
@@ -607,7 +618,7 @@ function resendStoreBookingEmail() {
 }
 
 /** [9] 📱 [모바일 어드민 겸용] 점주 취소 알림 메일 발송 및 마스터로그 슬롯 반환 엔진 */
-function adminCancelAndNotifyStore(row) {
+function adminCancelAndNotifyStore_(row) {
   try {
     const safeRow = parseInt(row, 10);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -715,7 +726,7 @@ function sendStoreCancellationEmail() {
 
   if (confirm !== ui.Button.YES) return;
 
-  const result = adminCancelAndNotifyStore(targetRow);
+  const result = adminCancelAndNotifyStore_(targetRow);
 
   if (result.success) {
     ui.alert(`✅ [취소 완료]\n\n#${orderNo} (${storeName}) 예약 취소 메일이 점주에게 발송되었습니다.`);

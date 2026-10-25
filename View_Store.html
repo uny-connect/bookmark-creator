@@ -260,6 +260,10 @@
 
     let alertModalObj = null;
 
+    // 서버 세션 토큰 (PIN 로그인 성공 시 발급, 모든 점주 API 호출에 첨부)
+    function getPartnerToken() { return localStorage.getItem('partnerToken') || ''; }
+    function isAuthError(err) { return err && String(err.message || err.error || err).indexOf('AUTH_REQUIRED') !== -1; }
+
     // 기본 alert 대신 사용할 커스텀 모달 함수
     function showAlert(msg) {
       var safeMsg = String(msg || "알 수 없는 오류가 발생했습니다.");
@@ -280,7 +284,7 @@
       } catch(urlErr){}
 
       const savedStoreId = localStorage.getItem('partnerStoreId');
-      if (savedStoreId) {
+      if (savedStoreId && getPartnerToken()) {
         document.getElementById('storeLoginSection').style.display = 'none';
         document.getElementById('storeDashboardSection').style.display = 'block';
         loadDashboardData(savedStoreId);
@@ -299,6 +303,7 @@
 
     function logoutPartner() {
       localStorage.removeItem('partnerStoreId');
+      localStorage.removeItem('partnerToken');
       location.reload();
     }
 
@@ -318,6 +323,7 @@
           if (res.success) {
             globalStoreId = res.storeId;
             localStorage.setItem('partnerStoreId', res.storeId); 
+            localStorage.setItem('partnerToken', res.token || ''); 
             document.getElementById('storeLoginSection').style.display = 'none';
             document.getElementById('storeDashboardSection').style.display = 'block';
             loadDashboardData(globalStoreId);
@@ -340,6 +346,7 @@
       globalStoreMissions = [];
       preloadedConfig = null;
       localStorage.removeItem('partnerStoreId'); 
+      localStorage.removeItem('partnerToken'); 
       
       const inputPin = document.getElementById('partnerPin');
       if(inputPin) { inputPin.value = ""; }
@@ -363,7 +370,7 @@
           document.getElementById('s-verified').innerText = data.stats.verified; 
           document.getElementById('s-submitted').innerText = data.stats.submitted;
           
-          google.script.run.withSuccessHandler(function(res) { if(res.success) preloadedConfig = res; }).getStoreConfig(id);
+          google.script.run.withSuccessHandler(function(res) { if(res.success) preloadedConfig = res; }).getStoreConfig(id, getPartnerToken());
 
           if (data.missions.length === 0) { 
             document.getElementById('storeMissionTbody').innerHTML = '<tr><td colspan="7" class="text-center py-5 text-muted fw-bold">割当されたクリエイターの履歴がありません。</td></tr>'; 
@@ -374,7 +381,10 @@
             if (da === db) return 0; if (da === '-') return 1; if (db === '-') return -1; return da < db ? 1 : -1;
           });
           initMonthFilter(); applyFilters();
-      }).getStoreData(id);
+      }).withFailureHandler(function(err) {
+          if (isAuthError(err)) return executeStoreLogout();
+          showAlert('サーバーエラーが発生しました。');
+      }).getStoreData(id, getPartnerToken());
     }
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -478,7 +488,11 @@
             btn.disabled = false; btn.innerText = "⚙️ 店舗設定";
             if (res.success) { preloadedConfig = res; fillConfigAndShow(res); } 
             else { showAlert('エラー: ' + res.error); }
-          }).getStoreConfig(globalStoreId);
+          }).withFailureHandler(function(err) {
+            btn.disabled = false; btn.innerText = "⚙️ 店舗設定";
+            if (isAuthError(err)) return executeStoreLogout();
+            showAlert('サーバーエラーが発生しました。');
+          }).getStoreConfig(globalStoreId, getPartnerToken());
       }
     }
 
@@ -539,14 +553,15 @@
           btn.innerText = "設定を保存する";
           if (res.success) {
             configModalObj.hide();
-            google.script.run.withSuccessHandler(function(data) { if(data.success) preloadedConfig = data; }).getStoreConfig(globalStoreId);
+            google.script.run.withSuccessHandler(function(data) { if(data.success) preloadedConfig = data; }).getStoreConfig(globalStoreId, getPartnerToken());
             showAlert('設定が保存されました。');
           } else { 
+            if (isAuthError(res)) return executeStoreLogout();
             showAlert('保存に失敗しました: ' + res.error); 
           }
         })
         .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = "設定を保存する"; showAlert('サーバーエラーが発生しました。'); })
-        .updateStoreConfig(row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes);
+        .updateStoreConfig(getPartnerToken(), row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes);
     }
   </script>
 </body>

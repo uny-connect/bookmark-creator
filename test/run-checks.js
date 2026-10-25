@@ -1,4 +1,4 @@
-// 정적 검증: node test/run-checks.js
+// 정적 검증 + 스모크 테스트: node test/run-checks.js
 // GAS 런타임을 쓰지 않고 구문 / 전역 이름 중복 / 화면↔서버 함수 연결 / 템플릿 파일 존재를 점검한다.
 const fs = require('fs');
 const path = require('path');
@@ -93,3 +93,11 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(`OK: ${jsFiles.length} js, ${htmlFiles.length} html, ${serverFns.size} global functions`);
+
+// 7. 동작 스모크 테스트 (목 환경)
+const { spawnSync } = require('child_process');
+for (const t of ['mail-smoke.js', 'logic-smoke.js']) {
+  const r = spawnSync(process.execPath, [path.join(__dirname, t)], { encoding: 'utf8' });
+  process.stdout.write(r.stdout);
+  if (r.status !== 0) { process.stderr.write(r.stderr); console.error(`FAILED: ${t}`); process.exit(1); }
+}

@@ -39,7 +39,7 @@ function onEdit(e) {
         const restData = restSheet.getDataRange().getValues();
         let matchedName = "식당명 없음";
         
-        for (let k = 2; k < restData.length; k++) {
+        for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
           const sheetStoreId = String(restData[k][IDX_REST.ID] || '').trim().toUpperCase();
           if (sheetStoreId === storeId) {
             matchedName = String(restData[k][IDX_REST.NAME_KO] || '').trim();
@@ -72,7 +72,7 @@ function onEdit(e) {
         let matchedId = "";
         let matchedOfficialName = "";
 
-        for (let k = 2; k < restData.length; k++) {
+        for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
           const sheetStoreId = String(restData[k][IDX_REST.ID] || '').trim().toUpperCase();
           const sheetNameKo = String(restData[k][IDX_REST.NAME_KO] || '').trim();
           const sheetNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim();

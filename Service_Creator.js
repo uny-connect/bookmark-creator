@@ -40,7 +40,7 @@ function getMissions(orderNo, phoneLast4) {
     
     const restMap = new Map();
     const restNameMap = new Map();
-    for (let k = 1; k < data[SHEET.REST].length; k++) {
+    for (let k = REST_DATA_START_INDEX; k < data[SHEET.REST].length; k++) {
       const rRow = data[SHEET.REST][k]; 
       if (!rRow || !rRow[IDX_REST.ID]) continue; 
       const rId = String(rRow[IDX_REST.ID]).trim().toUpperCase();
@@ -204,7 +204,7 @@ function checkAvailability(storeId, targetDateStr, mealOption) {
     const userOption = String(mealOption || '').trim().toLowerCase();
     const restList = data[SHEET.REST];
 
-    for (let i = 1; i < restList.length; i++) {
+    for (let i = REST_DATA_START_INDEX; i < restList.length; i++) {
       const rowId = String(restList[i][IDX_REST.ID] || '').trim().toUpperCase().replace(/['"]/g, '');
       const rowNameKo = String(restList[i][IDX_REST.NAME_KO] || '').trim();
       const rowNameJp = String(restList[i][IDX_REST.NAME_JP] || '').trim();

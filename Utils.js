@@ -79,3 +79,9 @@ function getAdminAlertEmails() {
   }
   return MAIL.DEFAULT_ADMIN;
 }
+
+/** 메일/HTML 본문에 사용자 입력을 넣을 때 사용하는 이스케이프 */
+function _escapeHtml(v) {
+  return String(v === undefined || v === null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}

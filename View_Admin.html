@@ -373,6 +373,16 @@
     let logoutModalObj = null;
 
     const AUTH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; 
+    // 서버 세션 토큰 (로그인 성공 시 발급, 모든 관리자 API 호출에 첨부)
+    function getAdminToken() { return localStorage.getItem('adminToken') || ''; }
+    function isAuthError(err) { return err && String(err.message || err).indexOf('AUTH_REQUIRED') !== -1; }
+    function forceReLogin() {
+      localStorage.removeItem('adminAuthTimestamp');
+      localStorage.removeItem('adminToken');
+      document.getElementById('adminCoreWrapper').style.display = 'none';
+      document.getElementById('adminAuthScreen').style.display = 'flex';
+      alert(t('세션이 만료되었습니다. 다시 로그인해 주세요.', 'セッションの有効期限が切れました。再度ログインしてください。'));
+    }
 
     const STATUS_MAP_JA = { '예약대기': '予約待機', '예약확인중': '予約確認中', '방문전': '訪問前', '일정조율필요': '調整必要', '방문완료': '訪問完了', '제출완료': '提出完了', '노쇼': 'ノーショー' };
 
@@ -391,9 +401,10 @@
       authBtn.innerText = t('인증 중...', '認証中...');
       
       google.script.run
-        .withSuccessHandler(function(isMatch) {
-          if(isMatch) {
+        .withSuccessHandler(function(token) {
+          if(token) {
             localStorage.setItem('adminAuthTimestamp', Date.now());
+            localStorage.setItem('adminToken', token);
             document.getElementById('adminAuthScreen').style.display = 'none';
             document.getElementById('adminCoreWrapper').style.display = 'block';
             fetchDashboardData(); 
@@ -429,6 +440,7 @@
         authBtn.innerText = 'Sign in';
       }
       localStorage.removeItem('adminAuthTimestamp');
+      localStorage.removeItem('adminToken');
       document.getElementById('adminCoreWrapper').style.display = 'none';
       document.getElementById('adminGatePw').value = '';
       document.getElementById('adminAuthScreen').style.display = 'flex';
@@ -445,12 +457,13 @@
       const lastAuth = localStorage.getItem('adminAuthTimestamp');
       const now = Date.now();
 
-      if (lastAuth && (now - lastAuth < AUTH_EXPIRY_MS)) {
+      if (lastAuth && getAdminToken() && (now - lastAuth < AUTH_EXPIRY_MS)) {
         document.getElementById('adminAuthScreen').style.display = 'none';
         document.getElementById('adminCoreWrapper').style.display = 'block';
         fetchDashboardData(); 
       } else {
         localStorage.removeItem('adminAuthTimestamp');
+        localStorage.removeItem('adminToken');
         document.getElementById('adminAuthScreen').style.display = 'flex';
       }
     });
@@ -485,9 +498,10 @@
           renderRestList(); 
         })
         .withFailureHandler(function(err) {
+          if (isAuthError(err)) return forceReLogin();
           document.getElementById('missionTbody').innerHTML = `<tr><td colspan="9"><div class="unified-loading-box"><h6 class="text-danger fw-bold" style="font-size: 16px;">❌ 데이터 동기화 오류 발생</h6><p class="text-dark mt-2 fw-semibold" style="font-size: 13.5px;">사유: ${err.message}</p></div></td></tr>`;
         })
-        .getAdminData(); 
+        .getAdminData(getAdminToken()); 
     }
 
     function buildMissionMap() {
@@ -594,9 +608,10 @@
         .withFailureHandler(function(err) {
           saveBtn.disabled = false;
           saveBtn.innerHTML = t("기준 저장", "基準保存");
+          if (isAuthError(err)) return forceReLogin();
           console.error("저장 실패 상세: ", err);
         })
-        .saveChallengeSettings(startDate, endDate, targetCount);
+        .saveChallengeSettings(getAdminToken(), startDate, endDate, targetCount);
     }
 
     function renderTable(data) {
@@ -699,11 +714,12 @@
           fetchDashboardData(); 
         })
         .withFailureHandler(err => { 
+          if (isAuthError(err)) { document.getElementById('saveEditBtn').disabled = false; document.getElementById('saveEditBtn').innerText = t("저장하기", "保存する"); return forceReLogin(); }
           alert("저장 실패: " + err.message); 
           document.getElementById('saveEditBtn').disabled = false; 
           document.getElementById('saveEditBtn').innerText = t("저장하기", "保存する"); 
         })
-        .adminUpdateMission(row, status, link, refundStatus, visitDate, googleLink, shortReview); 
+        .adminUpdateMission(getAdminToken(), row, status, link, refundStatus, visitDate, googleLink, shortReview); 
     }
   </script>
 

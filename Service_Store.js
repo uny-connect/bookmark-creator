@@ -19,15 +19,19 @@ function confirmBookingByLink(params) {
 
       // 🚨 1. 이미 다른 상태로 처리된 건인지 검사
       if (currentStatus === '일정조율필요' || currentStatus.includes('취소') || currentStatus.includes('노쇼')) {
-        isAlreadyRequested = true; 
-      } 
+        isAlreadyRequested = true;
+      }
+      // 🔒 이미 확정(방문전)·방문완료·제출완료된 건은 링크를 다시 눌러도 상태/메일/만료 처리를 하지 않는다 (멱등)
+      else if (currentStatus === '방문전' || currentStatus === '방문완료' || currentStatus === '제출완료') {
+        // 변경 없음 → 확정 완료 화면만 표시
+      }
       else if (safeRow && sheetOrderNo === String(orderNo).trim().replace(/'/g, '')) {
-        
-        // 🚨 2. Y열 시스템 로그의 타임스탬프 검사 ([YYYY-MM-DD HH:mm] 형태 추출)
+
+        // 🚨 2. Y열 시스템 로그의 타임스탬프 검사 ([YYYY-MM-DD HH:mm] 형태 추출) — 승인 대기(예약확인중) 건만 만료 대상
         const sysLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
         const logMatch = sysLog.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
-        
-        if (logMatch) {
+
+        if (logMatch && currentStatus === '예약확인중') {
           const sentTime = new Date(logMatch[1].replace(/-/g, '/'));
           const now = new Date();
           const diffHours = (now.getTime() - sentTime.getTime()) / (1000 * 60 * 60);
@@ -44,7 +48,7 @@ function confirmBookingByLink(params) {
             // ② 🎯 Restaurant_List Z열(26번째 열) 무응답 카운트 +1 누적
             if (restSheet && storeId) {
               const restData = restSheet.getDataRange().getValues();
-              for (let k = 2; k < restData.length; k++) {
+              for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
                 if (String(restData[k][IDX_REST.ID] || '').trim().toUpperCase() === storeId) {
                   const currentCount = parseInt(restData[k][IDX_REST.NORESPONSE_COUNT], 10) || 0; // Z열(index 25)
                   restSheet.getRange(k + 1, COL_REST.NORESPONSE_COUNT).setValue(currentCount + 1);
@@ -76,7 +80,7 @@ function confirmBookingByLink(params) {
               let storeNameJp = "";
               if (restSheet && storeId) {
                 const restData = restSheet.getDataRange().getValues();
-                for (let k = 2; k < restData.length; k++) {
+                for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
                   if (String(restData[k][IDX_REST.ID] || '').trim().toUpperCase() === storeId) {
                     storeNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim();
                     break;
@@ -236,11 +240,18 @@ function submitStoreFeedback(row, orderNo, msg) {
  * 🎯 [파트너센터 로그인 & 대시보드 연동 코어 엔진]
  ****************************************************************************************/
 
-/** [1] 매장 고유 PIN 번호로 로그인 검증 */
+/** 점주 토큰 검증 + 토큰 주체(storeId)와 요청 대상 매장 일치 확인. 실패 시 Error('AUTH_REQUIRED') */
+function requireStoreAccess_(token, storeId) {
+  const subject = requireToken_(token, 'store');
+  if (String(subject).toUpperCase() !== String(storeId || '').trim().toUpperCase()) throw new Error('AUTH_REQUIRED');
+}
+
+/** [1] 매장 고유 PIN 번호로 로그인 검증 → 성공 시 { storeId, token } */
 function loginStoreByPin(pin) {
   try {
     const pinClean = String(pin).trim().toUpperCase();
     if (!pinClean) return { success: false, error: "コードを入力してください。" };
+    if (isLoginLocked_('store')) return { success: false, error: "試行回数が上限に達しました。しばらくしてからもう一度お試しください。" };
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const restSheet = ss.getSheetByName(SHEET.REST);
@@ -253,10 +264,12 @@ function loginStoreByPin(pin) {
       const sheetPin = String(restData[i][IDX_REST.PIN] || '').trim().toUpperCase();
       if (sheetPin === pinClean) {
         const storeId = String(restData[i][IDX_REST.ID]).trim(); 
-        return { success: true, storeId: storeId };
+        clearLoginFailures_('store');
+        return { success: true, storeId: storeId, token: issueToken_('store', storeId) };
       }
     }
     
+    recordLoginFailure_('store');
     return { success: false, error: "無効なパートナーコードです。再度コードを確認してください。" };
   } catch (e) {
     return { success: false, error: "서버 오류: " + e.toString() };
@@ -264,7 +277,8 @@ function loginStoreByPin(pin) {
 }
 
 /** [2] 특정 매장의 대시보드 스탯 및 할당 크리에이터 미션 리스트 조회 */
-function getStoreData(storeId) {
+function getStoreData(storeId, token) {
+  requireStoreAccess_(token, storeId);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const data = _getSheetsData([SHEET.MASTER, SHEET.REST, SHEET.USER]);
@@ -344,7 +358,8 @@ function getStoreData(storeId) {
 }
 
 /** [3] 매장 예약 환경설정 파일 불러오기 */
-function getStoreConfig(storeId) {
+function getStoreConfig(storeId, token) {
+  requireStoreAccess_(token, storeId);
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET.REST);
@@ -375,10 +390,12 @@ function getStoreConfig(storeId) {
 }
 
 /** [4] 매장 예약 환경설정 파일 수정 저장하기 */
-function updateStoreConfig(row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes) {
+function updateStoreConfig(token, row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes) {
   try {
     const safeRow = parseInt(row, 10);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.REST);
+    // 토큰 주체(매장)의 행만 수정 가능
+    requireStoreAccess_(token, sheet.getRange(safeRow, COL_REST.ID).getValue());
     
     sheet.getRange(safeRow, COL_REST.EMAIL).setValue(email);          
     sheet.getRange(safeRow, COL_REST.STORE_TYPE).setValue(storeType);        
@@ -396,7 +413,7 @@ function updateStoreConfig(row, email, storeType, maxPerSlot, dailyCap, blackout
 }
 
 /** [5] 점주가 대시보드에서 즉시 예약을 확정(승인)하는 함수 */
-function storeDirectConfirm(row, orderNo) {
+function storeDirectConfirm_(row, orderNo) {
   try {
     const safeRow = parseInt(row, 10);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);

@@ -187,7 +187,7 @@ function sendCreatorRescheduleRequestMail(p) {
 
 /** ✉️ 점주에게 방문 예약 확인 요청 (확정/일시변경 링크 포함, 운영진 BCC) */
 function sendStoreBookingRequestMail(p) {
-  const storeNameJp = p.storeNameJp, memberName = p.memberName, dateStr = p.dateStr, timeStr = p.timeStr, peopleCount = p.peopleCount;
+  const storeNameJp = p.storeNameJp, memberName = _escapeHtml(p.memberName), dateStr = p.dateStr, timeStr = p.timeStr, peopleCount = p.peopleCount;
   const links = _creatorProfileLinks(p.creatorProfileUrl);
   const profileHtmlClean = links.profileHtmlClean;
   const benefitDisplay = p.benefit || _DEFAULT_BENEFIT_JP;
@@ -282,7 +282,7 @@ function sendStoreBookingRequestMail(p) {
 
 /** ✉️ 점주에게 예약 취소 통지 (운영진 BCC) */
 function sendStoreCancellationMail(p) {
-  const storeNameJp = p.storeNameJp, orderNo = p.orderNo, creatorName = p.creatorName, visitDisplay = p.visitDisplay, peopleCount = p.peopleCount;
+  const storeNameJp = p.storeNameJp, orderNo = p.orderNo, creatorName = _escapeHtml(p.creatorName), visitDisplay = p.visitDisplay, peopleCount = p.peopleCount;
   const subject = `【予約キャンセル】 ご来店予約キャンセルのご案内 (${storeNameJp})`;
   const htmlBody = `
       <meta charset="UTF-8">
@@ -373,11 +373,11 @@ function sendStoreConnectionTestMail(p) {
 function sendAdminBookingRequestMail(p) {
   const to = getAdminAlertEmails();
   if (!to) return;
-  const orderNo = p.orderNo, memberName = p.memberName, memberCode = p.memberCode, storeId = p.storeId, dateStr = p.dateStr, timeStr = p.timeStr, peopleCount = p.peopleCount;
+  const orderNo = p.orderNo, memberName = _escapeHtml(p.memberName), memberCode = p.memberCode, storeId = p.storeId, dateStr = p.dateStr, timeStr = p.timeStr, peopleCount = p.peopleCount;
   const storeName = p.storeName, storeEmail = p.storeEmail;
   const benefitDisplay = p.benefit || _DEFAULT_BENEFIT_JP;
   const adminSnsHtml = _creatorProfileLinks(p.creatorProfileUrl).adminSnsHtml;
-  const adminSubject = `【予約受付】${memberName}様 ➔ ${storeName} (${dateStr} ${timeStr})`;
+  const adminSubject = `【予約受付】${p.memberName}様 ➔ ${storeName} (${dateStr} ${timeStr})`;
   const adminHtml = `
         <meta charset="UTF-8">
         <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 14px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
@@ -434,7 +434,7 @@ function sendAdminBookingConfirmedMail(p) {
 
 /** ✉️ 운영진: 점주가 일정 변경을 요청했음을 알림 */
 function sendAdminRescheduleRequestMail(p) {
-  const storeName = p.storeName, creatorName = p.creatorName, memberCode = p.memberCode, orderNo = p.orderNo, msg = p.msg, row = p.row;
+  const storeName = p.storeName, creatorName = _escapeHtml(p.creatorName), memberCode = p.memberCode, orderNo = p.orderNo, msg = _escapeHtml(p.msg), row = p.row;
   const alertSubject = `【日程変更要請】[${storeName}] 店舗からの日時変更リクエスト - #${orderNo}`;
   const alertBody = `
       <meta charset="UTF-8">

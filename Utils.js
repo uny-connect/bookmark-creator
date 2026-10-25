@@ -492,7 +492,6 @@ function resendStoreBookingEmail() {
     }
 
     const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
-    const optionDisplayJp = mealOption ? `${mealOption} プラン` : '通常プラン (일반)';
     const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${dateStr})`;
     const htmlBody = `
       <meta charset="UTF-8">
@@ -529,11 +528,6 @@ function resendStoreBookingEmail() {
                 <tr>
                   <td style="padding: 6px 0; color: #333333;">
                     <strong>■ クリエイター名:</strong> ${memberName}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; color: #333333;">
-                    <strong>■ 予約プラン:</strong> <span style="color: #1A2B49; font-weight: 800;">${optionDisplayJp}</span>
                   </td>
                 </tr>
                 <tr>

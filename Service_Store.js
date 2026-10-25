@@ -92,86 +92,15 @@ function confirmBookingByLink(params) {
               const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
               if (currentMemberCode) {
-                const userSheet = ss.getSheetByName(SHEET.USER);
-                const userData = userSheet.getDataRange().getValues();
-                let creatorEmail = "";
-                
-                for (let j = 1; j < userData.length; j++) {
-                  const dbMemberCode = String(userData[j][IDX_USER.KEY] || '').trim().replace(/['"\s]/g, '').toLowerCase();
-                  if (dbMemberCode === currentMemberCode) {
-                    creatorEmail = String(userData[j][IDX_USER.EMAIL] || '').trim();
-                    break;
-                  }
-                }
-
                 // ✉️ 크리에이터 확정 안내 메일
-                if (creatorEmail && creatorEmail.includes("@")) {
-                  const subject = "[BOOKMARK CREATORS] 방문 예약 확정 안내";
-                  const htmlBody = `
-                    <meta charset="UTF-8">
-                    <div style="max-width: 500px; margin: 0 auto; padding: 32px 20px; background: #ffffff; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; border: 1px solid #eef0f2; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
-                      <div style="margin-bottom: 24px; text-align: left;">
-                        <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
-                        <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
-                      </div>
-                      <div style="border-top: 2px solid #1A2B49; padding-top: 24px; margin-bottom: 24px;">
-                        <p style="font-size: 14.5px; font-weight: 700; color: #2D6A4F; margin: 0 0 12px 0;">[예약 확정 안내]</p>
-                        <p style="font-size: 13.5px; line-height: 1.6; color: #495057; margin: 0;">
-                          매장에서 방문 예약이 확정되었습니다.<br>
-                          날짜와 시간을 다시 한번 확인 후 늦지 않게 방문해주세요! <br>
-                          <span style="font-weight: 700; color: #dc3545;">혹시라도 늦는다면 미리 말씀 부탁드립니다.</span>
-                        </p>
-                      </div>
-                      <div style="background: #f8f9fa; border-radius: 14px; padding: 18px; margin-bottom: 28px;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-                          <tr>
-                            <td style="width: 85px; color: #8b95a1; font-weight: 700; padding: 6px 0;">방문 매장</td>
-                            <td style="color: #1A2B49; font-weight: 700; padding: 6px 0;">${currentRestaurantName}</td>
-                          </tr>
-                          <tr>
-                            <td style="color: #8b95a1; font-weight: 700; padding: 6px 0;">예약 일시</td>
-                            <td style="color: #1a73e8; font-weight: 700; padding: 6px 0;">${visitDateStr}</td>
-                          </tr>
-                          <tr>
-                            <td style="color: #8b95a1; font-weight: 700; padding: 6px 0;">방문 인원</td>
-                            <td style="color: #495057; font-weight: 700; padding: 6px 0;">${pCount}명</td>
-                          </tr>
-                        </table>
-                      </div>
-                      <div style="text-align: center;">
-                        <a href="http://pf.kakao.com/_vFSxfX/chat" target="_blank" style="display: block; background: #1A2B49; color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none; padding: 14px; border-radius: 12px; box-shadow: 0 4px 12px rgba(26,43,73,0.15);">카카오톡 채팅하기</a>
-                      </div>
-                    </div>`;
-
-                  GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
+                const creatorEmail = getCreatorEmail(currentMemberCode);
+                if (creatorEmail.includes("@")) {
+                  sendCreatorConfirmedMail({ to: creatorEmail, storeName: currentRestaurantName, visitDateStr: visitDateStr, peopleCount: pCount });
                 }
 
                 // ✉️ 관리자 알림 발송
                 try {
-                  const adminAlertEmails = getAdminAlertEmails();
-                  if (adminAlertEmails) {
-                    const adminSubject = `【予約確定】店舗が予約を確定しました - #${orderNo}`;
-                    const adminHtml = `
-                      <meta charset="UTF-8">
-                      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 16px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
-                        <div style="margin-bottom: 18px;">
-                          <span style="background: #2D6A4F; color: #fff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px;">CONFIRMATION NOTICE</span>
-                          <h3 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 18px; font-weight: 800;">店舗による予約確定完了</h3>
-                        </div>
-                        <p style="font-size: 13.5px; color: #495057; margin: 0 0 16px 0;">
-                          店舗管理者がメールリンクより来店予約を【確定】しました。<br>
-                          クリエイターへ予約確定の案内メールが送信されました。
-                        </p>
-                        <div style="background: #ffffff; border-radius: 12px; padding: 18px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
-                          <p style="margin: 6px 0;"><b>・注文番号:</b> #${orderNo}</p>
-                          <p style="margin: 6px 0;"><b>・店舗名:</b> ${finalStoreNameJp}</p>
-                          <p style="margin: 6px 0;"><b>・クリエイター:</b> ${currentMemberCode}</p>
-                          <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #2D6A4F; font-weight: bold;">${visitDateStr} (${pCount}名)</span></p>
-                        </div>
-                      </div>
-                    `;
-                    GmailApp.sendEmail(adminAlertEmails, adminSubject, "", { htmlBody: adminHtml, name: "BOOKMARK NOTI" });
-                  }
+                  sendAdminBookingConfirmedMail({ orderNo: orderNo, storeNameJp: finalStoreNameJp, memberCode: currentMemberCode, visitDateStr: visitDateStr, peopleCount: pCount });
                 } catch(e) {}
               }
             } catch (mailErr) {
@@ -263,62 +192,12 @@ function submitStoreFeedback(row, orderNo, msg) {
     const finalStoreName = storeNameJp ? storeNameJp : storeNameKo;
 
     // ✉️ [1번 슈팅] 내부 운영진 담당자 일본어 알림 메일 발송
-    const adminEmail = (typeof getAdminAlertEmails === 'function') ? getAdminAlertEmails() : "bookmarkjapan.info@gmail.com"; 
-    const alertSubject = `【日程変更要請】[${finalStoreName}] 店舗からの日時変更リクエスト - #${cleanOrderNo}`;
-    
-    const alertBody = `
-      <meta charset="UTF-8">
-      <div style="background: #f4f5f7; padding: 24px 10px; font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;">
-        <div style="max-width: 500px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #eef0f2; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-          
-          <div style="margin-bottom: 20px; text-align: left;">
-            <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #7048e8; padding: 4px 10px; border-radius: 6px; display: inline-block;">ADMIN NOTICE</span>
-            <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 10px 0 0 0;">BOOKMARK CREATORS</h2>
-          </div>
-          
-          <div style="border-top: 2px solid #7048e8; padding-top: 20px; margin-bottom: 20px;">
-            <p style="font-size: 14.5px; font-weight: 800; color: #7048e8; margin: 0 0 10px 0;">日程変更リクエスト受付</p>
-            <p style="font-size: 13.5px; line-height: 1.6; color: #495057; margin: 0;">
-              店舗（加盟店）より日程調整のリクエストが送信されました。<br>
-              マスターログのステータスは自動的に <b>【調整必要】</b> に変更されました。クリエイターとの再スケジュール調整をお願いいたします。
-            </p>
-          </div>
-          
-          <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 16px 18px; margin-bottom: 16px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
-              <tr>
-                <td style="width: 105px; color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 店舗名</td>
-                <td style="color: #1A2B49; font-weight: 700; padding: 6px 0;">${finalStoreName}</td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ クリエイター</td>
-                <td style="color: #495057; font-weight: 700; padding: 6px 0;">${creatorName} <span style="font-size:11.5px; color:#8b95a1; font-weight:500;">(ID: ${currentMemberCode})</span></td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 注文番号</td>
-                <td style="color: #495057; font-weight: 700; padding: 6px 0;">#${cleanOrderNo}</td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 6px 0; vertical-align: top;">■ 店舗メッセージ</td>
-                <td style="color: #7048e8; font-weight: 800; padding: 6px 0; line-height: 1.5; word-break: break-all;">${msg}</td>
-              </tr>
-              <tr>
-                <td style="color: #8b95a1; font-weight: 700; padding: 8px 0 0 0; vertical-align: top; border-top: 1px dashed #dee2e6;">■ ログ位置</td>
-                <td style="color: #d63384; font-weight: 800; padding: 8px 0 0 0; border-top: 1px dashed #dee2e6;">Master_Log Sheet ${safeRow}行目 (Row ${safeRow})</td>
-              </tr>
-            </table>
-          </div>
-          
-        </div>
-      </div>`;
+    const adminEmail = getAdminAlertEmails();
+
 
     if (adminEmail && adminEmail.includes('@')) {
       try {
-        GmailApp.sendEmail(adminEmail, alertSubject, "", { 
-          htmlBody: alertBody, 
-          name: "BOOKMARK CREATORS",
-          from: "info@bookmarkfukuoka.jp"
-        });
+        sendAdminRescheduleRequestMail({ to: adminEmail, storeName: finalStoreName, creatorName: creatorName, memberCode: currentMemberCode, orderNo: cleanOrderNo, msg: msg, row: safeRow });
         sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue("운영진알림 발송완료"); 
       } catch (adminMailErr) {
         console.error("❌ 운영진 메일 알림 실패: " + adminMailErr.toString());
@@ -330,79 +209,22 @@ function submitStoreFeedback(row, orderNo, msg) {
 
     // ✉️ [2번 슈팅] 크리에이터향 알림 이메일 발송
     if (currentMemberCode) {
-      const userSheet = ss.getSheetByName(SHEET.USER);
-      if (userSheet) {
-        const userData = userSheet.getDataRange().getValues();
-        let creatorEmail = "";
-        
-        for (let j = 1; j < userData.length; j++) {
-          if (String(userData[j][IDX_USER.KEY]).trim() === currentMemberCode) {
-            creatorEmail = String(userData[j][IDX_USER.EMAIL] || '').trim();
-            break;
-          }
-        }
+      const creatorEmail = getCreatorEmail(currentMemberCode);
 
-        if (creatorEmail && creatorEmail.includes("@")) {
-          const timeZone = Session.getScriptTimeZone();
-          const rawVisitDate = rowData[IDX_MASTER.VISIT]; 
-          const pCount = rowData[IDX_MASTER.PEOPLE] ? String(rowData[IDX_MASTER.PEOPLE]).replace(/[^0-9]/g, '') : '1'; 
-          const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
+      if (creatorEmail.includes("@")) {
+        const timeZone = Session.getScriptTimeZone();
+        const rawVisitDate = rowData[IDX_MASTER.VISIT]; 
+        const pCount = rowData[IDX_MASTER.PEOPLE] ? String(rowData[IDX_MASTER.PEOPLE]).replace(/[^0-9]/g, '') : '1'; 
+        const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
-          const creatorSubject = "[BOOKMARK CREATORS] 방문 일정 변경 조율 안내";
-          const creatorHtmlBody = `
-            <meta charset="UTF-8">
-            <div style="background: #f4f5f7; padding: 24px 10px; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;">
-              <div style="max-width: 500px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #eef0f2; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                
-                <div style="margin-bottom: 20px; text-align: left;">
-                  <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #e03131; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
-                  <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 10px 0 0 0;">BOOKMARK CREATORS</h2>
-                </div>
-                
-                <div style="border-top: 2px solid #e03131; padding-top: 20px; margin-bottom: 20px;">
-                  <p style="font-size: 14.5px; font-weight: 800; color: #e03131; margin: 0 0 10px 0;">[방문 일정 변경 요청 알림]</p>
-                  <p style="font-size: 13.5px; line-height: 1.65; color: #495057; margin: 0;">
-                    안녕하세요 크리에이터님, 신청하신 매장의 사정으로 인해 <b>일정 조율이 필요한 상태</b>로 변경되었습니다.<br><br>
-                    신청 내역을 바탕으로 운영 담당자가 빠르게 연락드려 일정 재조율을 도와드리겠습니다.
-                  </p>
-                </div>
-                
-                <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 16px 18px; margin-bottom: 24px;">
-                  <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
-                    <tr>
-                      <td style="width: 85px; color: #8b95a1; font-weight: 700; padding: 6px 0;">방문 매장</td>
-                      <td style="color: #1A2B49; font-weight: 700; padding: 6px 0;">${storeNameKo}</td>
-                    </tr>
-                    <tr>
-                      <td style="color: #8b95a1; font-weight: 700; padding: 6px 0;">기존 일시</td>
-                      <td style="color: #e03131; font-weight: 800; padding: 6px 0;">${visitDateStr}</td>
-                    </tr>
-                    <tr>
-                      <td style="color: #8b95a1; font-weight: 700; padding: 6px 0;">방문 인원</td>
-                      <td style="color: #495057; font-weight: 700; padding: 6px 0;">${pCount}명</td>
-                    </tr>
-                  </table>
-                </div>
-                
-                <div style="text-align: center;">
-                  <a href="http://pf.kakao.com/_vFSxfX/chat" target="_blank" style="display: block; background: #1A2B49; color: #ffffff; font-size: 14px; font-weight: 800; text-decoration: none; padding: 13px; border-radius: 10px; box-shadow: 0 4px 12px rgba(26,43,73,0.15);">담당자에게 문의하기</a>
-                </div>
-              </div>
-            </div>`;
-
-          try {
-            GmailApp.sendEmail(creatorEmail, creatorSubject, "", { 
-              htmlBody: creatorHtmlBody, 
-              name: "BOOKMARK CREATORS",
-              from: "info@bookmarkfukuoka.jp"
-            });
-            const prevLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
-            sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLog.includes("완료") ? "조율 노티 전체메일 발송완료" : "크리에이터 노티 메일 발송완료");
-          } catch (creatorMailErr) {
-            console.error("❌ 크리에이터 변경 안내 메일 실패: " + creatorMailErr.toString());
-            const prevLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
-            sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLog + " | ❌ 크리에이터메일 실패: " + creatorMailErr.toString());
-          }
+        try {
+          sendCreatorRescheduleRequestMail({ to: creatorEmail, storeNameKo: storeNameKo, visitDateStr: visitDateStr, peopleCount: pCount });
+          const prevLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
+          sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLog.includes("완료") ? "조율 노티 전체메일 발송완료" : "크리에이터 노티 메일 발송완료");
+        } catch (creatorMailErr) {
+          console.error("❌ 크리에이터 변경 안내 메일 실패: " + creatorMailErr.toString());
+          const prevLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
+          sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLog + " | ❌ 크리에이터메일 실패: " + creatorMailErr.toString());
         }
       }
     }
@@ -603,62 +425,11 @@ function storeDirectConfirm(row, orderNo) {
       const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
       if (currentMemberCode) {
-        const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.USER);
-        const userData = userSheet.getDataRange().getValues();
-        let creatorEmail = "";
-        
-        for (let j = 1; j < userData.length; j++) {
-          const dbMemberCode = String(userData[j][IDX_USER.KEY] || '').trim().replace(/['"\s]/g, '').toLowerCase();
-          if (dbMemberCode === currentMemberCode) {
-            creatorEmail = String(userData[j][IDX_USER.EMAIL] || '').trim();
-            break;
-          }
-        }
+        const creatorEmail = getCreatorEmail(currentMemberCode);
 
-        if (creatorEmail && creatorEmail.includes("@")) {
-          const subject = "[BOOKMARK CREATORS] 방문 예약 확정 안내";
-          const htmlBody = `
-            <meta charset="UTF-8">
-            <div style="max-width: 500px; margin: 0 auto; padding: 32px 24px; background: #ffffff; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; border: 1px solid #eef0f2; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-              <div style="margin-bottom: 20px; text-align: left;">
-                <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
-                <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 10px 0 0 0;">BOOKMARK CREATORS</h2>
-              </div>
-              <div style="border-top: 2px solid #1A2B49; padding-top: 20px; margin-bottom: 20px;">
-                <p style="font-size: 14.5px; font-weight: 800; color: #2D6A4F; margin: 0 0 10px 0;">[예약 확정 안내]</p>
-                <p style="font-size: 13.5px; line-height: 1.65; color: #495057; margin: 0;">
-                  매장에서 방문 예약이 확정되었습니다.<br>
-                  날짜와 시간을 다시 한번 확인 후 늦지 않게 방문해 주세요! <br>
-                  <span style="font-weight: 700; color: #dc3545;">혹시라도 늦으실 경우 미리 연락 부탁드립니다.</span>
-                </p>
-              </div>
-              <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 10px; padding: 16px 18px; margin-bottom: 24px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
-                  <tr>
-                    <td style="width: 85px; color: #8b95a1; font-weight: 700; padding: 6px 0;">방문 매장</td>
-                    <td style="color: #1A2B49; font-weight: 700; padding: 6px 0;">${currentRestaurantName}</td>
-                  </tr>
-                  <tr>
-                    <td style="color: #8b95a1; font-weight: 700; padding: 6px 0;">예약 일시</td>
-                    <td style="color: #1a73e8; font-weight: 800; padding: 6px 0;">${visitDateStr}</td>
-                  </tr>
-                  <tr>
-                    <td style="color: #8b95a1; font-weight: 700; padding: 6px 0;">방문 인원</td>
-                    <td style="color: #495057; font-weight: 700; padding: 6px 0;">${pCount}명</td>
-                  </tr>
-                </table>
-              </div>
-              <div style="text-align: center;">
-                <a href="http://pf.kakao.com/_vFSxfX/chat" target="_blank" style="display: block; background: #1A2B49; color: #ffffff; font-size: 14px; font-weight: 800; text-decoration: none; padding: 13px; border-radius: 10px; box-shadow: 0 4px 12px rgba(26,43,73,0.15);">카카오톡 채팅하기</a>
-              </div>
-            </div>`;
-          
+        if (creatorEmail.includes("@")) {
           try {
-            GmailApp.sendEmail(creatorEmail, subject, "", { 
-              htmlBody: htmlBody, 
-              name: "BOOKMARK CREATORS",
-              from: "info@bookmarkfukuoka.jp"
-            });
+            sendCreatorConfirmedMail({ to: creatorEmail, storeName: currentRestaurantName, visitDateStr: visitDateStr, peopleCount: pCount });
             sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue("크리에이터확정메일 발송완료"); 
           } catch (directMailErr) {
             console.error("❌ 점주 직접 확정 메일 발송 실패: " + directMailErr.toString());
@@ -733,44 +504,7 @@ function saveStoreEmailAndSendTest(storeId, email) {
     restSheet.getRange(rowIndex, COL_REST.EMAIL).setValue(email.trim());
 
     // 테스트 메일 발송
-    const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
-    const subject = `【TEST / 接続テスト】 BOOKMARK CREATORS 予約通知テスト送信 (${storeNameJp})`;
-    
-    const htmlBody = `
-      <meta charset="UTF-8">
-      <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 20px; background-color: #f4f5f7;">
-        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 14px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #edf0f2;">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">CONNECTION TEST</span>
-            <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
-            <div style="width: 36px; height: 3px; background: #C5A358; margin: 10px auto;"></div>
-          </div>
-          <h2 style="color: #1A2B49; margin-top: 0; font-size: 16px; border-bottom: 2px solid #f1f3f5; padding-bottom: 14px; text-align: center; font-weight: 800;">メール受信テスト</h2>
-          <div style="margin-top: 18px;">
-            <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin-bottom: 4px;">${storeNameJp}</p>
-            <p style="color: #6c757d; font-size: 13px; margin-top: 0;">店舗管理者様</p>
-          </div>
-          <p style="color: #495057; font-size: 13.5px; line-height: 1.65;">
-            本メールは、BOOKMARK CREATORSからの予約受付通知が正常に届くか確認するための<b>【テストメール】</b>です。<br>
-            このメールが確認できましたら、今後のクリエイター来店予約通知も問題なく受信いただけます。
-          </p>
-          <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 14px 16px; margin: 20px 0; font-size: 13px;">
-            <p style="margin: 4px 0;"><strong>■ 店舗ID:</strong> ${cleanId}</p>
-            <p style="margin: 4px 0;"><strong>■ 受信状態:</strong> <span style="color: #2D6A4F; font-weight: bold;">正常受信完了 (Success)</span></p>
-            <p style="margin: 4px 0;"><strong>■ テスト日時:</strong> ${todayStr}</p>
-            <p style="margin: 4px 0;"><strong>■ 登録アドレス:</strong> ${email}</p>
-          </div>
-          <div style="text-align: center; margin-top: 24px; padding: 10px; background-color: #f1f3f5; border-radius: 8px; font-size: 12px; color: #6c757d; font-weight: 600;">
-            ※ 本メールに対する返信や確定手続きは不要です。
-          </div>
-        </div>
-      </div>`;
-
-    GmailApp.sendEmail(email.trim(), subject, "", {
-      htmlBody: htmlBody,
-      name: "BOOKMARK CREATORS",
-      from: "info@bookmarkfukuoka.jp"
-    });
+    sendStoreConnectionTestMail({ to: email.trim(), storeId: cleanId, storeNameJp: storeNameJp, addressLabel: '登録アドレス' });
 
     return { success: true };
   } catch (err) {

@@ -102,3 +102,12 @@ const IDX_SETTINGS = _toIdx(COL_SETTINGS);
 /** 한 번에 비우는 열 범위 폭 */
 const MASTER_SLOT_COLS = COL_MASTER.DEADLINE - COL_MASTER.VISIT + 1;     // H~J 방문일시/인원/마감일
 const MASTER_SUBMIT_COLS = COL_MASTER.REFUND - COL_MASTER.RECEIPT + 1;   // O~U 영수증~환불
+
+/** 메일 공통 상수 */
+const MAIL = {
+  NAME: 'BOOKMARK CREATORS',            // 발신자 표시명
+  NOTI_NAME: 'BOOKMARK NOTI',           // 운영진 알림 발신자 표시명
+  FROM: 'info@bookmarkfukuoka.jp',      // 발신 주소(Gmail 별칭)
+  DEFAULT_ADMIN: 'bookmarkjapan.info@gmail.com', // Settings 에 ADMIN_NOTIFICATION_EMAILS 가 없을 때
+  KAKAO_URL: 'http://pf.kakao.com/_vFSxfX/chat', // 크리에이터 문의 카카오 채널
+};

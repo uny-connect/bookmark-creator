@@ -64,18 +64,18 @@ function getAdminAlertEmails() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET.SETTINGS);
-    if (!sheet) return "bookmarkjapan.info@gmail.com";
+    if (!sheet) return MAIL.DEFAULT_ADMIN;
 
     const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       const key = String(data[i][IDX_SETTINGS.KEY] || '').trim().toUpperCase();
       if (key === "ADMIN_NOTIFICATION_EMAILS") {
         const emails = String(data[i][IDX_SETTINGS.VALUE] || '').trim();
-        return emails || "bookmarkjapan.info@gmail.com";
+        return emails || MAIL.DEFAULT_ADMIN;
       }
     }
   } catch (e) {
     Logger.log("getAdminAlertEmails 에러: " + e.toString());
   }
-  return "bookmarkjapan.info@gmail.com";
+  return MAIL.DEFAULT_ADMIN;
 }

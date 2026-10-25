@@ -525,7 +525,7 @@ function _sendBookingNotifications(p) {
 
   const benefitDisplay = storeBenefit || "店舗指定のクリエイター向け提供メニュー";
   // 🎯 구매 옵션 문자열을 있는 그대로 플랜명에 반영
-  const optionDisplayJp = p.mealOption ? `${p.mealOption} プラン` : '通常プラン (일반)';
+  const optionDisplayJp = p.mealOption ? `${p.mealOption} プラン` : '通常プラン';
 
   // 1. 점주에게 일본어 예약 신청 메일 발송
   if (storeEmail && storeEmail.includes("@")) {
@@ -574,11 +574,6 @@ function _sendBookingNotifications(p) {
                 <tr>
                   <td style="padding: 6px 0; color: #333333;">
                     <strong>■ クリエイター名:</strong> ${p.memberName}
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; color: #333333;">
-                    <strong>■ 予約プラン:</strong> <span style="color: #1A2B49; font-weight: 800;">${optionDisplayJp}</span>
                   </td>
                 </tr>
                 <tr>
@@ -643,7 +638,7 @@ function _sendBookingNotifications(p) {
   try {
     const adminAlertEmails = getAdminAlertEmails();
     if (adminAlertEmails) {
-      const adminSubject = `【予約受付】${p.memberName}様 ➔ ${storeNameJp || storeNameKo} (${p.dateStr} ${p.timeStr}) [${p.mealOption || '일반'}]`;
+      const adminSubject = `【予約受付】${p.memberName}様 ➔ ${storeNameJp || storeNameKo} (${p.dateStr} ${p.timeStr})`;
       const adminHtml = `
         <meta charset="UTF-8">
         <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 14px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
@@ -659,10 +654,9 @@ function _sendBookingNotifications(p) {
             <p style="margin: 6px 0;"><b>・注文번호:</b> #${p.orderNo}</p>
             <p style="margin: 6px 0;"><b>・クリエイター:</b> ${p.memberName} <span style="color:#8b95a1; font-size: 12px;">(${p.memberCode})</span></p>
             <p style="margin: 6px 0;"><b>・訪問店舗:</b> ${storeNameJp || storeNameKo} <span style="color:#8b95a1; font-size: 12px;">(${p.storeId})</span></p>
-            <p style="margin: 6px 0;"><b>・購入オプション:</b> <span style="color: #1A2B49; font-weight: bold;">${p.mealOption || '기본'}</span></p>
             <p style="margin: 6px 0;"><b>・提供内容:</b> <span style="color: #2D6A4F; font-weight: bold;">${storeBenefit || '店舗指定のクリエイター向け提供メニュー'}</span></p>
             <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #d63384; font-weight: bold;">${p.dateStr} ${p.timeStr}</span></p>
-            <p style="margin: 6px 0;"><b>・訪問人数:</b> <span style="font-weight: bold;">${p.safePeopleCount}명</span></p>
+            <p style="margin: 6px 0;"><b>・訪問人数:</b> <span style="font-weight: bold;">${p.safePeopleCount}人</span></p>
             ${adminSnsHtml}
             <p style="margin: 6px 0;"><b>・店舗受信メール:</b> <span style="color: #1a73e8;">${storeEmail || '未登録'}</span></p>
           </div>

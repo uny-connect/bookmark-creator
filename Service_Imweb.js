@@ -1,7 +1,9 @@
+/** 아임웹 연동: 웹훅(주문/취소/가입) 처리, 회원 동기화 */
+
 /*****************************************************************************************
  * ⚡ [엔진 완전 최적화] 아임웹 실제 수신 페이로드 정합성 100% 동기화 시스템 (주문/가입/취소/구매옵션 통합)
  ****************************************************************************************/
-function doPost(e) {
+function handleImwebWebhook(e) {
   // 🔒 웹훅 동시 인입(ORDER_CREATE & ORDER_PAY_COMPLETE 동시 도달) 시 중복 등록 방지 Lock
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) {
@@ -335,4 +337,178 @@ function handleImwebCancellation(orderNo, reason) {
     console.error("handleImwebCancellation 실패: " + e.toString());
     return { success: false, error: e.toString() };
   }
+}
+
+/** [아임웹 유저 동기화 - User_DB 업서트 + Master_Log 과거 이메일 식별자 자동 승격] */
+function syncImwebUsers() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const rawSheet = ss.getSheetByName("Imweb_Raw");
+  const userSheet = ss.getSheetByName("User_DB");
+  const logSheet = ss.getSheetByName("Master_Log");
+  
+  if (!rawSheet || !userSheet) return SpreadsheetApp.getUi().alert("Imweb_Raw 또는 User_DB 시트가 없습니다.");
+
+  const rawData = rawSheet.getDataRange().getValues();
+  if (rawData.length <= 1) return SpreadsheetApp.getUi().alert("가져올 데이터가 없습니다.");
+
+  const headers = rawData[0].map(h => String(h || "").trim().toLowerCase());
+  const col = (...keywords) => {
+    return headers.findIndex(h => keywords.some(k => h.includes(k.toLowerCase())));
+  };
+
+  const userData = userSheet.getDataRange().getValues();
+  const existingUserRowMap = new Map();
+  for (let r = 1; r < userData.length; r++) {
+    const key = String(userData[r][0] || "").trim();
+    if (key) {
+      existingUserRowMap.set(key, r + 1);
+    }
+  }
+
+  let addedCount = 0;
+  let updatedCount = 0;
+
+  for (let i = 1; i < rawData.length; i++) {
+    const row = rawData[i];
+    
+    const keyIdx = col("고유키", "회원코드", "member_code");
+    const uniqueKey = keyIdx !== -1 ? String(row[keyIdx] || "").trim() : "";
+    if (!uniqueKey) continue; 
+
+    const phoneIdx = col("연락처", "휴대폰", "전화번호");
+    let rawPhone = phoneIdx !== -1 ? String(row[phoneIdx] || "").replace(/[^0-9]/g, "") : "";
+    if (rawPhone.startsWith("10") && (rawPhone.length === 9 || rawPhone.length === 10)) {
+      rawPhone = "0" + rawPhone;
+    }
+    let formattedPhone = rawPhone;
+    if (rawPhone.length === 11) {
+      formattedPhone = rawPhone.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
+    } else if (rawPhone.length === 10) {
+      formattedPhone = rawPhone.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3");
+    }
+
+    const getVal = (...keys) => {
+      const idx = col(...keys);
+      return idx !== -1 ? (row[idx] || "") : "";
+    };
+
+    const englishName = getVal("영문명", "영문이름", "english");
+    const koreanName = getVal("이름", "성명", "실명");
+    const blogUrl = getVal("블로그", "blog", "네이버");
+    const instaUrl = getVal("인스타", "insta", "instagram", "릴스");
+    const youtubeUrl = getVal("유튜브", "youtube");
+    const tiktokUrl = getVal("틱톡", "tiktok", "tictok");
+    const googleGuide = getVal("구글", "로컬", "가이드");
+    const userGroup = getVal("회원 그룹", "그룹", "등급");
+    const signupDate = getVal("가입일", "가입 승인일");
+    const email = getVal("이메일", "email");
+    const adminMemo = getVal("관리자 메모", "메모");
+
+    if (existingUserRowMap.has(uniqueKey)) {
+      const targetRow = existingUserRowMap.get(uniqueKey);
+      if (englishName) userSheet.getRange(targetRow, 2).setValue(englishName);
+      if (koreanName) userSheet.getRange(targetRow, 3).setValue(koreanName);
+      if (formattedPhone) userSheet.getRange(targetRow, 4).setValue(formattedPhone);
+
+      if (col("블로그", "blog", "네이버") !== -1) userSheet.getRange(targetRow, 5).setValue(blogUrl);
+      if (col("인스타", "insta", "instagram", "릴스") !== -1) userSheet.getRange(targetRow, 6).setValue(instaUrl);
+      if (col("유튜브", "youtube") !== -1) userSheet.getRange(targetRow, 7).setValue(youtubeUrl);
+      if (col("틱톡", "tiktok", "tictok") !== -1) userSheet.getRange(targetRow, 8).setValue(tiktokUrl);
+      if (col("구글", "로컬", "가이드") !== -1) userSheet.getRange(targetRow, 9).setValue(googleGuide);
+
+      if (userGroup) userSheet.getRange(targetRow, 10).setValue(userGroup);
+      if (email) userSheet.getRange(targetRow, 14).setValue(email);
+      if (adminMemo) userSheet.getRange(targetRow, 16).setValue(adminMemo);
+      updatedCount++;
+    } else {
+      const newRow = new Array(16).fill("");
+      newRow[0] = uniqueKey;
+      newRow[1] = englishName;
+      newRow[2] = koreanName;
+      newRow[3] = formattedPhone;
+      newRow[4] = blogUrl;
+      newRow[5] = instaUrl;
+      newRow[6] = youtubeUrl;
+      newRow[7] = tiktokUrl;
+      newRow[8] = googleGuide;
+      newRow[9] = userGroup;
+      newRow[10] = "";
+      newRow[11] = "";
+      newRow[12] = signupDate;
+      newRow[13] = email;
+      newRow[14] = "";
+      newRow[15] = adminMemo;
+
+      userSheet.appendRow(newRow);
+      existingUserRowMap.set(uniqueKey, userSheet.getLastRow());
+      addedCount++;
+    }
+  }
+
+  let fixedLogCount = 0;
+  if (logSheet) {
+    const refreshedUserData = userSheet.getDataRange().getValues();
+    const emailToKeyMap = new Map();
+    const keyToNameMap = new Map();
+    for (let u = 1; u < refreshedUserData.length; u++) {
+      const uKey = String(refreshedUserData[u][0] || '').trim();
+      const uName = String(refreshedUserData[u][1] || '').trim();
+      const uMail = String(refreshedUserData[u][13] || '').trim().toLowerCase();
+      if (uKey && uMail) emailToKeyMap.set(uMail, uKey);
+      if (uKey && uName) keyToNameMap.set(uKey, uName);
+    }
+
+    const logData = logSheet.getDataRange().getValues();
+    for (let i = 2; i < logData.length; i++) {
+      const rowNum = i + 1;
+      const currentCode = String(logData[i][1] || '').trim();
+      const currentEngName = String(logData[i][2] || '').trim();
+
+      if (currentCode.includes("@") && emailToKeyMap.has(currentCode.toLowerCase())) {
+        const correctKey = emailToKeyMap.get(currentCode.toLowerCase());
+        logSheet.getRange(rowNum, 2).setValue(correctKey);
+        if (!currentEngName && keyToNameMap.has(correctKey)) {
+          logSheet.getRange(rowNum, 3).setValue(keyToNameMap.get(correctKey));
+        }
+        fixedLogCount++;
+      }
+    }
+  }
+
+  SpreadsheetApp.getUi().alert(
+    `✅ 동기화 완료!\n\n` +
+    `• 신규 등록: ${addedCount}명\n` +
+    `• 정보 업데이트: ${updatedCount}명\n` +
+    `• 기존 주문의 고유키 자동 복구: ${fixedLogCount}건`
+  );
+}
+
+/** 🧪 아임웹 주문 취소 웹훅 가상 테스트 함수 */
+function testCancelWebhook() {
+  // ⚠️ 중요: 현재 Master_Log 시트 A열에 실제로 존재하는 주문번호 하나를 입력하세요 (예: 2222 또는 실제 주문번호)
+  const testOrderNo = "2222"; 
+
+  // 아임웹에서 실제로 보내는 취소 웹훅 규격 가상 데이터
+  const samplePayload = {
+    eventType: "ORDER_CANCEL_COMPLETE",
+    eventTime: 1791274411890,
+    data: {
+      orderNo: testOrderNo,
+      section: {
+        cancelInfo: {
+          cancelReason: "테스트 단순 변심 취소"
+        }
+      }
+    }
+  };
+
+  const mockEvent = {
+    postData: {
+      contents: JSON.stringify(samplePayload)
+    }
+  };
+
+  // doPost 직접 호출 실행
+  const response = doPost(mockEvent);
+  Logger.log("실행 결과: " + response.getContent());
 }

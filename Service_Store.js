@@ -1,4 +1,216 @@
 /*****************************************************************************************
+ * 점주(파트너) 도메인: 예약 승인/일정변경 요청, PIN 로그인, 대시보드, 매장 설정, 간편 등록
+ ****************************************************************************************/
+/** 📩 메일 직통 링크 예약 승인 엔진 (doGet mode=store_confirm 에서 위임) → { isExpired, isAlreadyRequested } */
+function confirmBookingByLink(params) {
+    let isAlreadyRequested = false; 
+    let isExpired = false; // 24시간 만료 플래그
+    
+    try {
+      const safeRow = parseInt(params.row, 10);
+      const orderNo = params.o;
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const sheet = ss.getSheetByName('Master_Log');
+      const restSheet = ss.getSheetByName('Restaurant_List');
+      
+      const sheetOrderNo = String(sheet.getRange(safeRow, 1).getValue()).trim().replace(/'/g, '');
+      const currentStatus = String(sheet.getRange(safeRow, 12).getValue()).trim();
+      const storeId = String(sheet.getRange(safeRow, 5).getValue() || '').trim().toUpperCase();
+
+      // 🚨 1. 이미 다른 상태로 처리된 건인지 검사
+      if (currentStatus === '일정조율필요' || currentStatus.includes('취소') || currentStatus.includes('노쇼')) {
+        isAlreadyRequested = true; 
+      } 
+      else if (safeRow && sheetOrderNo === String(orderNo).trim().replace(/'/g, '')) {
+        
+        // 🚨 2. Y열 시스템 로그의 타임스탬프 검사 ([YYYY-MM-DD HH:mm] 형태 추출)
+        const sysLog = String(sheet.getRange(safeRow, 25).getValue() || '');
+        const logMatch = sysLog.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
+        
+        if (logMatch) {
+          const sentTime = new Date(logMatch[1].replace(/-/g, '/'));
+          const now = new Date();
+          const diffHours = (now.getTime() - sentTime.getTime()) / (1000 * 60 * 60);
+          
+          // 24시간 초과 시 만료 처리
+          if (diffHours >= 24) {
+            isExpired = true;
+            
+            // ① Master_Log 슬롯 회수 및 상태 취소 변경
+            sheet.getRange(safeRow, 12).setValue('취소(기한만료)');
+            sheet.getRange(safeRow, 8, 1, 3).clearContent(); // H~J열 슬롯 반환
+            sheet.getRange(safeRow, 25).setValue(sysLog + " | [시스템] 점주 24시간 미답변 만료");
+
+            // ② 🎯 Restaurant_List Z열(26번째 열) 무응답 카운트 +1 누적
+            if (restSheet && storeId) {
+              const restData = restSheet.getDataRange().getValues();
+              for (let k = 2; k < restData.length; k++) {
+                if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
+                  const currentCount = parseInt(restData[k][25], 10) || 0; // Z열(index 25)
+                  restSheet.getRange(k + 1, 26).setValue(currentCount + 1);
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        // 🔒 [중복 발송 방어 락] 기한 내이고 최초 1회 승인일 때만 메일 엔진 동작
+        const isFirstConfirm = (currentStatus !== '방문전');
+
+        if (!isExpired) {
+          sheet.getRange(safeRow, 12).setValue('방문전'); 
+          
+          // 🎯 [G열 비우기] Y열(25열)에 기존 로그 보존하며 누적 기록
+          const prevLogY = String(sheet.getRange(safeRow, 25).getValue() || '').trim();
+          const confirmTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+          const appendLog = `[${confirmTime}] 점주_직접_링크확정`;
+          sheet.getRange(safeRow, 25).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
+
+          if (isFirstConfirm) {
+            try {
+              const currentRestaurantName = String(sheet.getRange(safeRow, 6).getValue() || '').trim(); 
+              const rawMemberCode = String(sheet.getRange(safeRow, 2).getValue() || '').trim();
+              const currentMemberCode = rawMemberCode.replace(/['"\s]/g, '').toLowerCase();
+              
+              let storeNameJp = "";
+              if (restSheet && storeId) {
+                const restData = restSheet.getDataRange().getValues();
+                for (let k = 2; k < restData.length; k++) {
+                  if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
+                    storeNameJp = String(restData[k][2] || '').trim();
+                    break;
+                  }
+                }
+              }
+              const finalStoreNameJp = storeNameJp || currentRestaurantName;
+
+              const timeZone = Session.getScriptTimeZone();
+              const rawVisitDate = sheet.getRange(safeRow, 8).getValue();
+              const rawPeopleStr = String(sheet.getRange(safeRow, 9).getValue() || '1');
+              const pCount = rawPeopleStr.replace(/[^0-9]/g, '') || '1';
+              const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
+
+              if (currentMemberCode) {
+                const userSheet = ss.getSheetByName('User_DB');
+                const userData = userSheet.getDataRange().getValues();
+                let creatorEmail = "";
+                
+                for (let j = 1; j < userData.length; j++) {
+                  const dbMemberCode = String(userData[j][0] || '').trim().replace(/['"\s]/g, '').toLowerCase();
+                  if (dbMemberCode === currentMemberCode) {
+                    creatorEmail = String(userData[j][13] || '').trim();
+                    break;
+                  }
+                }
+
+                // ✉️ 크리에이터 확정 안내 메일
+                if (creatorEmail && creatorEmail.includes("@")) {
+                  const subject = "[BOOKMARK CREATORS] 방문 예약 확정 안내";
+                  const htmlBody = `
+                    <meta charset="UTF-8">
+                    <div style="max-width: 500px; margin: 0 auto; padding: 32px 20px; background: #ffffff; font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; border: 1px solid #eef0f2; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.02);">
+                      <div style="margin-bottom: 24px; text-align: left;">
+                        <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">NOTICE</span>
+                        <h2 style="font-size: 20px; font-weight: 800; color: #1A2B49; margin: 12px 0 0 0;">BOOKMARK CREATORS</h2>
+                      </div>
+                      <div style="border-top: 2px solid #1A2B49; padding-top: 24px; margin-bottom: 24px;">
+                        <p style="font-size: 14.5px; font-weight: 700; color: #2D6A4F; margin: 0 0 12px 0;">[예약 확정 안내]</p>
+                        <p style="font-size: 13.5px; line-height: 1.6; color: #495057; margin: 0;">
+                          매장에서 방문 예약이 확정되었습니다.<br>
+                          날짜와 시간을 다시 한번 확인 후 늦지 않게 방문해주세요! <br>
+                          <span style="font-weight: 700; color: #dc3545;">혹시라도 늦는다면 미리 말씀 부탁드립니다.</span>
+                        </p>
+                      </div>
+                      <div style="background: #f8f9fa; border-radius: 14px; padding: 18px; margin-bottom: 28px;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                          <tr>
+                            <td style="width: 85px; color: #8b95a1; font-weight: 700; padding: 6px 0;">방문 매장</td>
+                            <td style="color: #1A2B49; font-weight: 700; padding: 6px 0;">${currentRestaurantName}</td>
+                          </tr>
+                          <tr>
+                            <td style="color: #8b95a1; font-weight: 700; padding: 6px 0;">예약 일시</td>
+                            <td style="color: #1a73e8; font-weight: 700; padding: 6px 0;">${visitDateStr}</td>
+                          </tr>
+                          <tr>
+                            <td style="color: #8b95a1; font-weight: 700; padding: 6px 0;">방문 인원</td>
+                            <td style="color: #495057; font-weight: 700; padding: 6px 0;">${pCount}명</td>
+                          </tr>
+                        </table>
+                      </div>
+                      <div style="text-align: center;">
+                        <a href="http://pf.kakao.com/_vFSxfX/chat" target="_blank" style="display: block; background: #1A2B49; color: #ffffff; font-size: 14px; font-weight: 700; text-decoration: none; padding: 14px; border-radius: 12px; box-shadow: 0 4px 12px rgba(26,43,73,0.15);">카카오톡 채팅하기</a>
+                      </div>
+                    </div>`;
+
+                  GmailApp.sendEmail(creatorEmail, subject, "", { htmlBody: htmlBody, name: "BOOKMARK CREATORS" });
+                }
+
+                // ✉️ 관리자 알림 발송
+                try {
+                  const adminAlertEmails = getAdminAlertEmails();
+                  if (adminAlertEmails) {
+                    const adminSubject = `【予約確定】店舗が予約を確定しました - #${orderNo}`;
+                    const adminHtml = `
+                      <meta charset="UTF-8">
+                      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 16px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
+                        <div style="margin-bottom: 18px;">
+                          <span style="background: #2D6A4F; color: #fff; font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px;">CONFIRMATION NOTICE</span>
+                          <h3 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 18px; font-weight: 800;">店舗による予約確定完了</h3>
+                        </div>
+                        <p style="font-size: 13.5px; color: #495057; margin: 0 0 16px 0;">
+                          店舗管理者がメールリンクより来店予約を【確定】しました。<br>
+                          クリエイターへ予約確定の案内メールが送信されました。
+                        </p>
+                        <div style="background: #ffffff; border-radius: 12px; padding: 18px; margin: 16px 0; border: 1px solid #eef0f2; font-size: 13.5px;">
+                          <p style="margin: 6px 0;"><b>・注文番号:</b> #${orderNo}</p>
+                          <p style="margin: 6px 0;"><b>・店舗名:</b> ${finalStoreNameJp}</p>
+                          <p style="margin: 6px 0;"><b>・クリエイター:</b> ${currentMemberCode}</p>
+                          <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #2D6A4F; font-weight: bold;">${visitDateStr} (${pCount}名)</span></p>
+                        </div>
+                      </div>
+                    `;
+                    GmailApp.sendEmail(adminAlertEmails, adminSubject, "", { htmlBody: adminHtml, name: "BOOKMARK NOTI" });
+                  }
+                } catch(e) {}
+              }
+            } catch (mailErr) {
+              console.error("❌ doGet 메일 엔진 연산 실패: " + mailErr.toString());
+            }
+          }
+        }
+      }
+    } catch(err) {
+      console.error("❌ store_confirm 코어 에러: " + err.toString());
+    }
+
+  return { isExpired: isExpired, isAlreadyRequested: isAlreadyRequested };
+}
+
+/** 🔒 일정변경 요청 화면 진입 가능 여부 (24시간 만료 및 취소/노쇼/조율 중 건 차단) → true면 차단 */
+function isFeedbackBlocked(params) {
+  const safeRow = parseInt(params?.row, 10);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
+
+  if (safeRow && sheet) {
+    const currentStatus = String(sheet.getRange(safeRow, 12).getValue() || '').trim();
+    const sysLog = String(sheet.getRange(safeRow, 25).getValue() || '');
+    const logMatch = sysLog.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
+
+    let isExpired = false;
+    if (logMatch) {
+      const sentTime = new Date(logMatch[1].replace(/-/g, '/'));
+      const now = new Date();
+      const diffHours = (now.getTime() - sentTime.getTime()) / (1000 * 60 * 60);
+      if (diffHours >= 24) isExpired = true;
+    }
+
+    return isExpired || currentStatus.includes('취소') || currentStatus.includes('노쇼') || currentStatus === '일정조율필요';
+  }
+  return false;
+}
+
+/*****************************************************************************************
  * ⚡ [엔진 완전 통합] 점주 일정 변경 리퀘스트 처리 및 크리에이터+운영진 동시 노티 엔진
  ****************************************************************************************/
 function submitStoreFeedback(row, orderNo, msg) {
@@ -563,176 +775,5 @@ function saveStoreEmailAndSendTest(storeId, email) {
     return { success: true };
   } catch (err) {
     return { success: false, error: err.toString() };
-  }
-}
-
-/** [9] 📱 [모바일 어드민 겸용] 점주 취소 알림 메일 발송 및 마스터로그 슬롯 반환 엔진 */
-function adminCancelAndNotifyStore(row) {
-  try {
-    const safeRow = parseInt(row, 10);
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const logSheet = ss.getSheetByName('Master_Log');
-    const restSheet = ss.getSheetByName('Restaurant_List');
-
-    if (!logSheet || !restSheet) return { success: false, error: "필수 시트 누락" };
-
-    const rowData = logSheet.getRange(safeRow, 1, 1, 25).getValues()[0];
-    const orderNo = String(rowData[0] || '').replace(/'/g, '').trim();
-    const creatorName = String(rowData[2] || '').trim();
-    const storeId = String(rowData[4] || '').trim().toUpperCase();
-    const storeNameKo = String(rowData[5] || '').trim();
-    const rawVisitDate = rowData[7];
-    const peopleStr = String(rowData[8] || '1명').replace(/[^0-9]/g, '') || '1';
-
-    if (!orderNo) return { success: false, error: "주문번호가 없습니다." };
-
-    const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
-    const dateStr = (rawVisitDate instanceof Date) 
-      ? Utilities.formatDate(rawVisitDate, timeZone, "yyyy-MM-dd") 
-      : String(rawVisitDate || '').substring(0, 10);
-    const timeStr = (rawVisitDate instanceof Date) 
-      ? Utilities.formatDate(rawVisitDate, timeZone, "HH:mm") 
-      : String(rawVisitDate || '').substring(11, 16);
-    const visitDisplay = (dateStr && timeStr) ? `${dateStr} ${timeStr}` : (dateStr || "未定 (미정)");
-
-    let storeEmail = "", storeNameJp = "";
-    const restData = restSheet.getDataRange().getValues();
-    
-    // 3행부터 순회 (k=2)
-    for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
-      if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
-        storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
-        storeEmail = String(restData[k][10] || '').trim();
-        break;
-      }
-    }
-    const finalStoreName = storeNameJp || storeNameKo || storeId;
-
-    if (!storeEmail || !storeEmail.includes("@")) {
-      return { success: false, error: `매장 이메일이 등록되어 있지 않습니다. (${storeId})` };
-    }
-
-    const todayStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
-    const subject = `【予約キャンセル】 ご来店予約キャンセルのご案内 (${finalStoreName})`;
-    
-    const htmlBody = `
-      <meta charset="UTF-8">
-      <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 20px; background-color: #f4f5f7;">
-        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 14px; padding: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #edf0f2;">
-          
-          <div style="text-align: center; margin-bottom: 22px;">
-            <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background: #dc3545; padding: 4px 10px; border-radius: 6px; display: inline-block;">CANCELLATION</span>
-            <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
-            <div style="width: 36px; height: 3px; background: #dc3545; margin: 10px auto;"></div>
-          </div>
-
-          <h2 style="color: #dc3545; margin-top: 0; font-size: 17px; border-bottom: 2px solid #f1f3f5; padding-bottom: 15px; text-align: center; font-weight: 800;">&#10060; ご来店予約キャンセルのご連絡</h2>
-
-          <div style="margin-top: 20px;">
-            <p style="color: #1A2B49; font-size: 15.5px; font-weight: bold; margin-bottom: 4px;">${finalStoreName}</p>
-            <p style="color: #6c757d; font-size: 13px; margin-top: 0;">店舗管理者様</p>
-          </div>
-
-          <p style="color: #495057; font-size: 13.5px; line-height: 1.65; margin: 16px 0;">
-            いつもお世話になっております。BOOKMARK CREATORS運営事務局です。<br><br>
-            予定されておりました下記の来店予約につきまして、<b>クリエイター側の都合によりキャンセルとなりました</b>のでご案内申し上げます。<br>
-            お席の確保やご準備は不要となります。
-          </p>
-
-          <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-left: 4px solid #dc3545; padding: 16px; border-radius: 8px; margin: 20px 0; font-size: 13.5px;">
-            <p style="margin: 5px 0;"><strong>■ 注文番号:</strong> #${orderNo}</p>
-            <p style="margin: 5px 0;"><strong>■ クリエ이터名:</strong> ${creatorName}</p>
-            <p style="margin: 5px 0;"><strong>■ 予約日時:</strong> <span style="color: #dc3545; font-weight: 800;">${visitDisplay}</span></p>
-            <p style="margin: 5px 0;"><strong>■ 予約人数:</strong> ${peopleStr}名</p>
-          </div>
-
-          <p style="color: #8b95a1; font-size: 12px; line-height: 1.6; margin: 18px 0 0 0;">
-            ※ 本件に関する店舗様側のご対応（確認ボタンの押下等）は不要です。<br>
-            ※ 新たな日程で再予約が入りましたら、改めてご案内いたします。
-          </p>
-
-          <div style="text-align: center; margin-top: 26px; padding: 12px; background-color: #f1f3f5; border-radius: 8px; font-size: 12px; color: #6c757d; font-weight: 600;">
-            BOOKMARK CREATORS 運営事務局 (<a href="mailto:info@bookmarkfukuoka.jp" style="color: #1a73e8; text-decoration: none;">info@bookmarkfukuoka.jp</a>)
-          </div>
-
-        </div>
-      </div>
-    `;
-
-    const adminAlertEmails = (typeof getAdminAlertEmails === 'function') ? getAdminAlertEmails() : "bookmarkjapan.info@gmail.com";
-
-    GmailApp.sendEmail(storeEmail, subject, "", {
-      htmlBody: htmlBody,
-      name: "BOOKMARK CREATORS",
-      from: "info@bookmarkfukuoka.jp",
-      bcc: adminAlertEmails
-    });
-
-    // 🎯 [정합성 보정] L열: 취소(운영자), H~J열 슬롯 비움, U열(21번째): 취소환불
-    logSheet.getRange(safeRow, 12).setValue("취소(운영자)");
-    logSheet.getRange(safeRow, 8, 1, 3).clearContent();
-    logSheet.getRange(safeRow, 21).setValue("취소환불");
-
-    const currentLog = String(logSheet.getRange(safeRow, 25).getValue() || '').trim();
-    const newLog = `[${todayStr}] 점주 취소메일 발송완료(어드민)`;
-    logSheet.getRange(safeRow, 25).setValue(currentLog ? `${currentLog} | ${newLog}` : newLog);
-
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.toString() };
-  }
-}
-
-/**
- * ❌ [시트 메뉴용] 마우스로 선택한 행 자동 감지 + 취소 통지 메일 발송
- */
-function sendStoreCancellationEmail() {
-  const ui = SpreadsheetApp.getUi();
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const activeSheet = ss.getActiveSheet();
-
-  // 1. 현재 시트가 Master_Log인지 확인
-  if (activeSheet.getName() !== "Master_Log") {
-    return ui.alert("⚠️ 'Master_Log' 시트로 이동한 후 취소할 행을 클릭하고 실행해주세요.");
-  }
-
-  // 2. 현재 마우스 커서가 올라가 있는 행 번호 취득
-  const targetRow = activeSheet.getActiveRange().getRow();
-
-  // 3. 헤더 행(1, 2행) 클릭 방어
-  if (targetRow < 3) {
-    return ui.alert("⚠️ 취소하려는 예약 데이터 행(3행 이후)을 마우스로 클릭한 뒤 실행해주세요.");
-  }
-
-  const orderNo = String(activeSheet.getRange(targetRow, 1).getValue() || '').replace(/'/g, '').trim();
-  const creatorName = String(activeSheet.getRange(targetRow, 3).getValue() || '').trim();
-  const storeName = String(activeSheet.getRange(targetRow, 6).getValue() || '').trim();
-  const currentStatus = String(activeSheet.getRange(targetRow, 12).getValue() || '').trim();
-
-  if (!orderNo) {
-    return ui.alert(`⚠️ 선택하신 ${targetRow}행에는 주문 데이터가 없습니다.`);
-  }
-
-  // 4. 클릭한 대상 정보 확인창 띄우기 (실수 방지)
-  const confirm = ui.alert(
-    "⚠️ 점주 취소 통지 확인",
-    `[선택된 예약 정보]\n` +
-    `• 행 번호: ${targetRow}행\n` +
-    `• 주문번호: #${orderNo}\n` +
-    `• 크리에이터: ${creatorName}\n` +
-    `• 매장명: ${storeName}\n` +
-    `• 현재상태: ${currentStatus}\n\n` +
-    `점주에게 예약 취소 안내 메일을 발송하고 상태를 '취소(운영자)'로 변경하시겠습니까?`,
-    ui.ButtonSet.YES_NO
-  );
-
-  if (confirm !== ui.Button.YES) return;
-
-  const result = adminCancelAndNotifyStore(targetRow);
-
-  if (result.success) {
-    ui.alert(`✅ [취소 완료]\n\n#${orderNo} (${storeName}) 예약 취소 메일이 점주에게 발송되었습니다.`);
-  } else {
-    ui.alert(`❌ [처리 실패]\n\n사유: ${result.error}`);
   }
 }

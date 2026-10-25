@@ -78,6 +78,15 @@ for (const m of read('Triggers.js').matchAll(/\.addItem\(\s*'[^']*'\s*,\s*'(\w+)
   if (!serverFns.has(m[1])) fail(`[menu] onOpen 메뉴 핸들러 없음: ${m[1]}`);
 }
 
+
+// 6. 시트 열/이름 하드코딩 금지 (Config.js 의 COL_* / SHEET 상수 사용)
+jsFiles.filter(f => f !== 'Config.js').forEach(f => {
+  read(f).split('\n').forEach((line, i) => {
+    if (/\.getRange\(\s*[^,()]+,\s*\d+\s*[,)]/.test(line)) fail(`[column] ${f}:${i + 1} getRange 열 번호 리터럴 → COL_* 사용`);
+    if (/getSheetByName\(\s*['"]/.test(line)) fail(`[sheet] ${f}:${i + 1} 시트 이름 리터럴 → SHEET.* 사용`);
+  });
+});
+
 if (errors.length) {
   console.error(errors.join('\n'));
   console.error(`\nFAILED: ${errors.length} issue(s)`);

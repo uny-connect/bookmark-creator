@@ -10,12 +10,12 @@ function confirmBookingByLink(params) {
       const safeRow = parseInt(params.row, 10);
       const orderNo = params.o;
       const ss = SpreadsheetApp.getActiveSpreadsheet();
-      const sheet = ss.getSheetByName('Master_Log');
-      const restSheet = ss.getSheetByName('Restaurant_List');
+      const sheet = ss.getSheetByName(SHEET.MASTER);
+      const restSheet = ss.getSheetByName(SHEET.REST);
       
-      const sheetOrderNo = String(sheet.getRange(safeRow, 1).getValue()).trim().replace(/'/g, '');
-      const currentStatus = String(sheet.getRange(safeRow, 12).getValue()).trim();
-      const storeId = String(sheet.getRange(safeRow, 5).getValue() || '').trim().toUpperCase();
+      const sheetOrderNo = String(sheet.getRange(safeRow, COL_MASTER.ORDER).getValue()).trim().replace(/'/g, '');
+      const currentStatus = String(sheet.getRange(safeRow, COL_MASTER.STATUS).getValue()).trim();
+      const storeId = String(sheet.getRange(safeRow, COL_MASTER.STORE_ID).getValue() || '').trim().toUpperCase();
 
       // 🚨 1. 이미 다른 상태로 처리된 건인지 검사
       if (currentStatus === '일정조율필요' || currentStatus.includes('취소') || currentStatus.includes('노쇼')) {
@@ -24,7 +24,7 @@ function confirmBookingByLink(params) {
       else if (safeRow && sheetOrderNo === String(orderNo).trim().replace(/'/g, '')) {
         
         // 🚨 2. Y열 시스템 로그의 타임스탬프 검사 ([YYYY-MM-DD HH:mm] 형태 추출)
-        const sysLog = String(sheet.getRange(safeRow, 25).getValue() || '');
+        const sysLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
         const logMatch = sysLog.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
         
         if (logMatch) {
@@ -37,17 +37,17 @@ function confirmBookingByLink(params) {
             isExpired = true;
             
             // ① Master_Log 슬롯 회수 및 상태 취소 변경
-            sheet.getRange(safeRow, 12).setValue('취소(기한만료)');
-            sheet.getRange(safeRow, 8, 1, 3).clearContent(); // H~J열 슬롯 반환
-            sheet.getRange(safeRow, 25).setValue(sysLog + " | [시스템] 점주 24시간 미답변 만료");
+            sheet.getRange(safeRow, COL_MASTER.STATUS).setValue('취소(기한만료)');
+            sheet.getRange(safeRow, COL_MASTER.VISIT, 1, MASTER_SLOT_COLS).clearContent(); // H~J열 슬롯 반환
+            sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(sysLog + " | [시스템] 점주 24시간 미답변 만료");
 
             // ② 🎯 Restaurant_List Z열(26번째 열) 무응답 카운트 +1 누적
             if (restSheet && storeId) {
               const restData = restSheet.getDataRange().getValues();
               for (let k = 2; k < restData.length; k++) {
-                if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
-                  const currentCount = parseInt(restData[k][25], 10) || 0; // Z열(index 25)
-                  restSheet.getRange(k + 1, 26).setValue(currentCount + 1);
+                if (String(restData[k][IDX_REST.ID] || '').trim().toUpperCase() === storeId) {
+                  const currentCount = parseInt(restData[k][IDX_REST.NORESPONSE_COUNT], 10) || 0; // Z열(index 25)
+                  restSheet.getRange(k + 1, COL_REST.NORESPONSE_COUNT).setValue(currentCount + 1);
                   break;
                 }
               }
@@ -59,26 +59,26 @@ function confirmBookingByLink(params) {
         const isFirstConfirm = (currentStatus !== '방문전');
 
         if (!isExpired) {
-          sheet.getRange(safeRow, 12).setValue('방문전'); 
+          sheet.getRange(safeRow, COL_MASTER.STATUS).setValue('방문전'); 
           
           // 🎯 [G열 비우기] Y열(25열)에 기존 로그 보존하며 누적 기록
-          const prevLogY = String(sheet.getRange(safeRow, 25).getValue() || '').trim();
+          const prevLogY = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '').trim();
           const confirmTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
           const appendLog = `[${confirmTime}] 점주_직접_링크확정`;
-          sheet.getRange(safeRow, 25).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
+          sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
 
           if (isFirstConfirm) {
             try {
-              const currentRestaurantName = String(sheet.getRange(safeRow, 6).getValue() || '').trim(); 
-              const rawMemberCode = String(sheet.getRange(safeRow, 2).getValue() || '').trim();
+              const currentRestaurantName = String(sheet.getRange(safeRow, COL_MASTER.STORE_NAME).getValue() || '').trim(); 
+              const rawMemberCode = String(sheet.getRange(safeRow, COL_MASTER.MEMBER).getValue() || '').trim();
               const currentMemberCode = rawMemberCode.replace(/['"\s]/g, '').toLowerCase();
               
               let storeNameJp = "";
               if (restSheet && storeId) {
                 const restData = restSheet.getDataRange().getValues();
                 for (let k = 2; k < restData.length; k++) {
-                  if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
-                    storeNameJp = String(restData[k][2] || '').trim();
+                  if (String(restData[k][IDX_REST.ID] || '').trim().toUpperCase() === storeId) {
+                    storeNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim();
                     break;
                   }
                 }
@@ -86,20 +86,20 @@ function confirmBookingByLink(params) {
               const finalStoreNameJp = storeNameJp || currentRestaurantName;
 
               const timeZone = Session.getScriptTimeZone();
-              const rawVisitDate = sheet.getRange(safeRow, 8).getValue();
-              const rawPeopleStr = String(sheet.getRange(safeRow, 9).getValue() || '1');
+              const rawVisitDate = sheet.getRange(safeRow, COL_MASTER.VISIT).getValue();
+              const rawPeopleStr = String(sheet.getRange(safeRow, COL_MASTER.PEOPLE).getValue() || '1');
               const pCount = rawPeopleStr.replace(/[^0-9]/g, '') || '1';
               const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
               if (currentMemberCode) {
-                const userSheet = ss.getSheetByName('User_DB');
+                const userSheet = ss.getSheetByName(SHEET.USER);
                 const userData = userSheet.getDataRange().getValues();
                 let creatorEmail = "";
                 
                 for (let j = 1; j < userData.length; j++) {
-                  const dbMemberCode = String(userData[j][0] || '').trim().replace(/['"\s]/g, '').toLowerCase();
+                  const dbMemberCode = String(userData[j][IDX_USER.KEY] || '').trim().replace(/['"\s]/g, '').toLowerCase();
                   if (dbMemberCode === currentMemberCode) {
-                    creatorEmail = String(userData[j][13] || '').trim();
+                    creatorEmail = String(userData[j][IDX_USER.EMAIL] || '').trim();
                     break;
                   }
                 }
@@ -190,11 +190,11 @@ function confirmBookingByLink(params) {
 /** 🔒 일정변경 요청 화면 진입 가능 여부 (24시간 만료 및 취소/노쇼/조율 중 건 차단) → true면 차단 */
 function isFeedbackBlocked(params) {
   const safeRow = parseInt(params?.row, 10);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);
 
   if (safeRow && sheet) {
-    const currentStatus = String(sheet.getRange(safeRow, 12).getValue() || '').trim();
-    const sysLog = String(sheet.getRange(safeRow, 25).getValue() || '');
+    const currentStatus = String(sheet.getRange(safeRow, COL_MASTER.STATUS).getValue() || '').trim();
+    const sysLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
     const logMatch = sysLog.match(/(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})/);
 
     let isExpired = false;
@@ -217,12 +217,12 @@ function submitStoreFeedback(row, orderNo, msg) {
   try {
     const safeRow = parseInt(row, 10);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('Master_Log');
+    const sheet = ss.getSheetByName(SHEET.MASTER);
     
     // 데이터(A~N열까지 총 14칸) 캐싱
-    const rowData = sheet.getRange(safeRow, 1, 1, 14).getValues()[0];
+    const rowData = sheet.getRange(safeRow, COL_MASTER.ORDER, 1, COL_MASTER.VISITED).getValues()[0];
     
-    const sheetOrderNo = String(rowData[0]).trim().replace(/'/g, '');
+    const sheetOrderNo = String(rowData[IDX_MASTER.ORDER]).trim().replace(/'/g, '');
     const cleanOrderNo = String(orderNo).trim().replace(/'/g, '');
     
     if (!safeRow || sheetOrderNo !== cleanOrderNo) {
@@ -230,32 +230,32 @@ function submitStoreFeedback(row, orderNo, msg) {
     }
     
     // 1️⃣ L열(12번째): 진행 상태를 '일정조율필요'로 변경
-    sheet.getRange(safeRow, 12).setValue('일정조율필요');
+    sheet.getRange(safeRow, COL_MASTER.STATUS).setValue('일정조율필요');
     
     // 2️⃣ H열~J열 슬롯 영역 자동 리셋 처리
-    sheet.getRange(safeRow, 8, 1, 3).clearContent();
+    sheet.getRange(safeRow, COL_MASTER.VISIT, 1, MASTER_SLOT_COLS).clearContent();
     
     // 3️⃣ M열(13번째): 피드백 기록
     const timestamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "MM/dd HH:mm");
-    const currentNote = String(rowData[12] || '').trim();
+    const currentNote = String(rowData[IDX_MASTER.FEEDBACK] || '').trim();
     const newNote = (currentNote ? currentNote + "\n" : "") + `[점주요청 ${timestamp}] ${msg}`;
-    sheet.getRange(safeRow, 13).setValue(newNote); 
+    sheet.getRange(safeRow, COL_MASTER.FEEDBACK).setValue(newNote); 
     
     // 4️⃣ 변수 바인딩
-    const storeNameKo = String(rowData[5]).trim();      // F열 기본 한국어 매장명
-    const creatorName = String(rowData[2]).trim();      // C열 크리에이터 성함
-    const currentMemberCode = String(rowData[1]).trim(); // B열 크리에이터 코드
+    const storeNameKo = String(rowData[IDX_MASTER.STORE_NAME]).trim();      // F열 기본 한국어 매장명
+    const creatorName = String(rowData[IDX_MASTER.NAME]).trim();      // C열 크리에이터 성함
+    const currentMemberCode = String(rowData[IDX_MASTER.MEMBER]).trim(); // B열 크리에이터 코드
 
     // Restaurant_List 시트 3행(k=REST_DATA_START_INDEX)부터 대조하여 일본어 매장명(storeNameJp) 파싱
     let storeNameJp = "";
-    const restSheet = ss.getSheetByName('Restaurant_List');
+    const restSheet = ss.getSheetByName(SHEET.REST);
     if (restSheet) {
       const restData = restSheet.getDataRange().getValues();
-      const storeId = String(rowData[4] || '').trim().toUpperCase(); // E열: 매장 ID
+      const storeId = String(rowData[IDX_MASTER.STORE_ID] || '').trim().toUpperCase(); // E열: 매장 ID
       
       for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
-        if (String(restData[k][0]).trim().toUpperCase() === storeId) {
-          storeNameJp = String(restData[k][2] || '').trim(); // C열: 일본어 매장명
+        if (String(restData[k][IDX_REST.ID]).trim().toUpperCase() === storeId) {
+          storeNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim(); // C열: 일본어 매장명
           break;
         }
       }
@@ -319,33 +319,33 @@ function submitStoreFeedback(row, orderNo, msg) {
           name: "BOOKMARK CREATORS",
           from: "info@bookmarkfukuoka.jp"
         });
-        sheet.getRange(safeRow, 25).setValue("운영진알림 발송완료"); 
+        sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue("운영진알림 발송완료"); 
       } catch (adminMailErr) {
         console.error("❌ 운영진 메일 알림 실패: " + adminMailErr.toString());
-        sheet.getRange(safeRow, 25).setValue("❌ 운영진알림 실패: " + adminMailErr.toString());
+        sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue("❌ 운영진알림 실패: " + adminMailErr.toString());
       }
     } else {
-      sheet.getRange(safeRow, 25).setValue("❌ 실패: 운영진 이메일 주소 포맷 오류");
+      sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue("❌ 실패: 운영진 이메일 주소 포맷 오류");
     }
 
     // ✉️ [2번 슈팅] 크리에이터향 알림 이메일 발송
     if (currentMemberCode) {
-      const userSheet = ss.getSheetByName('User_DB');
+      const userSheet = ss.getSheetByName(SHEET.USER);
       if (userSheet) {
         const userData = userSheet.getDataRange().getValues();
         let creatorEmail = "";
         
         for (let j = 1; j < userData.length; j++) {
-          if (String(userData[j][0]).trim() === currentMemberCode) {
-            creatorEmail = String(userData[j][13] || '').trim();
+          if (String(userData[j][IDX_USER.KEY]).trim() === currentMemberCode) {
+            creatorEmail = String(userData[j][IDX_USER.EMAIL] || '').trim();
             break;
           }
         }
 
         if (creatorEmail && creatorEmail.includes("@")) {
           const timeZone = Session.getScriptTimeZone();
-          const rawVisitDate = rowData[7]; 
-          const pCount = rowData[8] ? String(rowData[8]).replace(/[^0-9]/g, '') : '1'; 
+          const rawVisitDate = rowData[IDX_MASTER.VISIT]; 
+          const pCount = rowData[IDX_MASTER.PEOPLE] ? String(rowData[IDX_MASTER.PEOPLE]).replace(/[^0-9]/g, '') : '1'; 
           const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
           const creatorSubject = "[BOOKMARK CREATORS] 방문 일정 변경 조율 안내";
@@ -396,12 +396,12 @@ function submitStoreFeedback(row, orderNo, msg) {
               name: "BOOKMARK CREATORS",
               from: "info@bookmarkfukuoka.jp"
             });
-            const prevLog = String(sheet.getRange(safeRow, 25).getValue() || '');
-            sheet.getRange(safeRow, 25).setValue(prevLog.includes("완료") ? "조율 노티 전체메일 발송완료" : "크리에이터 노티 메일 발송완료");
+            const prevLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
+            sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLog.includes("완료") ? "조율 노티 전체메일 발송완료" : "크리에이터 노티 메일 발송완료");
           } catch (creatorMailErr) {
             console.error("❌ 크리에이터 변경 안내 메일 실패: " + creatorMailErr.toString());
-            const prevLog = String(sheet.getRange(safeRow, 25).getValue() || '');
-            sheet.getRange(safeRow, 25).setValue(prevLog + " | ❌ 크리에이터메일 실패: " + creatorMailErr.toString());
+            const prevLog = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '');
+            sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLog + " | ❌ 크리에이터메일 실패: " + creatorMailErr.toString());
           }
         }
       }
@@ -421,16 +421,16 @@ function loginStoreByPin(pin) {
     if (!pinClean) return { success: false, error: "コードを入力してください。" };
 
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const restSheet = ss.getSheetByName('Restaurant_List');
+    const restSheet = ss.getSheetByName(SHEET.REST);
     if (!restSheet) return { success: false, error: "시스템 오류: Restaurant_List 시트가 없습니다." };
 
     const restData = restSheet.getDataRange().getValues();
     
     // 3행부터 순회
     for (let i = REST_DATA_START_INDEX; i < restData.length; i++) {
-      const sheetPin = String(restData[i][8] || '').trim().toUpperCase();
+      const sheetPin = String(restData[i][IDX_REST.PIN] || '').trim().toUpperCase();
       if (sheetPin === pinClean) {
-        const storeId = String(restData[i][0]).trim(); 
+        const storeId = String(restData[i][IDX_REST.ID]).trim(); 
         return { success: true, storeId: storeId };
       }
     }
@@ -445,45 +445,45 @@ function loginStoreByPin(pin) {
 function getStoreData(storeId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const data = _getSheetsData(['Master_Log', 'Restaurant_List', 'User_DB']);
+    const data = _getSheetsData([SHEET.MASTER, SHEET.REST, SHEET.USER]);
     
     let storeName = storeId;
     let storeNameJp = "";
     
-    const restList = data.Restaurant_List;
+    const restList = data[SHEET.REST];
     // 3행부터 순회
     for (let k = REST_DATA_START_INDEX; k < restList.length; k++) {
-      if (String(restList[k][0]).trim().toUpperCase() === String(storeId).toUpperCase()) {
-        storeName = String(restList[k][1] || '').trim(); 
-        storeNameJp = String(restList[k][2] || '').trim(); 
+      if (String(restList[k][IDX_REST.ID]).trim().toUpperCase() === String(storeId).toUpperCase()) {
+        storeName = String(restList[k][IDX_REST.NAME_KO] || '').trim(); 
+        storeNameJp = String(restList[k][IDX_REST.NAME_JP] || '').trim(); 
         break;
       }
     }
     const finalStoreName = storeNameJp ? storeNameJp : storeName;
 
     const userTierMap = {};
-    const userDB = data.User_DB;
+    const userDB = data[SHEET.USER];
     for (let u = 1; u < userDB.length; u++) {
-      if (userDB[u][0]) {
+      if (userDB[u][IDX_USER.KEY]) {
         let emoji = '🟡';
-        try { emoji = parseTierEmoji(userDB[u][9]); } catch(ex) {}
-        userTierMap[String(userDB[u][0]).trim()] = emoji;
+        try { emoji = parseTierEmoji(userDB[u][IDX_USER.GROUP]); } catch(ex) {}
+        userTierMap[String(userDB[u][IDX_USER.KEY]).trim()] = emoji;
       }
     }
 
     let stats = { total: 0, pending: 0, verified: 0, submitted: 0 };
     let storeMissions = [];
     const timeZone = Session.getScriptTimeZone();
-    const masterLog = data.Master_Log;
+    const masterLog = data[SHEET.MASTER];
 
     const webAppUrl = getActiveWebAppUrl();
 
     for (let i = masterLog.length - 1; i >= 2; i--) {
       const mRow = masterLog[i];
-      const mStoreId = String(mRow[4] || '').trim().toUpperCase(); 
-      const status = String(mRow[11] || '').trim(); 
+      const mStoreId = String(mRow[IDX_MASTER.STORE_ID] || '').trim().toUpperCase(); 
+      const status = String(mRow[IDX_MASTER.STATUS] || '').trim(); 
 
-      if (!mRow[0] || status.includes('취소') || mStoreId !== String(storeId).toUpperCase()) continue;
+      if (!mRow[IDX_MASTER.ORDER] || status.includes('취소') || mStoreId !== String(storeId).toUpperCase()) continue;
 
       stats.total++;
       if (status === '방문전' || status === '예약확인중' || status === '일정조율필요' || status === '예약대기') stats.pending++;
@@ -491,22 +491,22 @@ function getStoreData(storeId) {
       else if (status === '제출완료') stats.submitted++;
 
       const formatDate = (val, format) => (val instanceof Date) ? Utilities.formatDate(val, timeZone, format) : String(val || '-');
-      const memberCode = String(mRow[1]).trim();
-      const orderNoRaw = String(mRow[0]).replace(/'/g, ''); 
+      const memberCode = String(mRow[IDX_MASTER.MEMBER]).trim();
+      const orderNoRaw = String(mRow[IDX_MASTER.ORDER]).replace(/'/g, ''); 
 
       storeMissions.push({
         row: i + 1,
         orderNo: orderNoRaw,
         memberCode: memberCode,
-        member: String(mRow[2] || '').trim(), 
+        member: String(mRow[IDX_MASTER.NAME] || '').trim(), 
         tierEmoji: userTierMap[memberCode] || '🟡',
-        visitDate: formatDate(mRow[7], 'yyyy-MM-dd HH:mm'), 
-        peopleCount: mRow[8] ? String(mRow[8]).replace(/[^0-9]/g, '') : '1', 
+        visitDate: formatDate(mRow[IDX_MASTER.VISIT], 'yyyy-MM-dd HH:mm'), 
+        peopleCount: mRow[IDX_MASTER.PEOPLE] ? String(mRow[IDX_MASTER.PEOPLE]).replace(/[^0-9]/g, '') : '1', 
         status: status,
-        submitDate: formatDate(mRow[15], 'yyyy-MM-dd'), 
-        reviewUrl: String(mRow[16] || ''), 
-        googleMapUrl: String(mRow[17] || ''), 
-        shortReview: String(mRow[19] || mRow[18] || '')
+        submitDate: formatDate(mRow[IDX_MASTER.SUBMIT_DATE], 'yyyy-MM-dd'), 
+        reviewUrl: String(mRow[IDX_MASTER.REVIEW_URL] || ''), 
+        googleMapUrl: String(mRow[IDX_MASTER.GOOGLE_URL] || ''), 
+        shortReview: String(mRow[IDX_MASTER.SHORT_REVIEW_JP] || mRow[IDX_MASTER.SHORT_REVIEW] || '')
       });
     }
 
@@ -525,24 +525,24 @@ function getStoreData(storeId) {
 function getStoreConfig(storeId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('Restaurant_List');
+    const sheet = ss.getSheetByName(SHEET.REST);
     const data = sheet.getDataRange().getValues();
 
     // 3행부터 순회
     for (let i = REST_DATA_START_INDEX; i < data.length; i++) {
-      if (String(data[i][0]).trim().toUpperCase() === String(storeId).toUpperCase()) {
+      if (String(data[i][IDX_REST.ID]).trim().toUpperCase() === String(storeId).toUpperCase()) {
         return {
           success: true,
           row: i + 1,
-          storeId: String(data[i][0]).trim(),
-          email: String(data[i][10] || '').trim(),      
-          storeType: String(data[i][7] || '').trim(),   
-          maxPerSlot: data[i][11] ? parseInt(data[i][11], 10) : 1, 
-          dailyCap: data[i][12] ? parseInt(data[i][12], 10) : 999,  
-          blackouts: String(data[i][13] || '').trim(),   
-          bizHours: String(data[i][14] || '').trim(),    
-          intervalMin: data[i][15] ? String(data[i][15]).trim() : "30", 
-          blockedTimes: String(data[i][16] || '').trim() 
+          storeId: String(data[i][IDX_REST.ID]).trim(),
+          email: String(data[i][IDX_REST.EMAIL] || '').trim(),      
+          storeType: String(data[i][IDX_REST.STORE_TYPE] || '').trim(),   
+          maxPerSlot: data[i][IDX_REST.MAX_PER_SLOT] ? parseInt(data[i][IDX_REST.MAX_PER_SLOT], 10) : 1, 
+          dailyCap: data[i][IDX_REST.DAILY_CAP] ? parseInt(data[i][IDX_REST.DAILY_CAP], 10) : 999,  
+          blackouts: String(data[i][IDX_REST.BLACKOUTS] || '').trim(),   
+          bizHours: String(data[i][IDX_REST.BIZ_HOURS] || '').trim(),    
+          intervalMin: data[i][IDX_REST.INTERVAL_MIN] ? String(data[i][IDX_REST.INTERVAL_MIN]).trim() : "30", 
+          blockedTimes: String(data[i][IDX_REST.BLOCKED_TIMES] || '').trim() 
         };
       }
     }
@@ -556,16 +556,16 @@ function getStoreConfig(storeId) {
 function updateStoreConfig(row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes) {
   try {
     const safeRow = parseInt(row, 10);
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Restaurant_List');
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.REST);
     
-    sheet.getRange(safeRow, 11).setValue(email);          
-    sheet.getRange(safeRow, 8).setValue(storeType);        
-    sheet.getRange(safeRow, 12).setValue(parseInt(maxPerSlot, 10) || 1);  
-    sheet.getRange(safeRow, 13).setValue(parseInt(dailyCap, 10) || 999);   
-    sheet.getRange(safeRow, 14).setValue(blackouts);     
-    sheet.getRange(safeRow, 15).setValue(bizHours);      
-    sheet.getRange(safeRow, 16).setValue(parseInt(intervalMin, 10) || 30); 
-    sheet.getRange(safeRow, 17).setValue(blockedTimes);  
+    sheet.getRange(safeRow, COL_REST.EMAIL).setValue(email);          
+    sheet.getRange(safeRow, COL_REST.STORE_TYPE).setValue(storeType);        
+    sheet.getRange(safeRow, COL_REST.MAX_PER_SLOT).setValue(parseInt(maxPerSlot, 10) || 1);  
+    sheet.getRange(safeRow, COL_REST.DAILY_CAP).setValue(parseInt(dailyCap, 10) || 999);   
+    sheet.getRange(safeRow, COL_REST.BLACKOUTS).setValue(blackouts);     
+    sheet.getRange(safeRow, COL_REST.BIZ_HOURS).setValue(bizHours);      
+    sheet.getRange(safeRow, COL_REST.INTERVAL_MIN).setValue(parseInt(intervalMin, 10) || 30); 
+    sheet.getRange(safeRow, COL_REST.BLOCKED_TIMES).setValue(blockedTimes);  
 
     return { success: true };
   } catch (e) {
@@ -577,40 +577,40 @@ function updateStoreConfig(row, email, storeType, maxPerSlot, dailyCap, blackout
 function storeDirectConfirm(row, orderNo) {
   try {
     const safeRow = parseInt(row, 10);
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
-    const sheetOrderNo = String(sheet.getRange(safeRow, 1).getValue()).trim().replace(/'/g, '');
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);
+    const sheetOrderNo = String(sheet.getRange(safeRow, COL_MASTER.ORDER).getValue()).trim().replace(/'/g, '');
     
     if (sheetOrderNo !== String(orderNo).trim().replace(/'/g, '')) {
       return { success: false, error: "주문번호가 일치하지 않습니다." };
     }
     
-    sheet.getRange(safeRow, 12).setValue('방문전');
+    sheet.getRange(safeRow, COL_MASTER.STATUS).setValue('방문전');
     
     // 🎯 [G열 비우기] Y열(25열)에 기존 로그 보존하며 누적 기록
-    const prevLogY = String(sheet.getRange(safeRow, 25).getValue() || '').trim();
+    const prevLogY = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '').trim();
     const directTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
     const appendLog = `[${directTime}] 점주_대시보드_직접확정`;
-    sheet.getRange(safeRow, 25).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
+    sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
 
     try {
-      const currentRestaurantName = String(sheet.getRange(safeRow, 6).getValue() || '').trim(); 
-      const rawMemberCode = String(sheet.getRange(safeRow, 2).getValue() || '').trim();
+      const currentRestaurantName = String(sheet.getRange(safeRow, COL_MASTER.STORE_NAME).getValue() || '').trim(); 
+      const rawMemberCode = String(sheet.getRange(safeRow, COL_MASTER.MEMBER).getValue() || '').trim();
       const currentMemberCode = rawMemberCode.replace(/['"\s]/g, '').toLowerCase();
       
       const timeZone = Session.getScriptTimeZone();
-      const rawVisitDate = sheet.getRange(safeRow, 8).getValue();
-      const pCount = sheet.getRange(safeRow, 9).getValue() ? String(sheet.getRange(safeRow, 9).getValue()).replace(/[^0-9]/g, '') : '1'; 
+      const rawVisitDate = sheet.getRange(safeRow, COL_MASTER.VISIT).getValue();
+      const pCount = sheet.getRange(safeRow, COL_MASTER.PEOPLE).getValue() ? String(sheet.getRange(safeRow, COL_MASTER.PEOPLE).getValue()).replace(/[^0-9]/g, '') : '1'; 
       const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
 
       if (currentMemberCode) {
-        const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('User_DB');
+        const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.USER);
         const userData = userSheet.getDataRange().getValues();
         let creatorEmail = "";
         
         for (let j = 1; j < userData.length; j++) {
-          const dbMemberCode = String(userData[j][0] || '').trim().replace(/['"\s]/g, '').toLowerCase();
+          const dbMemberCode = String(userData[j][IDX_USER.KEY] || '').trim().replace(/['"\s]/g, '').toLowerCase();
           if (dbMemberCode === currentMemberCode) {
-            creatorEmail = String(userData[j][13] || '').trim();
+            creatorEmail = String(userData[j][IDX_USER.EMAIL] || '').trim();
             break;
           }
         }
@@ -659,10 +659,10 @@ function storeDirectConfirm(row, orderNo) {
               name: "BOOKMARK CREATORS",
               from: "info@bookmarkfukuoka.jp"
             });
-            sheet.getRange(safeRow, 25).setValue("크리에이터확정메일 발송완료"); 
+            sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue("크리에이터확정메일 발송완료"); 
           } catch (directMailErr) {
             console.error("❌ 점주 직접 확정 메일 발송 실패: " + directMailErr.toString());
-            sheet.getRange(safeRow, 25).setValue("❌ 크리에이터확정메일 실패: " + directMailErr.toString());
+            sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue("❌ 크리에이터확정메일 실패: " + directMailErr.toString());
           }
         }
       }
@@ -680,7 +680,7 @@ function storeDirectFeedback(row, orderNo, msg) {
 function findStoreSimple(storeId) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const restSheet = ss.getSheetByName('Restaurant_List');
+    const restSheet = ss.getSheetByName(SHEET.REST);
     if (!restSheet) return { success: false, error: "Restaurant_List 시트를 찾을 수 없습니다." };
 
     const data = restSheet.getDataRange().getValues();
@@ -688,14 +688,14 @@ function findStoreSimple(storeId) {
 
     // 3행부터 순회
     for (let i = REST_DATA_START_INDEX; i < data.length; i++) {
-      if (String(data[i][0]).trim().toUpperCase() === cleanId) {
+      if (String(data[i][IDX_REST.ID]).trim().toUpperCase() === cleanId) {
         return {
           success: true,
           data: {
             storeId: cleanId,
-            nameKo: String(data[i][1] || '').trim(),
-            nameJp: String(data[i][2] || '').trim(),
-            email: String(data[i][10] || '').trim()
+            nameKo: String(data[i][IDX_REST.NAME_KO] || '').trim(),
+            nameJp: String(data[i][IDX_REST.NAME_JP] || '').trim(),
+            email: String(data[i][IDX_REST.EMAIL] || '').trim()
           }
         };
       }
@@ -710,7 +710,7 @@ function findStoreSimple(storeId) {
 function saveStoreEmailAndSendTest(storeId, email) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const restSheet = ss.getSheetByName('Restaurant_List');
+    const restSheet = ss.getSheetByName(SHEET.REST);
     if (!restSheet) return { success: false, error: "Restaurant_List シートを見つかりません。" };
 
     const data = restSheet.getDataRange().getValues();
@@ -720,9 +720,9 @@ function saveStoreEmailAndSendTest(storeId, email) {
 
     // 3행부터 순회
     for (let i = REST_DATA_START_INDEX; i < data.length; i++) {
-      if (String(data[i][0]).trim().toUpperCase() === cleanId) {
+      if (String(data[i][IDX_REST.ID]).trim().toUpperCase() === cleanId) {
         rowIndex = i + 1;
-        storeNameJp = String(data[i][2] || '').trim() || String(data[i][1] || '').trim();
+        storeNameJp = String(data[i][IDX_REST.NAME_JP] || '').trim() || String(data[i][IDX_REST.NAME_KO] || '').trim();
         break;
       }
     }
@@ -730,7 +730,7 @@ function saveStoreEmailAndSendTest(storeId, email) {
     if (rowIndex === -1) return { success: false, error: "店舗コードが見つかりません。" };
 
     // 시트 K열(11번째 열) 이메일 갱신
-    restSheet.getRange(rowIndex, 11).setValue(email.trim());
+    restSheet.getRange(rowIndex, COL_REST.EMAIL).setValue(email.trim());
 
     // 테스트 메일 발송
     const todayStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");

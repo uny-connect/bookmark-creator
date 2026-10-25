@@ -2,28 +2,28 @@
 
 /** 메일 발송 분리 함수 (주문번호 제거, 5대 항목 고정, 24시간 답변기한 경고, 깨짐 방지 table 구조, Y열 타임스탬프 기록) */
 function _sendBookingNotifications(p) {
-  const data = _getSheetsData(['Restaurant_List', 'User_DB']);
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
+  const data = _getSheetsData([SHEET.REST, SHEET.USER]);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);
 
   let storeEmail = "", storeNameJp = "", storeNameKo = "", storeBenefit = "";
-  for (let i = 2; i < data.Restaurant_List.length; i++) {
-    if (String(data.Restaurant_List[i][0] || '').trim().toUpperCase() === p.storeId.toUpperCase()) {
-      storeNameKo = String(data.Restaurant_List[i][1] || '').trim();
-      storeNameJp = String(data.Restaurant_List[i][2] || '').trim() || storeNameKo;
-      storeEmail = String(data.Restaurant_List[i][10] || '').trim();
-      storeBenefit = String(data.Restaurant_List[i][22] || '').trim();
+  for (let i = 2; i < data[SHEET.REST].length; i++) {
+    if (String(data[SHEET.REST][i][IDX_REST.ID] || '').trim().toUpperCase() === p.storeId.toUpperCase()) {
+      storeNameKo = String(data[SHEET.REST][i][IDX_REST.NAME_KO] || '').trim();
+      storeNameJp = String(data[SHEET.REST][i][IDX_REST.NAME_JP] || '').trim() || storeNameKo;
+      storeEmail = String(data[SHEET.REST][i][IDX_REST.EMAIL] || '').trim();
+      storeBenefit = String(data[SHEET.REST][i][IDX_REST.BENEFIT] || '').trim();
       break;
     }
   }
 
   let creatorProfileUrl = "";
-  for (let u = 1; u < data.User_DB.length; u++) {
-    if (String(data.User_DB[u][0] || '').trim().toLowerCase() === p.memberCode.toLowerCase()) {
-      creatorProfileUrl = String(data.User_DB[u][4] || '').trim() || 
-                          String(data.User_DB[u][5] || '').trim() || 
-                          String(data.User_DB[u][6] || '').trim() || 
-                          String(data.User_DB[u][7] || '').trim() || 
-                          String(data.User_DB[u][8] || '').trim() || "";
+  for (let u = 1; u < data[SHEET.USER].length; u++) {
+    if (String(data[SHEET.USER][u][IDX_USER.KEY] || '').trim().toLowerCase() === p.memberCode.toLowerCase()) {
+      creatorProfileUrl = String(data[SHEET.USER][u][IDX_USER.BLOG] || '').trim() || 
+                          String(data[SHEET.USER][u][IDX_USER.INSTA] || '').trim() || 
+                          String(data[SHEET.USER][u][IDX_USER.YOUTUBE] || '').trim() || 
+                          String(data[SHEET.USER][u][IDX_USER.TIKTOK] || '').trim() || 
+                          String(data[SHEET.USER][u][IDX_USER.GOOGLE_GUIDE] || '').trim() || "";
       break;
     }
   }
@@ -148,13 +148,13 @@ function _sendBookingNotifications(p) {
         bcc: adminAlertEmails
       });
       const sentTimeStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
-      sheet.getRange(p.safeRow, 25).setValue(`[${sentTimeStr}] 점주메일 발송완료`);
+      sheet.getRange(p.safeRow, COL_MASTER.SYS_LOG).setValue(`[${sentTimeStr}] 점주메일 발송완료`);
     } catch (mailErr) {
       console.error("점주 이메일 발송 실패: " + mailErr.toString());
-      sheet.getRange(p.safeRow, 25).setValue("❌ 점주메일 실패: " + mailErr.toString());
+      sheet.getRange(p.safeRow, COL_MASTER.SYS_LOG).setValue("❌ 점주메일 실패: " + mailErr.toString());
     }
   } else {
-    sheet.getRange(p.safeRow, 25).setValue("❌ 실패: 점주 이메일 주소 없음");
+    sheet.getRange(p.safeRow, COL_MASTER.SYS_LOG).setValue("❌ 실패: 점주 이메일 주소 없음");
   }
 
   // 2. 운영진 실시간 알림 발송

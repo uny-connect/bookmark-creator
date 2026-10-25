@@ -11,10 +11,10 @@ function handleImwebWebhook(e) {
   }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const logSheet = ss.getSheetByName("Master_Log");
-  const userSheet = ss.getSheetByName("User_DB");
-  const restSheet = ss.getSheetByName("Restaurant_List"); 
-  const debugSheet = ss.getSheetByName("Log"); 
+  const logSheet = ss.getSheetByName(SHEET.MASTER);
+  const userSheet = ss.getSheetByName(SHEET.USER);
+  const restSheet = ss.getSheetByName(SHEET.REST); 
+  const debugSheet = ss.getSheetByName(SHEET.DEBUG_LOG); 
 
   try {
     if (!e || !e.postData || !e.postData.contents) {
@@ -43,17 +43,17 @@ function handleImwebWebhook(e) {
         const uValues = userSheet.getDataRange().getValues();
         let exists = false;
         for (let u = 1; u < uValues.length; u++) {
-          if (String(uValues[u][0]).trim().toLowerCase() === newMemberUid.toLowerCase() || 
-              String(uValues[u][13]).trim().toLowerCase() === newMemberUid.toLowerCase()) {
+          if (String(uValues[u][IDX_USER.KEY]).trim().toLowerCase() === newMemberUid.toLowerCase() || 
+              String(uValues[u][IDX_USER.EMAIL]).trim().toLowerCase() === newMemberUid.toLowerCase()) {
             exists = true; 
             break;
           }
         }
         if (!exists) {
-          const newUserRow = new Array(16).fill("");
-          newUserRow[0] = newMemberUid;                  // A: 고유키(이메일UID)
-          newUserRow[1] = "新規会員";                      // B: 이름
-          newUserRow[13] = newMemberUid;                  // N: 이메일
+          const newUserRow = new Array(COL_USER.ADMIN_MEMO).fill("");
+          newUserRow[IDX_USER.KEY] = newMemberUid;                  // A: 고유키(이메일UID)
+          newUserRow[IDX_USER.ENG_NAME] = "新規会員";                      // B: 이름
+          newUserRow[IDX_USER.EMAIL] = newMemberUid;                  // N: 이메일
           userSheet.appendRow(newUserRow);
         }
       }
@@ -77,16 +77,16 @@ function handleImwebWebhook(e) {
       const uData = userSheet.getDataRange().getValues();
       let foundUser = false;
       for (let j = 1; j < uData.length; j++) {
-        const dbKey = String(uData[j][0] || '').trim();
-        const dbEmail = String(uData[j][13] || '').trim();
+        const dbKey = String(uData[j][IDX_USER.KEY] || '').trim();
+        const dbEmail = String(uData[j][IDX_USER.EMAIL] || '').trim();
         
         if ((memberUid && dbKey.toLowerCase() === memberUid.toLowerCase()) || 
             (memberUid && dbEmail.toLowerCase() === memberUid.toLowerCase())) {
           finalMemberKey = dbKey;
-          englishName = String(uData[j][1] || ordererName).trim();
+          englishName = String(uData[j][IDX_USER.ENG_NAME] || ordererName).trim();
           
-          if (!uData[j][3] && ordererCall) {
-            userSheet.getRange(j + 1, 4).setValue(ordererCall);
+          if (!uData[j][IDX_USER.PHONE] && ordererCall) {
+            userSheet.getRange(j + 1, COL_USER.PHONE).setValue(ordererCall);
           }
           foundUser = true;
           break;
@@ -94,13 +94,13 @@ function handleImwebWebhook(e) {
       }
 
       if (!foundUser && memberUid) {
-        const newUserRow = new Array(16).fill("");
-        newUserRow[0] = memberUid;
-        newUserRow[1] = ordererName;
-        newUserRow[2] = ordererName;
-        newUserRow[3] = ordererCall;
-        newUserRow[13] = memberUid;
-        newUserRow[15] = "주문시 자동안착";
+        const newUserRow = new Array(COL_USER.ADMIN_MEMO).fill("");
+        newUserRow[IDX_USER.KEY] = memberUid;
+        newUserRow[IDX_USER.ENG_NAME] = ordererName;
+        newUserRow[IDX_USER.KO_NAME] = ordererName;
+        newUserRow[IDX_USER.PHONE] = ordererCall;
+        newUserRow[IDX_USER.EMAIL] = memberUid;
+        newUserRow[IDX_USER.ADMIN_MEMO] = "주문시 자동안착";
         userSheet.appendRow(newUserRow);
       }
     }
@@ -121,9 +121,9 @@ function handleImwebWebhook(e) {
     const restData = restSheet ? restSheet.getDataRange().getValues() : [];
     const restIdList = [];
     for (let k = 2; k < restData.length; k++) {
-      const rId = String(restData[k][0] || '').trim().toUpperCase();
-      const rNameKo = String(restData[k][1] || '').trim();
-      const rNameJp = String(restData[k][2] || '').trim();
+      const rId = String(restData[k][IDX_REST.ID] || '').trim().toUpperCase();
+      const rNameKo = String(restData[k][IDX_REST.NAME_KO] || '').trim();
+      const rNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim();
       if (rId && (rNameKo || rNameJp)) {
         restIdList.push({ id: rId, nameKo: rNameKo, nameJp: rNameJp });
       }
@@ -135,10 +135,10 @@ function handleImwebWebhook(e) {
     const existingOrderRows = [];
 
     for (let i = 2; i < logData.length; i++) {
-      const sheetOrder = String(logData[i][0] || '').replace(/['"\s]/g, '');
-      const sheetStoreId = String(logData[i][4] || '').trim().toUpperCase();
-      const sheetStoreName = String(logData[i][5] || '').trim();
-      const sheetOption = String(logData[i][6] || '').trim(); // 🎯 G열 구매옵션
+      const sheetOrder = String(logData[i][IDX_MASTER.ORDER] || '').replace(/['"\s]/g, '');
+      const sheetStoreId = String(logData[i][IDX_MASTER.STORE_ID] || '').trim().toUpperCase();
+      const sheetStoreName = String(logData[i][IDX_MASTER.STORE_NAME] || '').trim();
+      const sheetOption = String(logData[i][IDX_MASTER.OPTION] || '').trim(); // 🎯 G열 구매옵션
 
       if (sheetOrder === cleanOrderNo) {
         existingOrderRows.push({
@@ -146,7 +146,7 @@ function handleImwebWebhook(e) {
           storeId: sheetStoreId,
           storeName: sheetStoreName,
           option: sheetOption,
-          status: String(logData[i][11] || '').trim(),
+          status: String(logData[i][IDX_MASTER.STATUS] || '').trim(),
           used: false
         });
       }
@@ -234,34 +234,34 @@ function handleImwebWebhook(e) {
 
         // 방문 전이나 미신청 대기 상태인 행만 안전하게 취소 처리
         if (status === "취소완료") {
-          logSheet.getRange(matchedExisting.rowNum, 12).setValue("취소(아임웹)");
-          logSheet.getRange(matchedExisting.rowNum, 8, 1, 3).clearContent();
-          logSheet.getRange(matchedExisting.rowNum, 21).setValue("취소환불");
+          logSheet.getRange(matchedExisting.rowNum, COL_MASTER.STATUS).setValue("취소(아임웹)");
+          logSheet.getRange(matchedExisting.rowNum, COL_MASTER.VISIT, 1, MASTER_SLOT_COLS).clearContent();
+          logSheet.getRange(matchedExisting.rowNum, COL_MASTER.REFUND).setValue("취소환불");
         }
       } else {
         // 신규 주문 행 추가
-        const newRow = new Array(25).fill(""); 
-        newRow[0] = "'" + cleanOrderNo;      // A: 주문번호
-        newRow[1] = finalMemberKey;          // B: 멤버코드
-        newRow[2] = englishName;             // C: 성함
-        newRow[3] = "";                      // D: 참여 채널
-        newRow[4] = targetStoreId;           // E: 점포 ID
-        newRow[5] = matchedStoreName;        // F: 점포명
-        newRow[6] = mealOption;              // 🎯 G: 구매옵션 (A코스, 런치, B코스 등 있는 그대로 기록)
-        newRow[7] = "";                      // H: 방문예정일시
-        newRow[8] = "";                      // I: 방문인원
-        newRow[9] = "";                      // J: 리뷰 마감 기한
-        newRow[10] = itemDeposit || 10000;   // K: 보증금액
-        newRow[11] = status;                 // L: 진행 상태 ("예약대기")
-        newRow[12] = "";                     // M: 점주 피드백
-        newRow[13] = "";                     // N: 방문 확인
-        newRow[14] = "";                     // O: 매장 영수증
-        newRow[15] = "";                     // P: 콘텐츠 제출일
-        newRow[16] = "";                     // Q: 제출 콘텐츠 URL
-        newRow[17] = "";                     // R: 구글맵 리뷰 URL
-        newRow[18] = "";                     // S: 한 줄 후기
-        newRow[19] = "";                     // T: (JP)한 줄 후기
-        newRow[20] = "";                     // U: 환불 처리
+        const newRow = new Array(COL_MASTER.SYS_LOG).fill(""); 
+        newRow[IDX_MASTER.ORDER] = "'" + cleanOrderNo;      // A: 주문번호
+        newRow[IDX_MASTER.MEMBER] = finalMemberKey;          // B: 멤버코드
+        newRow[IDX_MASTER.NAME] = englishName;             // C: 성함
+        newRow[IDX_MASTER.CHANNEL] = "";                      // D: 참여 채널
+        newRow[IDX_MASTER.STORE_ID] = targetStoreId;           // E: 점포 ID
+        newRow[IDX_MASTER.STORE_NAME] = matchedStoreName;        // F: 점포명
+        newRow[IDX_MASTER.OPTION] = mealOption;              // 🎯 G: 구매옵션 (A코스, 런치, B코스 등 있는 그대로 기록)
+        newRow[IDX_MASTER.VISIT] = "";                      // H: 방문예정일시
+        newRow[IDX_MASTER.PEOPLE] = "";                      // I: 방문인원
+        newRow[IDX_MASTER.DEADLINE] = "";                      // J: 리뷰 마감 기한
+        newRow[IDX_MASTER.DEPOSIT] = itemDeposit || 10000;   // K: 보증금액
+        newRow[IDX_MASTER.STATUS] = status;                 // L: 진행 상태 ("예약대기")
+        newRow[IDX_MASTER.FEEDBACK] = "";                     // M: 점주 피드백
+        newRow[IDX_MASTER.VISITED] = "";                     // N: 방문 확인
+        newRow[IDX_MASTER.RECEIPT] = "";                     // O: 매장 영수증
+        newRow[IDX_MASTER.SUBMIT_DATE] = "";                     // P: 콘텐츠 제출일
+        newRow[IDX_MASTER.REVIEW_URL] = "";                     // Q: 제출 콘텐츠 URL
+        newRow[IDX_MASTER.GOOGLE_URL] = "";                     // R: 구글맵 리뷰 URL
+        newRow[IDX_MASTER.SHORT_REVIEW] = "";                     // S: 한 줄 후기
+        newRow[IDX_MASTER.SHORT_REVIEW_JP] = "";                     // T: (JP)한 줄 후기
+        newRow[IDX_MASTER.REFUND] = "";                     // U: 환불 처리
 
         logSheet.appendRow(newRow);
         
@@ -294,7 +294,7 @@ function handleImwebCancellation(orderNo, reason) {
 
     const targetOrderNo = String(orderNo).trim().replace(/['"\s]/g, '');
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName('Master_Log');
+    const sheet = ss.getSheetByName(SHEET.MASTER);
     if (!sheet) return { success: false, error: "Master_Log 시트 없음" };
 
     const lastRow = sheet.getLastRow();
@@ -302,14 +302,14 @@ function handleImwebCancellation(orderNo, reason) {
 
     const totalDataRows = lastRow - 2;
     // A열(주문번호), L열(상태), M열(메모) 데이터 로드
-    const logData = sheet.getRange(3, 1, totalDataRows, 13).getValues();
+    const logData = sheet.getRange(3, COL_MASTER.ORDER, totalDataRows, COL_MASTER.FEEDBACK).getValues();
     const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
     const timeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
     let canceledCount = 0;
 
     for (let i = 0; i < totalDataRows; i++) {
-      const sheetOrder = String(logData[i][0] || '').trim().replace(/['"\s]/g, '');
-      const currentStatus = String(logData[i][11] || '').trim();
+      const sheetOrder = String(logData[i][IDX_MASTER.ORDER] || '').trim().replace(/['"\s]/g, '');
+      const currentStatus = String(logData[i][IDX_MASTER.STATUS] || '').trim();
 
       if (sheetOrder === targetOrderNo) {
         // 🔒 [치명적 버그 방어 락] 이미 방문완료/제출완료/취소 건 방어
@@ -319,12 +319,12 @@ function handleImwebCancellation(orderNo, reason) {
 
         // 방문 전이거나 승인 대기 중인 행만 안전하게 취소 처리
         const targetRow = i + 3;
-        sheet.getRange(targetRow, 12).setValue('취소(아임웹)');
-        sheet.getRange(targetRow, 8, 1, 3).clearContent(); // H~J열 슬롯 반환
+        sheet.getRange(targetRow, COL_MASTER.STATUS).setValue('취소(아임웹)');
+        sheet.getRange(targetRow, COL_MASTER.VISIT, 1, MASTER_SLOT_COLS).clearContent(); // H~J열 슬롯 반환
 
-        const prevMemo = String(logData[i][12] || '').trim();
+        const prevMemo = String(logData[i][IDX_MASTER.FEEDBACK] || '').trim();
         const cancelNote = `[${timeStr} 아임웹 취소: ${reason}]`;
-        sheet.getRange(targetRow, 13).setValue(prevMemo ? `${prevMemo} | ${cancelNote}` : cancelNote);
+        sheet.getRange(targetRow, COL_MASTER.FEEDBACK).setValue(prevMemo ? `${prevMemo} | ${cancelNote}` : cancelNote);
 
         canceledCount++;
       }
@@ -342,9 +342,9 @@ function handleImwebCancellation(orderNo, reason) {
 /** [아임웹 유저 동기화 - User_DB 업서트 + Master_Log 과거 이메일 식별자 자동 승격] */
 function syncImwebUsers() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const rawSheet = ss.getSheetByName("Imweb_Raw");
-  const userSheet = ss.getSheetByName("User_DB");
-  const logSheet = ss.getSheetByName("Master_Log");
+  const rawSheet = ss.getSheetByName(SHEET.IMWEB_RAW);
+  const userSheet = ss.getSheetByName(SHEET.USER);
+  const logSheet = ss.getSheetByName(SHEET.MASTER);
   
   if (!rawSheet || !userSheet) return SpreadsheetApp.getUi().alert("Imweb_Raw 또는 User_DB 시트가 없습니다.");
 
@@ -359,7 +359,7 @@ function syncImwebUsers() {
   const userData = userSheet.getDataRange().getValues();
   const existingUserRowMap = new Map();
   for (let r = 1; r < userData.length; r++) {
-    const key = String(userData[r][0] || "").trim();
+    const key = String(userData[r][IDX_USER.KEY] || "").trim();
     if (key) {
       existingUserRowMap.set(key, r + 1);
     }
@@ -406,38 +406,38 @@ function syncImwebUsers() {
 
     if (existingUserRowMap.has(uniqueKey)) {
       const targetRow = existingUserRowMap.get(uniqueKey);
-      if (englishName) userSheet.getRange(targetRow, 2).setValue(englishName);
-      if (koreanName) userSheet.getRange(targetRow, 3).setValue(koreanName);
-      if (formattedPhone) userSheet.getRange(targetRow, 4).setValue(formattedPhone);
+      if (englishName) userSheet.getRange(targetRow, COL_USER.ENG_NAME).setValue(englishName);
+      if (koreanName) userSheet.getRange(targetRow, COL_USER.KO_NAME).setValue(koreanName);
+      if (formattedPhone) userSheet.getRange(targetRow, COL_USER.PHONE).setValue(formattedPhone);
 
-      if (col("블로그", "blog", "네이버") !== -1) userSheet.getRange(targetRow, 5).setValue(blogUrl);
-      if (col("인스타", "insta", "instagram", "릴스") !== -1) userSheet.getRange(targetRow, 6).setValue(instaUrl);
-      if (col("유튜브", "youtube") !== -1) userSheet.getRange(targetRow, 7).setValue(youtubeUrl);
-      if (col("틱톡", "tiktok", "tictok") !== -1) userSheet.getRange(targetRow, 8).setValue(tiktokUrl);
-      if (col("구글", "로컬", "가이드") !== -1) userSheet.getRange(targetRow, 9).setValue(googleGuide);
+      if (col("블로그", "blog", "네이버") !== -1) userSheet.getRange(targetRow, COL_USER.BLOG).setValue(blogUrl);
+      if (col("인스타", "insta", "instagram", "릴스") !== -1) userSheet.getRange(targetRow, COL_USER.INSTA).setValue(instaUrl);
+      if (col("유튜브", "youtube") !== -1) userSheet.getRange(targetRow, COL_USER.YOUTUBE).setValue(youtubeUrl);
+      if (col("틱톡", "tiktok", "tictok") !== -1) userSheet.getRange(targetRow, COL_USER.TIKTOK).setValue(tiktokUrl);
+      if (col("구글", "로컬", "가이드") !== -1) userSheet.getRange(targetRow, COL_USER.GOOGLE_GUIDE).setValue(googleGuide);
 
-      if (userGroup) userSheet.getRange(targetRow, 10).setValue(userGroup);
-      if (email) userSheet.getRange(targetRow, 14).setValue(email);
-      if (adminMemo) userSheet.getRange(targetRow, 16).setValue(adminMemo);
+      if (userGroup) userSheet.getRange(targetRow, COL_USER.GROUP).setValue(userGroup);
+      if (email) userSheet.getRange(targetRow, COL_USER.EMAIL).setValue(email);
+      if (adminMemo) userSheet.getRange(targetRow, COL_USER.ADMIN_MEMO).setValue(adminMemo);
       updatedCount++;
     } else {
-      const newRow = new Array(16).fill("");
-      newRow[0] = uniqueKey;
-      newRow[1] = englishName;
-      newRow[2] = koreanName;
-      newRow[3] = formattedPhone;
-      newRow[4] = blogUrl;
-      newRow[5] = instaUrl;
-      newRow[6] = youtubeUrl;
-      newRow[7] = tiktokUrl;
-      newRow[8] = googleGuide;
-      newRow[9] = userGroup;
-      newRow[10] = "";
-      newRow[11] = "";
-      newRow[12] = signupDate;
-      newRow[13] = email;
-      newRow[14] = "";
-      newRow[15] = adminMemo;
+      const newRow = new Array(COL_USER.ADMIN_MEMO).fill("");
+      newRow[IDX_USER.KEY] = uniqueKey;
+      newRow[IDX_USER.ENG_NAME] = englishName;
+      newRow[IDX_USER.KO_NAME] = koreanName;
+      newRow[IDX_USER.PHONE] = formattedPhone;
+      newRow[IDX_USER.BLOG] = blogUrl;
+      newRow[IDX_USER.INSTA] = instaUrl;
+      newRow[IDX_USER.YOUTUBE] = youtubeUrl;
+      newRow[IDX_USER.TIKTOK] = tiktokUrl;
+      newRow[IDX_USER.GOOGLE_GUIDE] = googleGuide;
+      newRow[IDX_USER.GROUP] = userGroup;
+      newRow[IDX_USER.RESERVED_K] = "";
+      newRow[IDX_USER.RESERVED_L] = "";
+      newRow[IDX_USER.SIGNUP_DATE] = signupDate;
+      newRow[IDX_USER.EMAIL] = email;
+      newRow[IDX_USER.RESERVED_O] = "";
+      newRow[IDX_USER.ADMIN_MEMO] = adminMemo;
 
       userSheet.appendRow(newRow);
       existingUserRowMap.set(uniqueKey, userSheet.getLastRow());
@@ -451,9 +451,9 @@ function syncImwebUsers() {
     const emailToKeyMap = new Map();
     const keyToNameMap = new Map();
     for (let u = 1; u < refreshedUserData.length; u++) {
-      const uKey = String(refreshedUserData[u][0] || '').trim();
-      const uName = String(refreshedUserData[u][1] || '').trim();
-      const uMail = String(refreshedUserData[u][13] || '').trim().toLowerCase();
+      const uKey = String(refreshedUserData[u][IDX_USER.KEY] || '').trim();
+      const uName = String(refreshedUserData[u][IDX_USER.ENG_NAME] || '').trim();
+      const uMail = String(refreshedUserData[u][IDX_USER.EMAIL] || '').trim().toLowerCase();
       if (uKey && uMail) emailToKeyMap.set(uMail, uKey);
       if (uKey && uName) keyToNameMap.set(uKey, uName);
     }
@@ -461,14 +461,14 @@ function syncImwebUsers() {
     const logData = logSheet.getDataRange().getValues();
     for (let i = 2; i < logData.length; i++) {
       const rowNum = i + 1;
-      const currentCode = String(logData[i][1] || '').trim();
-      const currentEngName = String(logData[i][2] || '').trim();
+      const currentCode = String(logData[i][IDX_MASTER.MEMBER] || '').trim();
+      const currentEngName = String(logData[i][IDX_MASTER.NAME] || '').trim();
 
       if (currentCode.includes("@") && emailToKeyMap.has(currentCode.toLowerCase())) {
         const correctKey = emailToKeyMap.get(currentCode.toLowerCase());
-        logSheet.getRange(rowNum, 2).setValue(correctKey);
+        logSheet.getRange(rowNum, COL_MASTER.MEMBER).setValue(correctKey);
         if (!currentEngName && keyToNameMap.has(correctKey)) {
-          logSheet.getRange(rowNum, 3).setValue(keyToNameMap.get(correctKey));
+          logSheet.getRange(rowNum, COL_MASTER.NAME).setValue(keyToNameMap.get(correctKey));
         }
         fixedLogCount++;
       }

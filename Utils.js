@@ -4,13 +4,13 @@
 function getActiveWebAppUrl() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("Settings");
+    const sheet = ss.getSheetByName(SHEET.SETTINGS);
     if (sheet) {
       const data = sheet.getDataRange().getValues();
       for (let i = 1; i < data.length; i++) {
-        const key = String(data[i][0] || '').trim().toUpperCase();
+        const key = String(data[i][IDX_SETTINGS.KEY] || '').trim().toUpperCase();
         if (key === "WEB_APP_URL") {
-          const customUrl = String(data[i][1] || '').trim();
+          const customUrl = String(data[i][IDX_SETTINGS.VALUE] || '').trim();
           if (customUrl && customUrl.startsWith("http")) return customUrl;
         }
       }
@@ -63,14 +63,14 @@ function _getSheetsData(sheetNames) {
 function getAdminAlertEmails() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("Settings");
+    const sheet = ss.getSheetByName(SHEET.SETTINGS);
     if (!sheet) return "bookmarkjapan.info@gmail.com";
 
     const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
-      const key = String(data[i][0] || '').trim().toUpperCase();
+      const key = String(data[i][IDX_SETTINGS.KEY] || '').trim().toUpperCase();
       if (key === "ADMIN_NOTIFICATION_EMAILS") {
-        const emails = String(data[i][1] || '').trim();
+        const emails = String(data[i][IDX_SETTINGS.VALUE] || '').trim();
         return emails || "bookmarkjapan.info@gmail.com";
       }
     }

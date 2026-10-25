@@ -5,59 +5,59 @@
  ********************************************************************/
 function getAdminData() {
   try {
-    const data = _getSheetsData(['Master_Log', 'Restaurant_List', 'User_DB']);
+    const data = _getSheetsData([SHEET.MASTER, SHEET.REST, SHEET.USER]);
     let stats = { total: 0, pending: 0, verified: 0, submitted: 0, waitingReview: 0 };
     let missions = [], restList = [], restNameMap = {}, userTierMap = {};
 
-    const userDB = data.User_DB;
+    const userDB = data[SHEET.USER];
     for (let u = 1; u < userDB.length; u++) {
-      if(userDB[u][0]) {
+      if(userDB[u][IDX_USER.KEY]) {
         try {
-          userTierMap[String(userDB[u][0]).trim()] = parseTierEmoji(userDB[u][9]);
+          userTierMap[String(userDB[u][IDX_USER.KEY]).trim()] = parseTierEmoji(userDB[u][IDX_USER.GROUP]);
         } catch(tierErr) {
-          userTierMap[String(userDB[u][0]).trim()] = '🟡'; 
+          userTierMap[String(userDB[u][IDX_USER.KEY]).trim()] = '🟡'; 
         }
       }
     }
 
-    const restListRaw = data.Restaurant_List;
+    const restListRaw = data[SHEET.REST];
     for (let k = 2; k < restListRaw.length; k++) {
-      if(!restListRaw[k][0]) continue; 
-      let rId = String(restListRaw[k][0]).trim(); 
-      restNameMap[rId] = String(restListRaw[k][2] || '').trim();
-      restList.push({ row: k + 1, id: rId, name: String(restListRaw[k][1] || '').trim(), nameJp: restNameMap[rId], pin: restListRaw[k][8] });
+      if(!restListRaw[k][IDX_REST.ID]) continue; 
+      let rId = String(restListRaw[k][IDX_REST.ID]).trim(); 
+      restNameMap[rId] = String(restListRaw[k][IDX_REST.NAME_JP] || '').trim();
+      restList.push({ row: k + 1, id: rId, name: String(restListRaw[k][IDX_REST.NAME_KO] || '').trim(), nameJp: restNameMap[rId], pin: restListRaw[k][IDX_REST.PIN] });
     }
 
     const timeZone = Session.getScriptTimeZone();
     const formatDate = (val, format) => (val instanceof Date) ? Utilities.formatDate(val, timeZone, format) : String(val || '-');
 
-    const masterLog = data.Master_Log;
+    const masterLog = data[SHEET.MASTER];
     for (let i = masterLog.length - 1; i >= 2; i--) {
       const mRow = masterLog[i];
-      const status = String(mRow[11] || '').trim();
-      if (!mRow[0] || status.includes('취소')) continue; 
+      const status = String(mRow[IDX_MASTER.STATUS] || '').trim();
+      if (!mRow[IDX_MASTER.ORDER] || status.includes('취소')) continue; 
       stats.total++;
       
       if (status === '방문전' || status === '예약확인중' || status === '일정조율필요') stats.pending++; 
       else if (status === '방문완료') stats.verified++; 
       else if (status === '제출완료') { stats.submitted++; stats.waitingReview++; }
 
-      let depRaw = String(mRow[10] || '').replace(/[^0-9.-]/g, ''); 
-      let mRestId = String(mRow[4]).trim(), mMemberCode = String(mRow[1]).trim();
+      let depRaw = String(mRow[IDX_MASTER.DEPOSIT] || '').replace(/[^0-9.-]/g, ''); 
+      let mRestId = String(mRow[IDX_MASTER.STORE_ID]).trim(), mMemberCode = String(mRow[IDX_MASTER.MEMBER]).trim();
       
       missions.push({
-        row: i + 1, orderNo: mRow[0], memberCode: mMemberCode, member: mRow[2], 
-        tierEmoji: userTierMap[mMemberCode] || '🟡', restId: mRestId, restaurant: String(mRow[5] || '').trim(), 
-        restaurantJp: restNameMap[mRestId] || String(mRow[5] || '').trim(), status: status,
-        feedback: String(mRow[12] || ''),
-        visitDate: formatDate(mRow[7], 'yyyy-MM-dd HH:mm'),
-        deadline: formatDate(mRow[9], 'yyyy-MM-dd'), deposit: depRaw ? Number(depRaw) : 0, 
-        receiptUrl: String(mRow[14] || ''),
-        submitDate: formatDate(mRow[15], 'yyyy-MM-dd'),
-        reviewUrl: String(mRow[16] || ''),
-        googleMapUrl: String(mRow[17] || ''),
-        shortReview: String(mRow[18] || ''),
-        refundStatus: String(mRow[20] || '').trim()
+        row: i + 1, orderNo: mRow[IDX_MASTER.ORDER], memberCode: mMemberCode, member: mRow[IDX_MASTER.NAME], 
+        tierEmoji: userTierMap[mMemberCode] || '🟡', restId: mRestId, restaurant: String(mRow[IDX_MASTER.STORE_NAME] || '').trim(), 
+        restaurantJp: restNameMap[mRestId] || String(mRow[IDX_MASTER.STORE_NAME] || '').trim(), status: status,
+        feedback: String(mRow[IDX_MASTER.FEEDBACK] || ''),
+        visitDate: formatDate(mRow[IDX_MASTER.VISIT], 'yyyy-MM-dd HH:mm'),
+        deadline: formatDate(mRow[IDX_MASTER.DEADLINE], 'yyyy-MM-dd'), deposit: depRaw ? Number(depRaw) : 0, 
+        receiptUrl: String(mRow[IDX_MASTER.RECEIPT] || ''),
+        submitDate: formatDate(mRow[IDX_MASTER.SUBMIT_DATE], 'yyyy-MM-dd'),
+        reviewUrl: String(mRow[IDX_MASTER.REVIEW_URL] || ''),
+        googleMapUrl: String(mRow[IDX_MASTER.GOOGLE_URL] || ''),
+        shortReview: String(mRow[IDX_MASTER.SHORT_REVIEW] || ''),
+        refundStatus: String(mRow[IDX_MASTER.REFUND] || '').trim()
       });
     }
 
@@ -68,61 +68,61 @@ function getAdminData() {
 function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDate, newGoogleLink, newShortReview) {
   try {
     const safeRow = parseInt(row, 10); 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master_Log');
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);
     
-    const currentRestaurantName = String(sheet.getRange(safeRow, 6).getValue() || '').trim(); 
-    const currentMemberCode = String(sheet.getRange(safeRow, 2).getValue() || '').trim(); 
+    const currentRestaurantName = String(sheet.getRange(safeRow, COL_MASTER.STORE_NAME).getValue() || '').trim(); 
+    const currentMemberCode = String(sheet.getRange(safeRow, COL_MASTER.MEMBER).getValue() || '').trim(); 
     
-    sheet.getRange(safeRow, 12).setValue(newStatus); 
+    sheet.getRange(safeRow, COL_MASTER.STATUS).setValue(newStatus); 
     
     if (newStatus === '방문완료' || newStatus === '제출완료') {
-      sheet.getRange(safeRow, 14).setValue('Y');
+      sheet.getRange(safeRow, COL_MASTER.VISITED).setValue('Y');
     } else if (newStatus === '방문전' || newStatus === '예약확인중' || newStatus === '일정조율필요' || newStatus === '예약대기') {
-      sheet.getRange(safeRow, 14).clearContent();
+      sheet.getRange(safeRow, COL_MASTER.VISITED).clearContent();
     }
     
     if (newStatus === '예약대기' || newStatus === '일정조율필요') {
-      sheet.getRange(safeRow, 8, 1, 3).clearContent();
-      sheet.getRange(safeRow, 15, 1, 7).clearContent();
+      sheet.getRange(safeRow, COL_MASTER.VISIT, 1, MASTER_SLOT_COLS).clearContent();
+      sheet.getRange(safeRow, COL_MASTER.RECEIPT, 1, MASTER_SUBMIT_COLS).clearContent();
     } else {
       if (newVisitDate && newVisitDate.trim() !== '') {
         const vDate = new Date(newVisitDate), dDate = new Date(vDate); 
         dDate.setDate(dDate.getDate() + 10);
-        sheet.getRange(safeRow, 8).setValue(vDate);   
-        sheet.getRange(safeRow, 10).setValue(dDate);  
-        if(!sheet.getRange(safeRow, 11).getValue()) sheet.getRange(safeRow, 11).setValue(10000); 
+        sheet.getRange(safeRow, COL_MASTER.VISIT).setValue(vDate);   
+        sheet.getRange(safeRow, COL_MASTER.DEADLINE).setValue(dDate);  
+        if(!sheet.getRange(safeRow, COL_MASTER.DEPOSIT).getValue()) sheet.getRange(safeRow, COL_MASTER.DEPOSIT).setValue(10000); 
       }
       if (newStatus === '방문전') {
         // 🎯 [G열 비우기] Y열(25열)에 기존 로그 보존하며 누적 기록
-        const prevLogY = String(sheet.getRange(safeRow, 25).getValue() || '').trim();
+        const prevLogY = String(sheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '').trim();
         const adminTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
         const appendLog = `[${adminTime}] 어드민_강제승인_패스`;
-        sheet.getRange(safeRow, 25).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
+        sheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(prevLogY ? `${prevLogY} | ${appendLog}` : appendLog);
       }
     }
     
     if (newStatus !== '예약확인중' && newStatus !== '일정조율필요' && newStatus !== '예약대기') {
       const fixUrl = (u) => { const s = String(u || '').trim(); return (s && !/^https?:\/\//i.test(s)) ? 'https://' + s : s; };
-      sheet.getRange(safeRow, 17).setValue(fixUrl(newLink));
-      sheet.getRange(safeRow, 18).setValue(fixUrl(newGoogleLink));
+      sheet.getRange(safeRow, COL_MASTER.REVIEW_URL).setValue(fixUrl(newLink));
+      sheet.getRange(safeRow, COL_MASTER.GOOGLE_URL).setValue(fixUrl(newGoogleLink));
 
       if(newShortReview !== undefined && String(newShortReview).trim() !== '') {
         const cleanRev = String(newShortReview).trim();
-        sheet.getRange(safeRow, 19).setValue(cleanRev);
-        try { sheet.getRange(safeRow, 20).setValue(LanguageApp.translate(cleanRev, 'ko', 'ja')); } catch(e) {}
+        sheet.getRange(safeRow, COL_MASTER.SHORT_REVIEW).setValue(cleanRev);
+        try { sheet.getRange(safeRow, COL_MASTER.SHORT_REVIEW_JP).setValue(LanguageApp.translate(cleanRev, 'ko', 'ja')); } catch(e) {}
       }
-      sheet.getRange(safeRow, 21).setValue((newStatus === '제출완료' && (!newRefundStatus || newRefundStatus.trim() === '')) ? '환급대기' : newRefundStatus);
+      sheet.getRange(safeRow, COL_MASTER.REFUND).setValue((newStatus === '제출완료' && (!newRefundStatus || newRefundStatus.trim() === '')) ? '환급대기' : newRefundStatus);
     }
     
     if ((newStatus === '방문전' || newStatus === '일정조율필요') && currentMemberCode) {
       try {
-        const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('User_DB');
+        const userSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.USER);
         const userData = userSheet.getDataRange().getValues();
         let creatorEmail = "";
         
         for (let j = 1; j < userData.length; j++) {
-          if (String(userData[j][0]).trim() === currentMemberCode) {
-            creatorEmail = String(userData[j][13] || '').trim();
+          if (String(userData[j][IDX_USER.KEY]).trim() === currentMemberCode) {
+            creatorEmail = String(userData[j][IDX_USER.EMAIL] || '').trim();
             break;
           }
         }
@@ -132,7 +132,7 @@ function adminUpdateMission(row, newStatus, newLink, newRefundStatus, newVisitDa
           let htmlBody = "";
           
           if (newStatus === '방문전') {
-            const rawPeopleStr = String(sheet.getRange(safeRow, 9).getValue() || '1');
+            const rawPeopleStr = String(sheet.getRange(safeRow, COL_MASTER.PEOPLE).getValue() || '1');
             const pCount = rawPeopleStr.replace(/[^0-9]/g, '') || '1';
 
             subject = "[BOOKMARK CREATORS] 방문 예약 확정 안내";
@@ -208,7 +208,7 @@ function sendTestEmailToStore() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const activeSheet = ss.getActiveSheet();
-  const restSheet = ss.getSheetByName('Restaurant_List');
+  const restSheet = ss.getSheetByName(SHEET.REST);
   
   if (!restSheet) return ui.alert('❌ Restaurant_List 시트를 찾을 수 없습니다.');
   
@@ -216,15 +216,15 @@ function sendTestEmailToStore() {
   let storeNameJp = "";
   let storeId = "";
 
-  if (activeSheet.getName().trim() === 'Restaurant_List') {
+  if (activeSheet.getName().trim() === SHEET.REST) {
     const selectedRow = activeSheet.getActiveRange().getRow();
     
     if (selectedRow >= 2) {
-      const rowValues = restSheet.getRange(selectedRow, 1, 1, 11).getValues()[0];
-      storeId = String(rowValues[0] || '').trim();
-      const nameKo = String(rowValues[1] || '').trim();
-      const nameJp = String(rowValues[2] || '').trim();
-      const email = String(rowValues[10] || '').trim();
+      const rowValues = restSheet.getRange(selectedRow, COL_REST.ID, 1, COL_REST.EMAIL).getValues()[0];
+      storeId = String(rowValues[IDX_REST.ID] || '').trim();
+      const nameKo = String(rowValues[IDX_REST.NAME_KO] || '').trim();
+      const nameJp = String(rowValues[IDX_REST.NAME_JP] || '').trim();
+      const email = String(rowValues[IDX_REST.EMAIL] || '').trim();
 
       if (storeId && email && email.includes('@')) {
         storeNameJp = nameJp || nameKo;
@@ -254,11 +254,11 @@ function sendTestEmailToStore() {
 
     const restData = restSheet.getDataRange().getValues();
     for (let i = 1; i < restData.length; i++) {
-      const sheetStoreId = String(restData[i][0] || '').trim().toUpperCase();
+      const sheetStoreId = String(restData[i][IDX_REST.ID] || '').trim().toUpperCase();
       if (sheetStoreId === inputVal.toUpperCase()) {
         storeId = sheetStoreId;
-        targetEmail = String(restData[i][10] || '').trim();
-        storeNameJp = String(restData[i][2] || '').trim() || String(restData[i][1] || '').trim();
+        targetEmail = String(restData[i][IDX_REST.EMAIL] || '').trim();
+        storeNameJp = String(restData[i][IDX_REST.NAME_JP] || '').trim() || String(restData[i][IDX_REST.NAME_KO] || '').trim();
         break;
       }
     }
@@ -317,7 +317,7 @@ function sendTestEmailToStore() {
 /** [매장별 고유 PIN 6자리 생성 엔진] */
 function generateStorePins() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const storeSheet = ss.getSheetByName("Restaurant_List"); 
+  const storeSheet = ss.getSheetByName(SHEET.REST); 
   if (!storeSheet) {
     SpreadsheetApp.getUi().alert("❌ Restaurant_List 시트를 찾을 수 없습니다.");
     return;
@@ -330,14 +330,14 @@ function generateStorePins() {
   }
   
   // A열부터 I열(9번째 열)까지 데이터 로드 (헤더 제외 3번째 행부터)
-  const data = storeSheet.getRange(3, 1, lastRow - 2, 9).getValues();
+  const data = storeSheet.getRange(3, COL_REST.ID, lastRow - 2, COL_REST.PIN).getValues();
   let createdCount = 0;
   const charPool = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // 헷갈리는 0, 1, I, O 제외
   const pinLength = 6; 
   
   for (let i = 0; i < data.length; i++) {
-    const storeId = String(data[i][0] || "").trim(); // A열: 매장 ID
-    const currentPin = String(data[i][8] || "").trim(); // I열: PIN
+    const storeId = String(data[i][IDX_REST.ID] || "").trim(); // A열: 매장 ID
+    const currentPin = String(data[i][IDX_REST.PIN] || "").trim(); // I열: PIN
     
     // 매장 ID는 있는데 PIN 번호가 비어있는 경우에만 신규 발급
     if (storeId !== "" && (!currentPin || currentPin === "undefined")) {
@@ -348,7 +348,7 @@ function generateStorePins() {
       }
       
       // I열(9번째 열)에 텍스트 형태('PIN)로 안전하게 주입
-      storeSheet.getRange(i + 3, 9).setValue("'" + randPin);
+      storeSheet.getRange(i + 3, COL_REST.PIN).setValue("'" + randPin);
       createdCount++;
     }
   }
@@ -366,7 +366,7 @@ function generateStorePins() {
 function verifyAdminPassword(inputPw) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("Settings");
+    const sheet = ss.getSheetByName(SHEET.SETTINGS);
     if (!sheet) {
       Logger.log("❌ Settings 시트를 찾을 수 없습니다.");
       return false;
@@ -376,10 +376,10 @@ function verifyAdminPassword(inputPw) {
     const data = sheet.getDataRange().getValues();
 
     for (let i = 1; i < data.length; i++) {
-      const key = String(data[i][0] || '').replace(/[\s_]+/g, '').toUpperCase();
+      const key = String(data[i][IDX_SETTINGS.KEY] || '').replace(/[\s_]+/g, '').toUpperCase();
       // 'ADMINPASSWORD' 또는 'ADMINPW' 키 매칭
       if (key === "ADMINPASSWORD" || key === "ADMINPW") {
-        const savedPw = String(data[i][1] || '').replace(/[\s\uFEFF\xA0]+/g, '');
+        const savedPw = String(data[i][IDX_SETTINGS.VALUE] || '').replace(/[\s\uFEFF\xA0]+/g, '');
         Logger.log(`[비밀번호 검증] 시트저장값: [${savedPw}] vs 입력값: [${cleanInput}]`);
         return savedPw === cleanInput;
       }
@@ -397,7 +397,7 @@ function verifyAdminPassword(inputPw) {
 function getChallengeSettings() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheet = ss.getSheetByName("Settings");
+    const sheet = ss.getSheetByName(SHEET.SETTINGS);
     if (!sheet) return { startDate: "2026-06-01", endDate: "2026-12-31", targetCount: "20" };
 
     const data = sheet.getDataRange().getValues();
@@ -405,8 +405,8 @@ function getChallengeSettings() {
     const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
 
     for (let i = 1; i < data.length; i++) {
-      const key = String(data[i][0] || '').trim().toUpperCase();
-      let val = data[i][1];
+      const key = String(data[i][IDX_SETTINGS.KEY] || '').trim().toUpperCase();
+      let val = data[i][IDX_SETTINGS.VALUE];
       if (val instanceof Date) {
         val = Utilities.formatDate(val, timeZone, "yyyy-MM-dd");
       }
@@ -426,22 +426,22 @@ function getChallengeSettings() {
 function saveChallengeSettings(startDate, endDate, targetCount) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName("Settings");
+    let sheet = ss.getSheetByName(SHEET.SETTINGS);
     if (!sheet) return "Settings 시트가 없습니다.";
 
     const data = sheet.getDataRange().getValues();
     let startRow = -1, endRow = -1, targetRow = -1;
 
     for (let i = 1; i < data.length; i++) {
-      const key = String(data[i][0] || '').trim().toUpperCase();
+      const key = String(data[i][IDX_SETTINGS.KEY] || '').trim().toUpperCase();
       if (key === "START_DATE") startRow = i + 1;
       if (key === "END_DATE") endRow = i + 1;
       if (key === "TARGET_COUNT") targetRow = i + 1;
     }
 
-    if (startRow > 0) sheet.getRange(startRow, 2).setValue(startDate);
-    if (endRow > 0) sheet.getRange(endRow, 2).setValue(endDate);
-    if (targetRow > 0) sheet.getRange(targetRow, 2).setValue(targetCount);
+    if (startRow > 0) sheet.getRange(startRow, COL_SETTINGS.VALUE).setValue(startDate);
+    if (endRow > 0) sheet.getRange(endRow, COL_SETTINGS.VALUE).setValue(endDate);
+    if (targetRow > 0) sheet.getRange(targetRow, COL_SETTINGS.VALUE).setValue(targetCount);
 
     return "기준 저장 완료";
   } catch (e) {
@@ -452,7 +452,7 @@ function saveChallengeSettings(startDate, endDate, targetCount) {
 /** 🚨 [자동 노쇼 일괄 처리 엔진] */
 function checkAndMarkNoShow() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName('Master_Log');
+  const sheet = ss.getSheetByName(SHEET.MASTER);
   if (!sheet) return;
 
   try {
@@ -467,9 +467,9 @@ function checkAndMarkNoShow() {
       const row = data[i];
       const rowNum = i + 1;
 
-      const orderNo = String(row[0] || '').trim().replace(/'/g, ''); 
-      const status = String(row[11] || '').trim();                    
-      const visitDateRaw = row[7];                                    
+      const orderNo = String(row[IDX_MASTER.ORDER] || '').trim().replace(/'/g, ''); 
+      const status = String(row[IDX_MASTER.STATUS] || '').trim();                    
+      const visitDateRaw = row[IDX_MASTER.VISIT];                                    
 
       if (!orderNo || status !== '방문전') continue;
 
@@ -495,12 +495,12 @@ function checkAndMarkNoShow() {
       safeDeadline.setHours(4, 0, 0, 0);
 
       if (now > safeDeadline) {
-        sheet.getRange(rowNum, 12).setValue('노쇼');
+        sheet.getRange(rowNum, COL_MASTER.STATUS).setValue('노쇼');
         
-        const currentSysLog = String(sheet.getRange(rowNum, 25).getValue() || '').trim();
+        const currentSysLog = String(sheet.getRange(rowNum, COL_MASTER.SYS_LOG).getValue() || '').trim();
         const autoLog = `[시스템] ${Utilities.formatDate(now, timeZone, 'yyyy-MM-dd HH:mm')} 자동 노쇼 처리`;
         const updatedSysLog = currentSysLog ? `${currentSysLog} | ${autoLog}` : autoLog;
-        sheet.getRange(rowNum, 25).setValue(updatedSysLog);
+        sheet.getRange(rowNum, COL_MASTER.SYS_LOG).setValue(updatedSysLog);
 
         updatedCount++;
       }
@@ -519,9 +519,9 @@ function checkAndMarkNoShow() {
 /** 🎯 [통합 완결본] Master_Log 누락 데이터 일괄 복구 및 자동 완성 */
 function fillMissingData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const logSheet = ss.getSheetByName("Master_Log");
-  const userSheet = ss.getSheetByName("User_DB");
-  const restSheet = ss.getSheetByName("Restaurant_List");
+  const logSheet = ss.getSheetByName(SHEET.MASTER);
+  const userSheet = ss.getSheetByName(SHEET.USER);
+  const restSheet = ss.getSheetByName(SHEET.REST);
   
   if (!logSheet || !userSheet || !restSheet) {
     SpreadsheetApp.getUi().alert("❌ 시트 확인 필요: Master_Log, User_DB, Restaurant_List 중 누락된 시트가 있습니다.");
@@ -534,14 +534,14 @@ function fillMissingData() {
     return;
   }
 
-  const logData = logSheet.getRange(3, 1, lastRow - 2, 25).getValues();
+  const logData = logSheet.getRange(3, COL_MASTER.ORDER, lastRow - 2, COL_MASTER.SYS_LOG).getValues();
   const userData = userSheet.getDataRange().getValues();
   const restData = restSheet.getDataRange().getValues();
 
   const userMap = new Map();
   for (let j = 1; j < userData.length; j++) {
-    const code = String(userData[j][0] || '').trim().toLowerCase();
-    const engName = String(userData[j][1] || '').trim();
+    const code = String(userData[j][IDX_USER.KEY] || '').trim().toLowerCase();
+    const engName = String(userData[j][IDX_USER.ENG_NAME] || '').trim();
     if (code && engName) userMap.set(code, engName);
   }
 
@@ -549,9 +549,9 @@ function fillMissingData() {
   const nameToIdMap = new Map();
 
   for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
-    const sId = String(restData[k][0] || '').trim().toUpperCase();
-    const sNameKo = String(restData[k][1] || '').trim();
-    const sNameJp = String(restData[k][2] || '').trim();
+    const sId = String(restData[k][IDX_REST.ID] || '').trim().toUpperCase();
+    const sNameKo = String(restData[k][IDX_REST.NAME_KO] || '').trim();
+    const sNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim();
 
     if (sId && sNameKo) {
       idToNameMap.set(sId, sNameKo);
@@ -566,33 +566,33 @@ function fillMissingData() {
 
   for (let i = 0; i < logData.length; i++) {
     const rowNum = i + 3;
-    const memberCode = String(logData[i][1] || '').trim().toLowerCase();
-    const currentEngName = String(logData[i][2] || '').trim();
-    const currentStoreId = String(logData[i][4] || '').trim().toUpperCase();
-    const currentStoreName = String(logData[i][5] || '').trim();
+    const memberCode = String(logData[i][IDX_MASTER.MEMBER] || '').trim().toLowerCase();
+    const currentEngName = String(logData[i][IDX_MASTER.NAME] || '').trim();
+    const currentStoreId = String(logData[i][IDX_MASTER.STORE_ID] || '').trim().toUpperCase();
+    const currentStoreName = String(logData[i][IDX_MASTER.STORE_NAME] || '').trim();
     const cleanStoreName = currentStoreName.replace(/\s+/g, '');
-    const visitDateVal = logData[i][7];
-    const deadlineVal = logData[i][9];
-    const depositVal = logData[i][10];
+    const visitDateVal = logData[i][IDX_MASTER.VISIT];
+    const deadlineVal = logData[i][IDX_MASTER.DEADLINE];
+    const depositVal = logData[i][IDX_MASTER.DEPOSIT];
 
     let rowChanged = false;
 
     if ((!currentEngName || currentEngName === "미승인/정보없음" || currentEngName === "undefined") && userMap.has(memberCode)) {
-      logSheet.getRange(rowNum, 3).setValue(userMap.get(memberCode));
+      logSheet.getRange(rowNum, COL_MASTER.NAME).setValue(userMap.get(memberCode));
       rowChanged = true;
     }
 
     if (!currentStoreId && cleanStoreName) {
       for (let [cleanName, info] of nameToIdMap.entries()) {
         if (cleanStoreName.includes(cleanName) || cleanName.includes(cleanStoreName)) {
-          logSheet.getRange(rowNum, 5).setValue(info.id);
-          logSheet.getRange(rowNum, 6).setValue(info.name);
+          logSheet.getRange(rowNum, COL_MASTER.STORE_ID).setValue(info.id);
+          logSheet.getRange(rowNum, COL_MASTER.STORE_NAME).setValue(info.name);
           rowChanged = true;
           break;
         }
       }
     } else if (currentStoreId && (!currentStoreName || currentStoreName === "식당명 없음") && idToNameMap.has(currentStoreId)) {
-      logSheet.getRange(rowNum, 6).setValue(idToNameMap.get(currentStoreId));
+      logSheet.getRange(rowNum, COL_MASTER.STORE_NAME).setValue(idToNameMap.get(currentStoreId));
       rowChanged = true;
     }
 
@@ -600,13 +600,13 @@ function fillMissingData() {
       if (!deadlineVal || String(deadlineVal).trim() === '') {
         const d = new Date(visitDateVal.getTime());
         d.setDate(d.getDate() + 10);
-        logSheet.getRange(rowNum, 10).setValue(d);
+        logSheet.getRange(rowNum, COL_MASTER.DEADLINE).setValue(d);
         rowChanged = true;
       }
     }
 
     if (!depositVal || depositVal === 0 || String(depositVal).trim() === '') {
-      logSheet.getRange(rowNum, 11).setValue(10000);
+      logSheet.getRange(rowNum, COL_MASTER.DEPOSIT).setValue(10000);
       rowChanged = true;
     }
 
@@ -621,15 +621,15 @@ function resendStoreBookingEmail() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const activeSheet = ss.getActiveSheet();
-  const logSheet = ss.getSheetByName("Master_Log");
-  const restSheet = ss.getSheetByName("Restaurant_List");
-  const userSheet = ss.getSheetByName("User_DB");
+  const logSheet = ss.getSheetByName(SHEET.MASTER);
+  const restSheet = ss.getSheetByName(SHEET.REST);
+  const userSheet = ss.getSheetByName(SHEET.USER);
 
   if (!logSheet || !restSheet || !userSheet) return ui.alert("❌ 시트 확인 필요: Master_Log, Restaurant_List, User_DB");
 
   let targetRow = activeSheet.getActiveRange().getRow();
 
-  if (activeSheet.getName() !== "Master_Log" || targetRow < MASTER_LOG_START_ROW) {
+  if (activeSheet.getName() !== SHEET.MASTER || targetRow < MASTER_LOG_START_ROW) {
     const promptRes = ui.prompt(
       "📧 점주 메일 재발송",
       "메일을 재발송할 [행 번호] 또는 [주문번호]를 입력하세요:\n(예: 3 또는 202609297282617)",
@@ -644,7 +644,7 @@ function resendStoreBookingEmail() {
     } else {
       const data = logSheet.getDataRange().getValues();
       for (let i = 2; i < data.length; i++) {
-        if (String(data[i][0]).replace(/['\s]/g, '') === inputVal.replace(/['\s]/g, '')) {
+        if (String(data[i][IDX_MASTER.ORDER]).replace(/['\s]/g, '') === inputVal.replace(/['\s]/g, '')) {
           targetRow = i + 1;
           break;
         }
@@ -656,14 +656,14 @@ function resendStoreBookingEmail() {
     return ui.alert("⚠️ 올바른 데이터 행 번호를 선택하거나 입력해주세요.");
   }
 
-  const rowData = logSheet.getRange(targetRow, 1, 1, 25).getValues()[0];
-  const orderNo = String(rowData[0] || '').replace(/'/g, '').trim();
-  const memberCode = String(rowData[1] || '').trim();
-  const memberName = String(rowData[2] || '').trim();
-  const storeId = String(rowData[4] || '').trim().toUpperCase();
-  const mealOption = String(rowData[6] || '').trim(); // 🎯 G열 구매옵션 연동
-  const rawVisitDate = rowData[7];
-  const peopleStr = String(rowData[8] || '1명').replace(/[^0-9]/g, '') || '1';
+  const rowData = logSheet.getRange(targetRow, COL_MASTER.ORDER, 1, COL_MASTER.SYS_LOG).getValues()[0];
+  const orderNo = String(rowData[IDX_MASTER.ORDER] || '').replace(/'/g, '').trim();
+  const memberCode = String(rowData[IDX_MASTER.MEMBER] || '').trim();
+  const memberName = String(rowData[IDX_MASTER.NAME] || '').trim();
+  const storeId = String(rowData[IDX_MASTER.STORE_ID] || '').trim().toUpperCase();
+  const mealOption = String(rowData[IDX_MASTER.OPTION] || '').trim(); // 🎯 G열 구매옵션 연동
+  const rawVisitDate = rowData[IDX_MASTER.VISIT];
+  const peopleStr = String(rowData[IDX_MASTER.PEOPLE] || '1명').replace(/[^0-9]/g, '') || '1';
 
   if (!orderNo || !rawVisitDate) {
     return ui.alert(`❌ [재발송 불가]\n\n${targetRow}행에 주문번호나 방문예정일시가 없습니다.`);
@@ -677,10 +677,10 @@ function resendStoreBookingEmail() {
   const restData = restSheet.getDataRange().getValues();
   
   for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
-    if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
-      storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
-      storeEmail = String(restData[k][10] || '').trim();
-      storeBenefit = String(restData[k][22] || '').trim();
+    if (String(restData[k][IDX_REST.ID] || '').trim().toUpperCase() === storeId) {
+      storeNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim() || String(restData[k][IDX_REST.NAME_KO] || '').trim();
+      storeEmail = String(restData[k][IDX_REST.EMAIL] || '').trim();
+      storeBenefit = String(restData[k][IDX_REST.BENEFIT] || '').trim();
       break;
     }
   }
@@ -704,12 +704,12 @@ function resendStoreBookingEmail() {
     let creatorProfileUrl = "";
     const userData = userSheet.getDataRange().getValues();
     for (let u = 1; u < userData.length; u++) {
-      if (String(userData[u][0] || '').trim().toLowerCase() === memberCode.toLowerCase()) {
-        const blogUrl = String(userData[u][4] || '').trim();        
-        const instaUrl = String(userData[u][5] || '').trim();       
-        const youtubeUrl = String(userData[u][6] || '').trim();     
-        const tiktokUrl = String(userData[u][7] || '').trim();      
-        const googleGuide = String(userData[u][8] || '').trim();    
+      if (String(userData[u][IDX_USER.KEY] || '').trim().toLowerCase() === memberCode.toLowerCase()) {
+        const blogUrl = String(userData[u][IDX_USER.BLOG] || '').trim();        
+        const instaUrl = String(userData[u][IDX_USER.INSTA] || '').trim();       
+        const youtubeUrl = String(userData[u][IDX_USER.YOUTUBE] || '').trim();     
+        const tiktokUrl = String(userData[u][IDX_USER.TIKTOK] || '').trim();      
+        const googleGuide = String(userData[u][IDX_USER.GOOGLE_GUIDE] || '').trim();    
 
         creatorProfileUrl = blogUrl || instaUrl || youtubeUrl || tiktokUrl || googleGuide || "";
         break;
@@ -818,11 +818,11 @@ function resendStoreBookingEmail() {
     });
 
     const nowTimeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
-    logSheet.getRange(targetRow, 25).setValue(`[${nowTimeStr}] 점주메일 재발송완료`);
+    logSheet.getRange(targetRow, COL_MASTER.SYS_LOG).setValue(`[${nowTimeStr}] 점주메일 재발송완료`);
     
     ui.alert(`✅ [재발송 성공]\n\n• 매장: ${storeNameJp}\n• 수신 메일: ${storeEmail}\n• 플랜: ${mealOption || '기본'}\n\n점주에게 예약 안내 메일이 재전송되었습니다!`);
   } catch (err) {
-    logSheet.getRange(targetRow, 25).setValue("❌ 재발송 실패: " + err.toString());
+    logSheet.getRange(targetRow, COL_MASTER.SYS_LOG).setValue("❌ 재발송 실패: " + err.toString());
     ui.alert(`❌ 재발송 실패: ${err.toString()}`);
   }
 }
@@ -832,18 +832,18 @@ function adminCancelAndNotifyStore(row) {
   try {
     const safeRow = parseInt(row, 10);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const logSheet = ss.getSheetByName('Master_Log');
-    const restSheet = ss.getSheetByName('Restaurant_List');
+    const logSheet = ss.getSheetByName(SHEET.MASTER);
+    const restSheet = ss.getSheetByName(SHEET.REST);
 
     if (!logSheet || !restSheet) return { success: false, error: "필수 시트 누락" };
 
-    const rowData = logSheet.getRange(safeRow, 1, 1, 25).getValues()[0];
-    const orderNo = String(rowData[0] || '').replace(/'/g, '').trim();
-    const creatorName = String(rowData[2] || '').trim();
-    const storeId = String(rowData[4] || '').trim().toUpperCase();
-    const storeNameKo = String(rowData[5] || '').trim();
-    const rawVisitDate = rowData[7];
-    const peopleStr = String(rowData[8] || '1명').replace(/[^0-9]/g, '') || '1';
+    const rowData = logSheet.getRange(safeRow, COL_MASTER.ORDER, 1, COL_MASTER.SYS_LOG).getValues()[0];
+    const orderNo = String(rowData[IDX_MASTER.ORDER] || '').replace(/'/g, '').trim();
+    const creatorName = String(rowData[IDX_MASTER.NAME] || '').trim();
+    const storeId = String(rowData[IDX_MASTER.STORE_ID] || '').trim().toUpperCase();
+    const storeNameKo = String(rowData[IDX_MASTER.STORE_NAME] || '').trim();
+    const rawVisitDate = rowData[IDX_MASTER.VISIT];
+    const peopleStr = String(rowData[IDX_MASTER.PEOPLE] || '1명').replace(/[^0-9]/g, '') || '1';
 
     if (!orderNo) return { success: false, error: "주문번호가 없습니다." };
 
@@ -861,9 +861,9 @@ function adminCancelAndNotifyStore(row) {
     
     // 3행부터 순회 (k=2)
     for (let k = REST_DATA_START_INDEX; k < restData.length; k++) {
-      if (String(restData[k][0] || '').trim().toUpperCase() === storeId) {
-        storeNameJp = String(restData[k][2] || '').trim() || String(restData[k][1] || '').trim();
-        storeEmail = String(restData[k][10] || '').trim();
+      if (String(restData[k][IDX_REST.ID] || '').trim().toUpperCase() === storeId) {
+        storeNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim() || String(restData[k][IDX_REST.NAME_KO] || '').trim();
+        storeEmail = String(restData[k][IDX_REST.EMAIL] || '').trim();
         break;
       }
     }
@@ -930,13 +930,13 @@ function adminCancelAndNotifyStore(row) {
     });
 
     // 🎯 [정합성 보정] L열: 취소(운영자), H~J열 슬롯 비움, U열(21번째): 취소환불
-    logSheet.getRange(safeRow, 12).setValue("취소(운영자)");
-    logSheet.getRange(safeRow, 8, 1, 3).clearContent();
-    logSheet.getRange(safeRow, 21).setValue("취소환불");
+    logSheet.getRange(safeRow, COL_MASTER.STATUS).setValue("취소(운영자)");
+    logSheet.getRange(safeRow, COL_MASTER.VISIT, 1, MASTER_SLOT_COLS).clearContent();
+    logSheet.getRange(safeRow, COL_MASTER.REFUND).setValue("취소환불");
 
-    const currentLog = String(logSheet.getRange(safeRow, 25).getValue() || '').trim();
+    const currentLog = String(logSheet.getRange(safeRow, COL_MASTER.SYS_LOG).getValue() || '').trim();
     const newLog = `[${todayStr}] 점주 취소메일 발송완료(어드민)`;
-    logSheet.getRange(safeRow, 25).setValue(currentLog ? `${currentLog} | ${newLog}` : newLog);
+    logSheet.getRange(safeRow, COL_MASTER.SYS_LOG).setValue(currentLog ? `${currentLog} | ${newLog}` : newLog);
 
     return { success: true };
   } catch (err) {
@@ -953,7 +953,7 @@ function sendStoreCancellationEmail() {
   const activeSheet = ss.getActiveSheet();
 
   // 1. 현재 시트가 Master_Log인지 확인
-  if (activeSheet.getName() !== "Master_Log") {
+  if (activeSheet.getName() !== SHEET.MASTER) {
     return ui.alert("⚠️ 'Master_Log' 시트로 이동한 후 취소할 행을 클릭하고 실행해주세요.");
   }
 
@@ -965,10 +965,10 @@ function sendStoreCancellationEmail() {
     return ui.alert("⚠️ 취소하려는 예약 데이터 행(3행 이후)을 마우스로 클릭한 뒤 실행해주세요.");
   }
 
-  const orderNo = String(activeSheet.getRange(targetRow, 1).getValue() || '').replace(/'/g, '').trim();
-  const creatorName = String(activeSheet.getRange(targetRow, 3).getValue() || '').trim();
-  const storeName = String(activeSheet.getRange(targetRow, 6).getValue() || '').trim();
-  const currentStatus = String(activeSheet.getRange(targetRow, 12).getValue() || '').trim();
+  const orderNo = String(activeSheet.getRange(targetRow, COL_MASTER.ORDER).getValue() || '').replace(/'/g, '').trim();
+  const creatorName = String(activeSheet.getRange(targetRow, COL_MASTER.NAME).getValue() || '').trim();
+  const storeName = String(activeSheet.getRange(targetRow, COL_MASTER.STORE_NAME).getValue() || '').trim();
+  const currentStatus = String(activeSheet.getRange(targetRow, COL_MASTER.STATUS).getValue() || '').trim();
 
   if (!orderNo) {
     return ui.alert(`⚠️ 선택하신 ${targetRow}행에는 주문 데이터가 없습니다.`);

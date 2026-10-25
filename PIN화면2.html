@@ -170,7 +170,6 @@
     <div id="loginSection" class="text-center py-5">
       <h2 class="fw-bold mb-4" style="color: var(--brand-navy); letter-spacing: -0.5px;">BOOKMARK CREATORS</h2>
       <div class="card p-4">
-        <!-- 서버 템플릿 태그를 완전히 제거한 안전한 정적 인풋 -->
         <input type="text" id="orderNo" class="form-control mb-2" placeholder="주문번호">
         <input type="tel" id="phoneLast4" class="form-control mb-4" placeholder="휴대폰 뒷자리 4자리" maxlength="4">
         <button type="button" class="btn btn-brand btn-custom" id="loginBtn" onclick="window.executeLogin()">내 미션 확인하기</button>
@@ -212,19 +211,17 @@
     </div>
   </div>
 
-<!-- 매장 확인 모달 -->
+  <!-- 매장 확인 모달 -->
   <div class="modal fade" id="staffModal" tabindex="-1">
     <div class="modal-dialog">
       <div class="modal-content text-center border-0" style="border-radius: 28px; max-width: 350px !important; padding: 26px 20px 22px; box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18) !important; background: #ffffff;">
         <div class="modal-body p-0">
           
-          <!-- 상단 헤더 -->
           <div style="margin-bottom: 16px;">
             <h4 class="m-0" style="color: var(--brand-navy); font-weight: 900; letter-spacing: -0.5px; font-size: 20px;">BOOKMARK CREATORS</h4>
             <div style="width: 32px; height: 3px; background: var(--sub-gold); margin: 8px auto 0; border-radius: 2px;"></div>
           </div>
 
-          <!-- 한국어 크리에이터 주의 안내 -->
           <div style="background: #FFF5F5; border-radius: 14px; padding: 12px 14px; margin-bottom: 16px; border: 1px solid #FFE3E3;">
             <p class="m-0 fw-bold" style="font-size: 15px; color: #E03131; line-height: 1.5; letter-spacing: -0.3px;">
               직원에게 이 화면을 보여주세요.
@@ -234,7 +231,6 @@
             </p>
           </div>
 
-          <!-- 운영회사 & 취재 문구 (가운데 정렬 & 2줄 개행) -->
           <div style="margin-bottom: 18px; text-align: center; padding: 0 4px; line-height: 1.6;">
             <p class="m-0 fw-bold" style="font-size: 13.5px; color: #4B5563; letter-spacing: -0.3px;">
               運営会社：株式会社lib.
@@ -245,7 +241,6 @@
             </p>
           </div>
 
-          <!-- W열 제공 메뉴 연동 -->
           <div style="background: #F4FBF7; border-radius: 16px; padding: 16px; margin-bottom: 22px; border: 1.5px solid #D3F9D8; text-align: left;">
             <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
               <span style="font-size: 15px;">🍽️</span>
@@ -256,7 +251,6 @@
             </p>
           </div>
 
-          <!-- 매장 스태프 안내 가이드 -->
           <div style="margin-bottom: 22px; text-align: center; line-height: 1.6; word-break: keep-all;">
             <p class="m-0 fw-bold" style="font-size: 15px; color: #111827; letter-spacing: -0.3px;">
               店舗スタッフの方へ
@@ -269,14 +263,12 @@
 
           <input type="hidden" id="targetRow">
 
-          <!-- 방문확인 완료 액션 버튼 -->
           <button type="button" id="confirmBtn" class="btn btn-custom" 
                   style="background-color: var(--brand-navy); color: #ffffff; font-size: 17px; font-weight: 800; letter-spacing: 0.5px; padding: 15px 0; border-radius: 16px; box-shadow: 0 6px 20px rgba(26, 43, 73, 0.25); border: none; width: 100%; transition: all 0.2s;" 
                   onclick="window.processVisit()">
             来店確認完了
           </button>
 
-          <!-- 닫기 버튼 -->
           <div style="margin-top: 10px;">
             <button type="button" class="btn btn-link btn-sm text-decoration-none" data-bs-dismiss="modal" style="font-size: 13px; color: #8B95A1; font-weight: 600; padding: 4px 12px;">閉じる (닫기)</button>
           </div>
@@ -295,6 +287,7 @@
     var staffModal = null; var alertModal = null; var alertCallback = null; 
     window.selectedBooking = {}; 
     window.currentSelectedChannel = {};
+    window.isLoggingIn = false; // 🎯 전역 로그인 진행 플래그
 
     function showAlert(msg, callback) {
       try {
@@ -328,11 +321,12 @@
         });
       } catch(e) {}
       
+      // 🚨 안전 타임아웃: 로그인 통신 중이거나 미션창이 열려있다면 로그인창을 절대 열지 않음
       setTimeout(function() {
         var loader = el('globalInitialLoading');
         if (loader && loader.style.display !== 'none') {
           hideGlobalInitialLoading();
-          if (el('missionSection').style.display !== 'block') {
+          if (!window.isLoggingIn && el('missionSection').style.display !== 'block') {
             el('loginSection').style.display = 'block';
           }
         }
@@ -365,29 +359,37 @@
           return; 
         }
         
+        window.isLoggingIn = true; // 🎯 로그인 진행 플래그 켜기
         window.selectedBooking = {};
+        
+        // 🎯 [핵심] 로그인 시도 즉시 로그인 영역과 미션 영역을 확실히 숨김
         el('loginSection').style.display = 'none'; 
         el('missionSection').style.display = 'none'; 
         el('loading').style.display = 'block';
         
         google.script.run
           .withSuccessHandler(function(data) {
+            window.isLoggingIn = false; // 🎯 통신 완료
             el('loading').style.display = 'none';
             hideGlobalInitialLoading(); 
             el('globalActionLoading').style.display = 'none'; 
             
             if (!data || data.length === 0) { 
               showAlert('일치하는 미션 정보가 없습니다.'); 
+              el('missionSection').style.display = 'none';
               el('loginSection').style.display = 'block'; 
               localStorage.removeItem('tycheOrderNo'); 
               localStorage.removeItem('tychePhone'); 
               return; 
             }
             
+            // 🎯 [핵심] 미션 데이터 수신 성공 시: 로그인 섹션은 무조건 none, 미션 섹션만 block
+            el('loginSection').style.display = 'none';
+            el('missionSection').style.display = 'block';
+
             window.globalMissionsData = data;
             localStorage.setItem('tycheOrderNo', o); 
             localStorage.setItem('tychePhone', p);
-            el('missionSection').style.display = 'block';
             
             var firstM = data[0];
             var chList = firstM.approvedChannels || [];
@@ -421,14 +423,17 @@
             }, 100);
           })
           .withFailureHandler(function(err) {
+            window.isLoggingIn = false; // 🎯 통신 실패
             el('loading').style.display = 'none'; 
             hideGlobalInitialLoading(); 
             el('globalActionLoading').style.display = 'none'; 
+            el('missionSection').style.display = 'none'; 
             el('loginSection').style.display = 'block'; 
             showAlert('서버 통신 오류: ' + err.message);
           })
           .getMissions(o, p);
       } catch (fatalError) { 
+        window.isLoggingIn = false;
         hideGlobalInitialLoading(); 
         el('globalActionLoading').style.display = 'none'; 
         alert("실행 중 오류 발생: " + fatalError.message); 

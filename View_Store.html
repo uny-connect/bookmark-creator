@@ -195,6 +195,30 @@
               <input type="email" id="cfgEmail" class="form-control-custom" placeholder="example@gmail.com">
             </div>
             
+            <div id="cfgStayFields" style="display:none;">
+              <div class="row mb-3">
+                <div class="col-6 text-start">
+                  <label class="config-label">🛏️ 1日の客室数</label>
+                  <input type="number" id="cfgRooms" class="form-control-custom" placeholder="例: 3" min="1">
+                </div>
+                <div class="col-6 text-start">
+                  <label class="config-label">🌙 最大宿泊数 (泊)</label>
+                  <input type="number" id="cfgMaxNights" class="form-control-custom" placeholder="例: 7" min="1">
+                </div>
+              </div>
+              <div class="row mb-3">
+                <div class="col-6 text-start">
+                  <label class="config-label">🔑 チェックイン時刻</label>
+                  <input type="text" id="cfgCheckinTime" class="form-control-custom" placeholder="例: 15:00">
+                </div>
+                <div class="col-6 text-start">
+                  <label class="config-label">🚪 チェックアウト時刻</label>
+                  <input type="text" id="cfgCheckoutTime" class="form-control-custom" placeholder="例: 11:00">
+                </div>
+              </div>
+            </div>
+
+            <div id="cfgSlotFields1">
             <div class="row mb-3">
               <div class="col-6 text-start">
                 <label class="config-label">👥 回別チーム数</label>
@@ -219,15 +243,16 @@
                 </select>
               </div>
             </div>
-            
+            </div>
+
             <div class="mb-3 text-start">
               <label class="config-label">📅 定休日</label>
               <input type="text" id="cfgBlackouts" class="form-control-custom" placeholder="例: 月、毎週火曜日、第2月曜日、2026-08-15">
             </div>
             
-            <div class="mb-4 text-start">
+            <div id="cfgSlotFields2" class="mb-4 text-start">
               <label class="config-label">❌ 予約不可時間帯</label>
-              <input type="text" id="cfgBlockedTimes" class="form-control-custom" placeholder="例: 14:00、18:00-20:00">
+              <input type="text" id="cfgBlockedTimes" class="form-control-custom" placeholder="例: 14:00、18:00-20:00、火木日11:00-13:00">
             </div>
             
             <button class="btn btn-brand-solid w-100" id="saveCfgBtn" onclick="submitConfig()">設定を保存する</button>
@@ -505,7 +530,19 @@
       document.getElementById('cfgBizHours').value = res.bizHours;
       document.getElementById('cfgInterval').value = res.intervalMin || "30";
       document.getElementById('cfgBlockedTimes').value = res.blockedTimes;
-      
+
+      // 숙박(STAY) 매장: 시간대 슬롯 항목 대신 객실/체크인 설정 표시
+      const isStay = String(res.storeType || '').trim().toUpperCase() === 'STAY';
+      document.getElementById('cfgStayFields').style.display = isStay ? '' : 'none';
+      document.getElementById('cfgSlotFields1').style.display = isStay ? 'none' : '';
+      document.getElementById('cfgSlotFields2').style.display = isStay ? 'none' : '';
+      if (isStay) {
+        document.getElementById('cfgRooms').value = res.rooms;
+        document.getElementById('cfgMaxNights').value = res.maxNights;
+        document.getElementById('cfgCheckinTime').value = res.checkinTime;
+        document.getElementById('cfgCheckoutTime').value = res.checkoutTime;
+      }
+
       let rawBlackouts = res.blackouts || '';
       
       if(typeof rawBlackouts === 'string' && (rawBlackouts.includes('GMT') || rawBlackouts.includes('Standard Time'))) {
@@ -561,7 +598,8 @@
           }
         })
         .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = "設定を保存する"; showAlert('サーバーエラーが発生しました。'); })
-        .updateStoreConfig(getPartnerToken(), row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes);
+        .updateStoreConfig(getPartnerToken(), row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes,
+          document.getElementById('cfgRooms').value, document.getElementById('cfgCheckinTime').value, document.getElementById('cfgCheckoutTime').value, document.getElementById('cfgMaxNights').value);
     }
   </script>
 </body>

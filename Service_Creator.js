@@ -54,14 +54,21 @@ function getMissions(orderNo, phoneLast4) {
       const rDetails = { 
         map: String(rRow[IDX_REST.MAP_URL] || '#').trim(),
         guide: String(rRow[IDX_REST.GUIDE_URL] || '#').trim(),
-        bookingUrl: (storeType === 'RETAIL') ? '' : String(rRow[IDX_REST.BOOKING_URL] || '').trim(), 
-        storeType: storeType, 
+        bookingUrl: (storeType === 'RETAIL' || storeType === STORE_TYPE_STAY) ? '' : String(rRow[IDX_REST.BOOKING_URL] || '').trim(),
+        storeType: storeType,
         maxPeople: maxPeople,
         minDays: minLeadDays,
         maxDays: maxLeadDays,
         blackouts: getSafeBlackouts(rRow[IDX_REST.BLACKOUTS]),
         benefit: String(rRow[IDX_REST.BENEFIT] || '').trim() // 🎯 [추가] W열(23번째 열, index 22) 제공 메뉴/혜택
       };
+      if (storeType === STORE_TYPE_STAY) {
+        const stay = _getStayConfig_(rRow);
+        rDetails.checkinTime = stay.checkinTime;
+        rDetails.checkoutTime = stay.checkoutTime;
+        rDetails.maxNights = stay.maxNights;
+        rDetails.autoCheckin = stay.autoCheckin;
+      }
       
       if (rId) restMap.set(rId, rDetails);
       if (rName) restNameMap.set(rName, rDetails);
@@ -111,7 +118,10 @@ function getMissions(orderNo, phoneLast4) {
         reviewUrl: String(mRow[IDX_MASTER.REVIEW_URL] || ''),  
         googleMapUrl: String(mRow[IDX_MASTER.GOOGLE_URL] || ''), 
         shortReview: String(mRow[IDX_MASTER.SHORT_REVIEW] || ''), 
-        deadline, visitDate: vDate, tierEmoji: userTierMap.get(memberCode) || '🟡',
+        deadline, visitDate: vDate,
+        checkoutDate: vDate ? formatDate(mRow[IDX_MASTER.CHECKOUT], 'yyyy-MM-dd') : '', // STAY 전용(체크인 H 값이 있을 때만)
+        nights: vDate ? (parseInt(mRow[IDX_MASTER.NIGHTS], 10) || 0) : 0,
+        tierEmoji: userTierMap.get(memberCode) || '🟡',
         approvedChannels: userChannelsMap.get(memberCode) || [{ type: 'instagram', name: '인스타그램(릴스)', icon: '📸', placeholder: '인스타그램 릴스/게시물 URL' }],
         info: { name: restaurantName, ...restInfo }
       });
@@ -249,21 +259,11 @@ function checkAvailability(storeId, targetDateStr, mealOption) {
     if (!config.bizHours) return { error: "오류: 매장 영업시간 설정 미비" };
 
     const targetDateObj = new Date(targetDateStr);
-    const dayJaMap = ['日', '月', '火', '水', '木', '金', '土'];
     const dayKoMap = ['일', '월', '화', '수', '목', '금', '토'];
-    const tDayJa = dayJaMap[targetDateObj.getDay()];
+    const tDayJa = _DAY_JA[targetDateObj.getDay()];
     const tDayKo = dayKoMap[targetDateObj.getDay()];
-    const tWeekNum = Math.ceil(targetDateObj.getDate() / 7);
 
-    const isBlackout = config.blackouts.some(b => {
-      if (!b) return false;
-      if (b === targetDateStr || b === tDayJa) return true;
-      if (b.includes('第')) {
-        const match = b.match(/第([1-5])/);
-        return match && parseInt(match[1], 10) === tWeekNum && b.includes(tDayJa);
-      }
-      return false;
-    });
+    const isBlackout = _isBlackoutDate_(config.blackouts, targetDateStr, targetDateObj.getDay(), targetDateObj.getDate());
 
     if (isBlackout) return { isAvailable: false, reason: "정기 휴무일", availableSlots: [] };
 
@@ -313,8 +313,7 @@ function checkAvailability(storeId, targetDateStr, mealOption) {
       const mStoreId = String(mRow[IDX_MASTER.STORE_ID] || '').trim().toUpperCase();
       if (mStoreId === cleanInputId && !String(mRow[IDX_MASTER.STATUS]).includes('취소') && !String(mRow[IDX_MASTER.STATUS]).includes('노쇼')) {
         let v = mRow[IDX_MASTER.VISIT];
-        let dateStr = (v instanceof Date) ? Utilities.formatDate(v, timeZone, 'yyyy-MM-dd') : String(v || '').substring(0, 10);
-        let timeStr = (v instanceof Date) ? Utilities.formatDate(v, timeZone, 'HH:mm') : String(v || '').substring(11, 16).replace(/\s+/g, '');
+        const { dateStr, timeStr } = _splitVisit_(v, timeZone);
         
         if (dateStr === targetDateStr) {
           dailyTotal++;
@@ -337,12 +336,16 @@ function checkAvailability(storeId, targetDateStr, mealOption) {
 
       const timeRanges = config.bizHours.split(',');
 
-      const blocks = config.blockedTimes.map(b => {
-        if (!b.includes('-')) return { type: 'exact', time: parseTime(b) };
+      // 🎯 요일 접두(예: 火木日11:00-13:00)가 있으면 해당 요일에만 차단, 없으면 매일
+      const blocks = config.blockedTimes.map(raw => {
+        const dm = String(raw).trim().match(/^([日月火水木金土]+)\s*(.*)$/);
+        const days = dm ? dm[1] : '';
+        const b = dm ? dm[2] : String(raw).trim();
+        if (!b.includes('-')) return { type: 'exact', time: parseTime(b), days };
         const bp = b.split('-');
         let bs = parseTime(bp[0]), be = parseTime(bp[1]);
-        return { type: 'range', start: bs, end: be };
-      });
+        return { type: 'range', start: bs, end: be, days };
+      }).filter(b => !b.days || b.days.includes(tDayJa));
 
       timeRanges.forEach(rangeStr => {
         const times = rangeStr.trim().split('-');
@@ -407,6 +410,11 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
     // 🎯 G열(7번째 열) 구매옵션 읽기
     const mealOption = String(sheet.getRange(safeRow, COL_MASTER.OPTION).getValue() || '').trim();
 
+    const maxPeople = _getStoreMaxPeople_(storeId);
+    if (safePeopleCount > maxPeople) {
+      return { success: false, error: `이 매장은 최대 ${maxPeople}명까지 예약할 수 있습니다.` };
+    }
+
     // 🎯 옵션을 포함하여 슬롯 유효성 검사 수행
     const avail = checkAvailability(storeId, dateStr, mealOption);
     if (!avail.isAvailable || !avail.availableSlots.includes(timeStr)) {
@@ -456,4 +464,209 @@ function bookTimeSlot(row, dateStr, timeStr, peopleCount) {
   }
 
   return { success: true };
+}
+
+/*********************** 🏨 숙박(STAY) 예약 ***********************/
+
+const _DAY_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+/** 휴무 규칙(날짜/요일/第N요일) 일치 여부. checkAvailability 와 checkStayAvailability 공용 */
+function _isBlackoutDate_(blackouts, dateStr, dayIdx, dayOfMonth) {
+  const dayJa = _DAY_JA[dayIdx];
+  const weekNum = Math.ceil(dayOfMonth / 7);
+  return blackouts.some(b => {
+    if (!b) return false;
+    if (b === dateStr || b === dayJa) return true;
+    if (b.includes('第')) {
+      const match = b.match(/第([1-5])/);
+      return match && parseInt(match[1], 10) === weekNum && b.includes(dayJa);
+    }
+    return false;
+  });
+}
+
+/** 'yyyy-MM-dd' → UTC 자정 ms (형식 오류 시 null). 박수 계산을 타임존과 무관하게 하기 위해 UTC 사용 */
+function _ymdToUtc_(s) {
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? Date.UTC(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)) : null;
+}
+function _utcToYmd_(ms) { return new Date(ms).toISOString().substring(0, 10); }
+const _MS_DAY = 86400000;
+
+/** 시트 셀(Date 또는 문자열) → 'yyyy-MM-dd' */
+function _cellToYmd_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return String(v || '').substring(0, 10);
+}
+
+/** 점포 행 찾기: ID 또는 KO/JP 매장명 일치 */
+function _findRestRow_(restList, storeId) {
+  const cleanId = String(storeId || '').trim().toUpperCase().replace(/['"]/g, '');
+  for (let i = REST_DATA_START_INDEX; i < restList.length; i++) {
+    const r = restList[i];
+    const rowId = String(r[IDX_REST.ID] || '').trim().toUpperCase().replace(/['"]/g, '');
+    if (rowId === cleanId || (cleanId && (cleanId === String(r[IDX_REST.NAME_KO] || '').trim() || cleanId === String(r[IDX_REST.NAME_JP] || '').trim()))) return r;
+  }
+  return null;
+}
+
+/** 서버 측 최대 인원 검증용 (시트 값이 비어 있으면 UI 기본값 4) */
+function _getStoreMaxPeople_(storeId) {
+  const row = _findRestRow_(_getSheetsData([SHEET.REST])[SHEET.REST], storeId);
+  return row ? (parseInt(row[IDX_REST.MAX_PEOPLE], 10) || 4) : 4;
+}
+
+/** STAY 전용 설정 (빈 값은 기본값) */
+function _getStayConfig_(restRow) {
+  // 시트에서 15:00 을 직접 입력하면 시간(Date) 셀이 되므로 HH:mm 으로 되돌린다
+  const hm = v => (v instanceof Date) ? Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm') : String(v || '').trim();
+  return {
+    rooms: parseInt(restRow[IDX_REST.ROOMS], 10) || 1,
+    checkinTime: hm(restRow[IDX_REST.CHECKIN_TIME]) || '15:00',
+    checkoutTime: hm(restRow[IDX_REST.CHECKOUT_TIME]) || '11:00',
+    maxNights: parseInt(restRow[IDX_REST.MAX_NIGHTS], 10) || 7,
+    autoCheckin: String(restRow[IDX_REST.AUTO_CHECKIN] || '').trim().toUpperCase() === 'Y'
+  };
+}
+
+/** 숙박 가능 여부: 박수/리드타임/휴무(숙박하는 밤 기준, 체크아웃일 제외)/일일 객실수 */
+function checkStayAvailability(storeId, checkInStr, checkOutStr) {
+  try {
+    const data = _getSheetsData([SHEET.REST, SHEET.MASTER]);
+    const restRow = _findRestRow_(data[SHEET.REST], storeId);
+    if (!restRow) return { error: "오류: 매장 확인 불가" };
+    if (String(restRow[IDX_REST.STORE_TYPE] || '').trim().toUpperCase() !== STORE_TYPE_STAY) {
+      return { error: "오류: 숙박 매장이 아닙니다" };
+    }
+
+    const inMs = _ymdToUtc_(checkInStr), outMs = _ymdToUtc_(checkOutStr);
+    if (inMs === null || outMs === null) return { error: "오류: 날짜 형식이 올바르지 않습니다" };
+
+    const stay = _getStayConfig_(restRow);
+    const nights = Math.round((outMs - inMs) / _MS_DAY);
+    if (nights < 1 || nights > stay.maxNights) {
+      return { isAvailable: false, reason: `숙박은 1박~${stay.maxNights}박까지 가능합니다.` };
+    }
+
+    const todayMs = _ymdToUtc_(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'));
+    const minDays = parseInt(restRow[IDX_REST.MIN_DAYS], 10) || 1;
+    const maxDays = parseInt(restRow[IDX_REST.MAX_DAYS], 10) || 90;
+    if (inMs < todayMs + minDays * _MS_DAY || outMs > todayMs + maxDays * _MS_DAY) {
+      return { isAvailable: false, reason: "예약 가능 기간을 벗어났습니다." };
+    }
+
+    const blackouts = getSafeBlackouts(restRow[IDX_REST.BLACKOUTS]);
+    const cleanId = String(restRow[IDX_REST.ID] || '').trim().toUpperCase();
+    const occupied = {};
+    const masterLog = data[SHEET.MASTER];
+    for (let i = 2; i < masterLog.length; i++) {
+      const mRow = masterLog[i];
+      const status = String(mRow[IDX_MASTER.STATUS] || '');
+      if (String(mRow[IDX_MASTER.STORE_ID] || '').trim().toUpperCase() !== cleanId || status.includes('취소') || status.includes('노쇼')) continue;
+      const s = _ymdToUtc_(_cellToYmd_(mRow[IDX_MASTER.VISIT]));
+      if (s === null) continue;
+      const eRaw = _ymdToUtc_(_cellToYmd_(mRow[IDX_MASTER.CHECKOUT]));
+      const e = (eRaw !== null && eRaw > s) ? eRaw : s + _MS_DAY;
+      for (let d = s; d < e; d += _MS_DAY) occupied[d] = (occupied[d] || 0) + 1;
+    }
+
+    for (let d = inMs; d < outMs; d += _MS_DAY) {
+      const dt = new Date(d);
+      if (_isBlackoutDate_(blackouts, _utcToYmd_(d), dt.getUTCDay(), dt.getUTCDate())) {
+        return { isAvailable: false, reason: `${_utcToYmd_(d)} 은(는) 예약 불가일입니다.` };
+      }
+      if ((occupied[d] || 0) >= stay.rooms) {
+        return { isAvailable: false, reason: `${_utcToYmd_(d)} 은(는) 객실이 마감되었습니다.` };
+      }
+    }
+
+    return {
+      isAvailable: true, nights: nights, checkinTime: stay.checkinTime, checkoutTime: stay.checkoutTime,
+      maxPeople: parseInt(restRow[IDX_REST.MAX_PEOPLE], 10) || 4
+    };
+  } catch (e) {
+    return { error: e.toString() };
+  }
+}
+
+/** 숙박 예약 신청: bookTimeSlot 과 동일한 흐름(상태 예약확인중 → 점주 확인 메일) */
+function bookStay(row, checkInStr, checkOutStr, peopleCount) {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(8000)) {
+    return { success: false, error: "현재 접속자가 몰려 처리 중입니다. 잠시 후 다시 눌러주세요." };
+  }
+
+  const safeRow = parseInt(row, 10);
+  const safePeopleCount = parseInt(peopleCount, 10) || 1;
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);
+
+  let mailPayload = null;
+
+  try {
+    const realTimeStatus = String(sheet.getRange(safeRow, COL_MASTER.STATUS).getValue()).trim();
+    if (realTimeStatus !== '예약대기' && realTimeStatus !== '일정조율필요') {
+      return {
+        success: false,
+        error: `이미 처리 중이거나 확정된 예약입니다. (현재 상태: ${realTimeStatus})\n새로고침 후 다시 확인해 주세요.`
+      };
+    }
+
+    const storeId = String(sheet.getRange(safeRow, COL_MASTER.STORE_ID).getValue()).trim();
+    const avail = checkStayAvailability(storeId, checkInStr, checkOutStr);
+    if (avail.error) return { success: false, error: avail.error };
+    if (!avail.isAvailable) return { success: false, error: avail.reason || "선택하신 일정은 예약할 수 없습니다." };
+    if (safePeopleCount > avail.maxPeople) {
+      return { success: false, error: `이 숙소는 최대 ${avail.maxPeople}명까지 예약할 수 있습니다.` };
+    }
+
+    const outMs = _ymdToUtc_(checkOutStr);
+    sheet.getRange(safeRow, COL_MASTER.VISIT).setValue(checkInStr + " " + avail.checkinTime);
+    sheet.getRange(safeRow, COL_MASTER.PEOPLE).setValue(safePeopleCount + '명');
+    sheet.getRange(safeRow, COL_MASTER.DEADLINE).setValue(new Date(outMs + 10 * _MS_DAY)); // 마감일: 체크아웃일 + 10일
+    sheet.getRange(safeRow, COL_MASTER.CHECKOUT).setValue(checkOutStr);
+    sheet.getRange(safeRow, COL_MASTER.NIGHTS).setValue(avail.nights);
+    if (!sheet.getRange(safeRow, COL_MASTER.DEPOSIT).getValue()) sheet.getRange(safeRow, COL_MASTER.DEPOSIT).setValue(10000);
+    sheet.getRange(safeRow, COL_MASTER.STATUS).setValue('예약확인중');
+
+    SpreadsheetApp.flush();
+
+    mailPayload = {
+      storeId: storeId,
+      memberCode: String(sheet.getRange(safeRow, COL_MASTER.MEMBER).getValue()).trim(),
+      memberName: String(sheet.getRange(safeRow, COL_MASTER.NAME).getValue()).trim(),
+      orderNo: String(sheet.getRange(safeRow, COL_MASTER.ORDER).getValue()).trim().replace(/'/g, ''),
+      mealOption: String(sheet.getRange(safeRow, COL_MASTER.OPTION).getValue() || '').trim(),
+      dateStr: _stayRangeText_(checkInStr, checkOutStr, avail.nights),
+      timeStr: '',
+      isStay: true,
+      safePeopleCount: safePeopleCount,
+      safeRow: safeRow
+    };
+  } catch (err) {
+    return { success: false, error: "예약 처리 중 오류가 발생했습니다: " + err.toString() };
+  } finally {
+    lock.releaseLock();
+  }
+
+  try {
+    if (mailPayload) _sendBookingNotifications(mailPayload);
+  } catch (mailErr) {
+    console.error("메일 발송 에러: " + mailErr.toString());
+  }
+
+  return { success: true };
+}
+
+/** 메일용 숙박 일정 문구: 기본(일본어, 점주·운영진) "2026-11-05 ~ 2026-11-07 (2泊3日)", lang='ko'(크리에이터) "… (2박 3일)" */
+function _stayRangeText_(checkInStr, checkOutStr, nights, lang) {
+  const span = (lang === 'ko') ? `${nights}박 ${nights + 1}일` : `${nights}泊${nights + 1}日`;
+  return `${checkInStr} ~ ${checkOutStr} (${span})`;
+}
+
+/** 메일용 일정 표기: 숙박 행(V·W열 값 있음)이면 "체크인 ~ 체크아웃 (N박 N+1일)", 아니면 방문일시 그대로. lang 은 _stayRangeText_ 참고 */
+function _visitDisplayForRow_(sheet, safeRow, visitDateStr, lang) {
+  const nights = parseInt(sheet.getRange(safeRow, COL_MASTER.NIGHTS).getValue(), 10) || 0;
+  const checkout = _cellToYmd_(sheet.getRange(safeRow, COL_MASTER.CHECKOUT).getValue());
+  // 일정이 비어 있는 행(H열 없음)에 남은 V·W 값은 무시
+  return (nights > 0 && checkout && /^\d{4}-\d{2}-\d{2}/.test(String(visitDateStr))) ? _stayRangeText_(String(visitDateStr).substring(0, 10), checkout, nights, lang) : visitDateStr;
 }

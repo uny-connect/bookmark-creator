@@ -42,11 +42,12 @@ const sandbox = {
     },
   },
   Session: { getScriptTimeZone: () => 'Asia/Seoul' },
-  SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => sheets[n] || null }) },
+  SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => sheets[n] || null }), flush: () => {} },
+  LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
   ScriptApp: { getService: () => ({ getUrl: () => 'https://example.test/exec' }) },
 };
 vm.createContext(sandbox);
-['Config.js', 'Utils.js', 'Service_Auth.js', 'Service_Mail.js', 'Service_Store.js'].forEach(f =>
+['Config.js', 'Utils.js', 'Service_Auth.js', 'Service_Mail.js', 'Service_Store.js', 'Service_Admin.js', 'Service_Creator.js'].forEach(f =>
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), sandbox, { filename: f }));
 const run = code => vm.runInContext(code, sandbox);
 
@@ -113,4 +114,180 @@ assert.strictEqual(call().isAlreadyRequested, true);
 setup('취소(운영자)', 1);
 assert.strictEqual(call().isAlreadyRequested, true);
 
-console.log('OK: logic-smoke (auth tokens, store access, confirmBookingByLink)');
+// ---- 3. sendDailyStoreReminders -------------------------------------------
+const todayDate = fmt(new Date()).substring(0, 10);
+function remindSetup(rows) { // rows: [storeId, status, visit, people, name, log]
+  sent = [];
+  const master = [[], []];
+  rows.forEach(([sid, st, visit, ppl, name, log], n) => {
+    const row = new Array(25).fill('');
+    row[0] = "'" + (2000 + n); row[2] = name; row[4] = sid; row[7] = visit; row[8] = ppl; row[11] = st; row[24] = log || '';
+    master.push(row);
+  });
+  const restRow = (id, jp, email) => { const r = new Array(30).fill(''); r[0] = id; r[2] = jp; r[10] = email; return r; };
+  sheets = { Master_Log: fakeSheet(master), Restaurant_List: fakeSheet([[], [], restRow('S1', 'テスト店', 's1@example.com'), restRow('S2', '店2', ''), restRow('S3', '店3', 's3@example.com')]), Settings: null };
+}
+remindSetup([
+  ['S1', '방문전', `${todayDate} 18:30`, '4명', 'Bob'],
+  ['S1', '방문전', `${todayDate} 12:00`, '2명', 'Alice'],
+  ['S1', '예약확인중', `${todayDate} 13:00`, '2명', 'Pending'],
+  ['S1', '방문전', '2000-01-01 12:00', '2명', 'OtherDay'],
+  ['S2', '방문전', `${todayDate} 12:00`, '2명', 'NoEmail'],
+  ['S3', '방문전', `${todayDate} 12:00`, '1명', 'Done', `[${todayDate} 09:00] 당일 리마인드 발송`],
+]);
+run(`sendDailyStoreReminders()`);
+assert.strictEqual(sent.length, 1, 'S1 1통만 발송 (S2 이메일 없음, S3 이미 발송)');
+assert.strictEqual(sent[0].to, 's1@example.com');
+assert.ok(/2件: 12:00 2名 \/ 18:30 4名/.test(sent[0].subject), '시간순 정렬 + 제목에 시간·인원: ' + sent[0].subject);
+assert.ok(!/Pending|OtherDay/.test(sent[0].opts.htmlBody), '방문전·오늘만 포함');
+const logAt = n => sheets.Master_Log.cells[n][24];
+assert.ok(/당일 리마인드 발송/.test(logAt(2)) && /당일 리마인드 발송/.test(logAt(3)), '발송 건 로그 기록');
+assert.ok(/실패: 점주 이메일 주소 없음/.test(logAt(6)), '이메일 없는 점포 실패 로그');
+assert.strictEqual(logAt(4), '', '예약확인중 건은 건드리지 않음');
+sent = [];
+run(`sendDailyStoreReminders()`);
+assert.strictEqual(sent.length, 0, '재실행 시 중복 발송 없음');
+
+// ---- 4. 숙박(STAY) 예약 ----------------------------------------------------
+const ymd = n => fmt(new Date(Date.now() + n * 864e5)).substring(0, 10);
+function staySetup(blackouts, bookings) { // bookings: [status, checkIn, checkOut]
+  sent = [];
+  const master = [[], []];
+  const base = new Array(25).fill('');
+  base[0] = "'3001"; base[1] = 'mc1'; base[2] = 'Alice'; base[4] = 'H1'; base[11] = '예약대기';
+  master.push(base);
+  bookings.forEach(([st, cin, cout], n) => {
+    const row = new Array(25).fill('');
+    row[0] = "'" + (3100 + n); row[4] = 'H1'; row[7] = cin + ' 15:00'; row[11] = st; row[21] = cout;
+    master.push(row);
+  });
+  const rest = new Array(35).fill('');
+  rest[0] = 'H1'; rest[1] = '호텔'; rest[2] = 'ホテル'; rest[7] = 'STAY'; rest[10] = 'h1@example.com';
+  rest[13] = blackouts; rest[21] = 3; rest[23] = 1; rest[24] = 90; rest[30] = 1; rest[33] = 3;
+  const userRow = new Array(16).fill(''); userRow[0] = 'mc1'; userRow[13] = 'alice@example.com';
+  sheets = { Master_Log: fakeSheet(master), Restaurant_List: fakeSheet([[], [], rest]), User_DB: fakeSheet([[], userRow]), Settings: null };
+}
+const stay = (a, b) => JSON.parse(JSON.stringify(run(`checkStayAvailability('H1', '${a}', '${b}')`)));
+
+staySetup('', []);
+let sr = stay(ymd(10), ymd(12));
+assert.strictEqual(sr.isAvailable, true, '기본 2박 가능');
+assert.strictEqual(sr.nights, 2);
+assert.strictEqual(sr.checkinTime, '15:00', '체크인 기본 시간');
+assert.strictEqual(stay(ymd(10), ymd(14)).isAvailable, false, '최대 3박 초과 거절');
+assert.strictEqual(stay(ymd(10), ymd(10)).isAvailable, false, '0박 거절');
+assert.strictEqual(stay(ymd(0), ymd(2)).isAvailable, false, '최소 사전 예약일(1일) 미달 거절');
+
+staySetup(ymd(11), []);
+assert.strictEqual(stay(ymd(10), ymd(12)).isAvailable, false, '숙박하는 밤이 휴무일이면 거절');
+assert.strictEqual(stay(ymd(10), ymd(11)).isAvailable, true, '체크아웃일이 휴무일이어도 허용');
+
+staySetup('', [['방문전', ymd(10), ymd(12)], ['취소(운영자)', ymd(20), ymd(22)], ['노쇼', ymd(30), ymd(32)]]);
+assert.strictEqual(stay(ymd(11), ymd(13)).isAvailable, false, 'ROOMS=1 이고 겹치는 밤이 있으면 거절');
+assert.strictEqual(stay(ymd(12), ymd(14)).isAvailable, true, '앞 예약의 체크아웃일 = 새 체크인일 허용');
+assert.strictEqual(stay(ymd(20), ymd(22)).isAvailable, true, '취소 건은 객실 점유하지 않음');
+assert.strictEqual(stay(ymd(30), ymd(32)).isAvailable, true, '노쇼 건은 객실 점유하지 않음');
+
+staySetup('', []);
+let br = JSON.parse(JSON.stringify(run(`bookStay(3, '${ymd(10)}', '${ymd(12)}', 4)`)));
+assert.strictEqual(br.success, false, '최대 인원(3명) 초과 거절');
+assert.strictEqual(sheets.Master_Log.cells[2][11], '예약대기', '거절 시 상태 불변');
+br = JSON.parse(JSON.stringify(run(`bookStay(3, '${ymd(10)}', '${ymd(12)}', 2)`)));
+assert.strictEqual(br.success, true, 'bookStay 성공: ' + JSON.stringify(br));
+const stayRow = sheets.Master_Log.cells[2];
+assert.strictEqual(stayRow[11], '예약확인중');
+assert.strictEqual(stayRow[7], ymd(10) + ' 15:00');
+assert.strictEqual(stayRow[8], '2명');
+assert.strictEqual(stayRow[21], ymd(12));
+assert.strictEqual(stayRow[22], 2);
+assert.ok(sent.some(m => m.to === 'h1@example.com' && /ご宿泊予約のご確認 \(.*~.*\(2泊3日\) \/ 2名\)/.test(m.subject)), '점주 메일 제목에 숙박 일정: ' + sent.map(m => m.subject));
+assert.strictEqual(JSON.parse(JSON.stringify(run(`bookStay(3, '${ymd(10)}', '${ymd(12)}', 1)`))).success, false, '이미 예약확인중인 행은 재예약 불가');
+
+// ---- 5. 기존 시간 슬롯 예약 회귀 (휴무 판정 공통화 / 최대 인원 검증 / getMissions) ----
+function slotSetup(blackouts) {
+  sent = [];
+  const master = [[], []];
+  const base = new Array(25).fill('');
+  base[0] = "'4001"; base[1] = 'mc1'; base[2] = 'Alice'; base[4] = 'R1'; base[11] = '예약대기';
+  master.push(base);
+  const rest = new Array(35).fill('');
+  rest[0] = 'R1'; rest[1] = '식당'; rest[2] = '食堂'; rest[7] = 'RESTAURANT'; rest[10] = 'r1@example.com';
+  rest[11] = 1; rest[12] = 2; rest[13] = blackouts; rest[14] = '12:00-14:00'; rest[15] = 60; rest[21] = 2;
+  const userRow = new Array(16).fill(''); userRow[0] = 'mc1'; userRow[3] = '01012345678'; userRow[13] = 'alice@example.com';
+  sheets = { Master_Log: fakeSheet(master), Restaurant_List: fakeSheet([[], [], rest]), User_DB: fakeSheet([[], userRow]), Settings: null };
+}
+const slotDate = ymd(10);
+const dow = new Date(slotDate + 'T00:00:00').getDay();
+const dowJa = ['日', '月', '火', '水', '木', '金', '土'][dow];
+const slots = d => JSON.parse(JSON.stringify(run(`checkAvailability('R1', '${d}', '')`)));
+
+slotSetup('');
+assert.deepStrictEqual(slots(slotDate).availableSlots, ['12:00', '13:00'], '휴무 없으면 슬롯 생성');
+slotSetup(slotDate);
+assert.strictEqual(slots(slotDate).isAvailable, false, '날짜 지정 휴무');
+slotSetup(dowJa);
+assert.strictEqual(slots(slotDate).isAvailable, false, '요일 휴무');
+slotSetup(`第${Math.ceil(new Date(slotDate + 'T00:00:00').getDate() / 7)}${dowJa}`);
+assert.strictEqual(slots(slotDate).isAvailable, false, '第N요일 휴무');
+slotSetup(`第${Math.ceil(new Date(slotDate + 'T00:00:00').getDate() / 7) % 5 + 1}${dowJa}`);
+assert.strictEqual(slots(slotDate).isAvailable, true, '다른 주차 第N요일은 영업');
+
+// 예약 불가 시간: 요일 접두는 해당 요일에만, 접두 없으면 매일
+const otherJa = ['日', '月', '火', '水', '木', '金', '土'][(dow + 1) % 7];
+slotSetup(''); sheets.Restaurant_List.cells[2][16] = `${dowJa}12:00`;
+assert.deepStrictEqual(slots(slotDate).availableSlots, ['13:00'], '해당 요일 접두 차단');
+slotSetup(''); sheets.Restaurant_List.cells[2][16] = `${otherJa}12:00`;
+assert.deepStrictEqual(slots(slotDate).availableSlots, ['12:00', '13:00'], '다른 요일 접두는 차단 안 함');
+slotSetup(''); sheets.Restaurant_List.cells[2][16] = `${otherJa}${dowJa}12:00-12:30,13:00`;
+assert.ok(slots(slotDate).error, '여러 요일 접두 범위 + 접두 없는 항목(매일)으로 전 슬롯 차단');
+slotSetup(''); sheets.Restaurant_List.cells[2][16] = `${otherJa}${dowJa}12:00-12:30,${otherJa}13:00`;
+assert.deepStrictEqual(slots(slotDate).availableSlots, ['13:00'], '여러 요일 접두 범위(해당 요일 포함)');
+slotSetup(''); sheets.Restaurant_List.cells[2][16] = '13:00';
+assert.deepStrictEqual(slots(slotDate).availableSlots, ['12:00'], '접두 없는 기존 표기 유지');
+
+slotSetup('');
+let sb = JSON.parse(JSON.stringify(run(`bookTimeSlot(3, '${slotDate}', '12:00', 3)`)));
+assert.strictEqual(sb.success, false, '최대 인원(2명) 초과 거절');
+assert.strictEqual(sheets.Master_Log.cells[2][11], '예약대기');
+sb = JSON.parse(JSON.stringify(run(`bookTimeSlot(3, '${slotDate}', '12:00', 2)`)));
+assert.strictEqual(sb.success, true, 'bookTimeSlot 정상 예약: ' + JSON.stringify(sb));
+assert.strictEqual(sheets.Master_Log.cells[2][11], '예약확인중');
+assert.ok(sent.some(m => m.to === 'r1@example.com' && /ご来店予約のご確認 \(.* 12:00 \/ 2名\)/.test(m.subject)), '기존 점주 메일 제목 유지: ' + sent.map(m => m.subject));
+assert.ok(!sheets.Master_Log.cells[2][21] && !sheets.Master_Log.cells[2][22], '일반 예약은 V·W열을 건드리지 않음');
+
+const missions = JSON.parse(JSON.stringify(run(`getMissions('4001', '5678')`)));
+assert.strictEqual(missions.length, 1, 'getMissions 조회');
+assert.strictEqual(missions[0].info.storeType, 'RESTAURANT');
+assert.strictEqual(missions[0].checkoutDate, '', '일반 예약은 checkoutDate 비어 있음');
+assert.strictEqual(missions[0].info.checkinTime, undefined, '일반 매장 info 에 STAY 필드 없음');
+
+staySetup('', []);
+sheets.User_DB = fakeSheet([[], (() => { const u = new Array(16).fill(''); u[0] = 'mc1'; u[3] = '01012345678'; return u; })()]);
+sheets.Master_Log.cells[2][0] = '5001';
+run(`bookStay(3, '${ymd(10)}', '${ymd(12)}', 2)`);
+const sm = JSON.parse(JSON.stringify(run(`getMissions('5001', '5678')`)))[0];
+assert.strictEqual(sm.checkoutDate, ymd(12), 'STAY getMissions 체크아웃일');
+assert.strictEqual(sm.nights, 2);
+assert.strictEqual(sm.info.checkoutTime, '11:00');
+assert.strictEqual(sm.info.bookingUrl, '', 'STAY 는 외부 예약 URL 없음');
+
+// ---- 6. 숙박 확정 메일 언어 / 금·토 휴무 ----------------------------------
+staySetup('', []);
+run(`bookStay(3, '${ymd(10)}', '${ymd(11)}', 2)`);
+sent = [];
+run(`confirmBookingByLink({ row: '3', o: '3001' })`);
+const creatorMail = sent.find(m => m.to === 'alice@example.com');
+const adminMail = sent.find(m => m.to !== 'alice@example.com');
+assert.ok(creatorMail && creatorMail.opts.htmlBody.includes(`${ymd(10)} ~ ${ymd(11)} (1박 2일)`), '크리에이터 확정 메일은 한국어 박수 표기');
+assert.ok(!/泊/.test(creatorMail.opts.htmlBody), '크리에이터 확정 메일에 일본어 박수 표기 없음');
+assert.ok(adminMail && adminMail.opts.htmlBody.includes('(1泊2日)'), '운영진 확정 메일은 일본어 박수 표기');
+
+let sun = 3; while (new Date(ymd(sun) + 'T00:00:00').getDay() !== 0) sun++;
+staySetup('金,土', []);
+sheets.Restaurant_List.cells[2][33] = 7;
+assert.strictEqual(stay(ymd(sun), ymd(sun + 5)).isAvailable, true, '일요일 체크인 ~ 금요일 체크아웃 가능');
+assert.strictEqual(stay(ymd(sun), ymd(sun + 6)).isAvailable, false, '토요일 체크아웃은 금요일 밤이 휴무라 불가');
+assert.strictEqual(stay(ymd(sun - 2), ymd(sun)).isAvailable, false, '금요일 체크인은 불가');
+assert.strictEqual(stay(ymd(sun - 1), ymd(sun + 1)).isAvailable, false, '토요일 밤 포함 불가');
+
+console.log('OK: logic-smoke (auth tokens, store access, confirmBookingByLink, daily reminders, stay booking, slot regression, stay mail language)');

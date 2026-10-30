@@ -42,6 +42,7 @@ GitHub: `uny-connect/bookmark-creator` (main). 아임웹(주문/회원) → 웹�
 - **휴무일(N열) 표기**: 요일은 日月火水木金土(한자)만 인식, 한글 요일 불가. 서버 `_isBlackoutDate_`는 요일 완전 일치, 클라이언트 캘린더는 `毎週火曜日` 같은 부분 일치도 막음(알려진 불일치)
 - **예약 불가 시간(Q열) 표기**: 쉼표 구분 `HH:MM` 또는 `HH:MM-HH:MM`(끝 시각 포함). 항목 앞에 요일 접두(`火木日11:00-13:00`)를 붙이면 해당 요일에만 차단, 없으면 매일. 요일은 한자만. 자정 넘는 영업시간(18:00-03:00)의 새벽 슬롯도 같은 표기(`1:30-3:00`)로 차단. 전 슬롯이 막히면 `availableSlots` 없이 `error`("영업시간 설정 미비") 반환
 - **PIN**: 점주 파트너센터 로그인 코드(6자리). **파트너/점주 = 매장 관리자**, **크리에이터 = 방문·리뷰하는 인플루언서**
+- 세트 상품명은 `[더블 체험] A + B` 처럼 A 매장명을 포함해야 하고, 상품명에서 A를 못 찾으면 짝(AJ열)이 있어도 행이 안 생김(상품명 그대로 점포ID 공란 1행). A 단품 상품에도 짝이 항상 붙는 점 주의
 
 ## 코딩 규칙
 - 전역 이름 중복 금지(파일이 달라도 충돌). 새 함수는 `node test/run-checks.js` 로 확인
@@ -72,7 +73,10 @@ node test/run-checks.js   # 구문·전역 중복·열/시트 리터럴·메일/
 - 반영: `clasp push` 후 웹앱 **새 배포(버전)** 생성. `.clasp.json` 은 커밋하지 않음
 - 운영 변경은 **테스트 시트 사본**에서 먼저: 예약 신청 → 점주 메일 → 확정/일정변경 → 방문확인 → 제출, 24h 만료, 어드민 수정/취소, `testCancelWebhook`
 - 커밋은 단계별로 작게. 푸시는 사용자 승인 후에만
-- `test/logic-smoke.js`는 로드할 파일 목록이 고정: 다른 파일 함수를 호출하는 코드를 추가하면 목록에 있는지 확인. 시트는 `fakeSheet`, 날짜는 `ymd(n)` 헬퍼
+- `test/logic-smoke.js`는 로드할 파일 목록이 고정(현재 Config·Utils·Auth·Mail·Store·Admin·Creator·Imweb): 다른 파일 함수를 호출하는 코드를 추가하면 목록에 있는지 확인. 시트는 `fakeSheet`(`appendRow` 지원), 날짜는 `ymd(n)` 헬퍼. 웹훅 테스트는 `handleImwebWebhook({postData:{contents:JSON}})` 을 직접 호출하고 `ContentService`/`Logger` 목이 샌드박스에 있음
+- git 저장소는 `CREATORS/` 안에만 있음(상위 폴더는 아님). 작업 브랜치 `refactor/structure`, GitHub `main`은 웹 업로드로 통째로 덮어쓰일 수 있으니 푸시 전 `git fetch` 후 `git diff --ignore-cr-at-eol HEAD origin/main` 으로 확인
+- 파일은 CRLF, 도구가 쓰면 LF 로 바뀌어 `git diff` 가 전체 변경처럼 보임 → 비교는 `--ignore-cr-at-eol`, 스크립트로 파일을 고칠 땐 기존 줄바꿈 유지
+- 이 PC에는 `clasp` 미설치: 반영은 Apps Script 편집기에 파일별 붙여넣기(테스트 시트 사본 먼저) → `배포 → 새 버전`. `appsscript.json` 스코프가 바뀌면 재승인
 - 클라이언트 달력(flatpickr)은 `file://`이 정적 스냅샷이라 동작 불가 → 임시 HTML 하네스를 `http://localhost`로 서빙해 Browser 패널에서 확인(프로젝트 밖에 두고 끝나면 서버 종료)
 - 작업 환경(Windows): Bash heredoc에 `'`가 섞인 긴 JS를 넣으면 잘릴 수 있음 → Write로 파일을 만든 뒤 `cat >>`/`sed`로 합칠 것. `python`은 스텁이라 node 사용
 - `test/report-smoke.js`는 vm 샌드박스에서 `const` 상수(`IDX_MASTER` 등)가 `sandbox.X`로 안 보임 → `vm.runInContext('this.IDX_MASTER = IDX_MASTER', sandbox)` 로 노출. 샌드박스 밖에서 만든 `Date`는 `instanceof Date`가 거짓이니 문자열로 테스트

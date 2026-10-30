@@ -35,6 +35,8 @@ GitHub: `uny-connect/bookmark-creator` (main). 아임웹(주문/회원) → 웹�
 - **진행 상태(L열)**: `예약대기` → (크리에이터 예약) `예약확인중` → (점주 확정) `방문전` → (매장 직원 확인) `방문완료` → (리뷰 제출) `제출완료`. 예외: `일정조율필요`(점주 일정변경 요청/어드민), `노쇼`, `취소(아임웹)`, `취소(운영자)`, `취소(기한만료)`. 취소류는 `includes('취소')` 로 판별
 - **슬롯**: 매장 × 날짜 × 시간대의 예약 가능 건수. 시간대당 `MAX_PER_SLOT`, 일일 `DAILY_CAP`(숫자 또는 `기본:3,토:2` 규칙), 휴무 `BLACKOUTS`(날짜/요일/`第n요일`). 취소·노쇼는 점유하지 않음
 - **24시간 규칙**: 점주 확인 메일 발송 후 24h 내 미응답이면 `취소(기한만료)` + 슬롯 반환 + 매장 무응답 카운트 +1 (대상: `예약확인중`만)
+- **24h 기한 리셋은 SYS_LOG 덮어쓰기로만 가능**: `confirmBookingByLink`/`isFeedbackBlocked`가 Y열의 *첫* `[yyyy-MM-dd HH:mm]`를 읽으므로, 점주 메일을 재발송할 땐 로그를 append하지 말고 덮어쓸 것
+- **메일 링크 일정 토큰(`t`)**: 점주 메일의 확정/일정변경 링크(`store_confirm`, `feedback`)와 대시보드 링크에 `&t=<_visitToken_>`(H열 일시+STAY 체크아웃일 숫자열)을 붙임. `_isStaleLink_`가 현재 시트 일정과 다르면 처리 없이 "内容が更新されました" 화면(`isStale`). `t` 없는 구 링크는 검사 생략. 새 점주 메일 링크를 만들 땐 `t`를 반드시 붙이고, 재발송(`resendStoreBookingEmail`)은 `예약확인중` + 이전 발송 로그가 있으면 `isUpdate`(제목 `【日時変更のお知らせ】`+배너)
 - **마감일**: 방문일 + 10일. **보증금**: 기본 10,000원, 제출완료 시 `환급대기` → 어드민이 `환급완료`
 - **구매옵션(G열)**: 아임웹 옵션명 원문. 시트의 키워드 매칭으로 옵션별 영업시간 선택
 - **STAY 예약**: H=`체크인일 시간`, V=체크아웃일. 점유·휴무는 **숙박하는 밤 `[체크인, 체크아웃)`** 기준(체크아웃일이 휴무여도 가능, 앞 예약 체크아웃일=새 체크인일 가능). 예약은 `bookStay`/`checkStayAvailability`(슬롯용 `bookTimeSlot`/`checkAvailability`와 별개). H가 비면 V·W는 stale 이므로 무시(슬롯 반환 시 V·W를 비우지 않음)
@@ -47,6 +49,7 @@ GitHub: `uny-connect/bookmark-creator` (main). 아임웹(주문/회원) → 웹�
 ## 코딩 규칙
 - 전역 이름 중복 금지(파일이 달라도 충돌). 새 함수는 `node test/run-checks.js` 로 확인
 - **열 번호·시트명 리터럴 금지**: `sheet.getRange(row, COL_MASTER.STATUS)`, 배열은 `row[IDX_MASTER.STATUS]`, 시트는 `SHEET.MASTER`. 컬럼이 바뀌면 `Config.js`만 수정
+- 행 전체를 배열로 읽을 땐 `getRange(row, COL_MASTER.ORDER, 1, COL_MASTER.SYS_LOG).getValues()[0]` (결과는 `IDX_MASTER` 로 접근)
 - 시트 읽기는 `_getSheetsData([SHEET.X, …])` 로 일괄 조회 후 메모리에서 처리. 루프 안 `getRange().getValue()` 반복 금지
 - 메일은 `Service_Mail.js` 의 `send*Mail` 만 사용(`GmailApp` 직접 호출 금지). 발신/주소/URL은 `MAIL` 상수. 사용자 입력은 `_escapeHtml`
 - 점주 대상 메일·화면은 **일본어**, 크리에이터·운영 화면은 한국어(Admin은 ko/ja 토글). 한글/일어 혼입 주의
@@ -78,6 +81,7 @@ node test/run-checks.js   # 구문·전역 중복·열/시트 리터럴·메일/
 - 파일은 CRLF, 도구가 쓰면 LF 로 바뀌어 `git diff` 가 전체 변경처럼 보임 → 비교는 `--ignore-cr-at-eol`, 스크립트로 파일을 고칠 땐 기존 줄바꿈 유지
 - 이 PC에는 `clasp` 미설치: 반영은 Apps Script 편집기에 파일별 붙여넣기(테스트 시트 사본 먼저) → `배포 → 새 버전`. `appsscript.json` 스코프가 바뀌면 재승인
 - 클라이언트 달력(flatpickr)은 `file://`이 정적 스냅샷이라 동작 불가 → 임시 HTML 하네스를 `http://localhost`로 서빙해 Browser 패널에서 확인(프로젝트 밖에 두고 끝나면 서버 종료)
+- 커밋 메시지는 PowerShell here-string(`@'…'@`)에 한글·따옴표가 섞이면 인자가 쪼개져 실패 → 스크래치패드에 파일로 쓰고 `git commit -F <파일>`
 - 작업 환경(Windows): Bash heredoc에 `'`가 섞인 긴 JS를 넣으면 잘릴 수 있음 → Write로 파일을 만든 뒤 `cat >>`/`sed`로 합칠 것. `python`은 스텁이라 node 사용
 - `test/report-smoke.js`는 vm 샌드박스에서 `const` 상수(`IDX_MASTER` 등)가 `sandbox.X`로 안 보임 → `vm.runInContext('this.IDX_MASTER = IDX_MASTER', sandbox)` 로 노출. 샌드박스 밖에서 만든 `Date`는 `instanceof Date`가 거짓이니 문자열로 테스트
 - `run-checks.js` 열 리터럴 검사는 `getRange(r, 1, …)` 같은 숫자 열 인자도 잡음 → `COL_REPORT.MONTH` 등 상수 사용

@@ -637,9 +637,26 @@ function resendStoreBookingEmail() {
   const rowData = logSheet.getRange(targetRow, COL_MASTER.ORDER, 1, COL_MASTER.SYS_LOG).getValues()[0];
   const orderNo = String(rowData[IDX_MASTER.ORDER] || '').replace(/'/g, '').trim();
   const memberCode = String(rowData[IDX_MASTER.MEMBER] || '').trim();
-  const memberName = String(rowData[IDX_MASTER.NAME] || '').trim();
+  let memberName = String(rowData[IDX_MASTER.NAME] || '').trim();
   const storeId = String(rowData[IDX_MASTER.STORE_ID] || '').trim().toUpperCase();
   const mealOption = String(rowData[IDX_MASTER.OPTION] || '').trim(); // 🎯 G열 구매옵션 연동
+
+  // 신규회원으로 접수된 건은 Master_Log 이름이 '新規会員' 그대로 → 회원 동기화 후 User_DB 이름으로 교체
+  const userRows = userSheet.getDataRange().getValues();
+  const memberPending = isPendingMember_(userRows, memberCode);
+  if (!memberPending && (!memberName || memberName === _PENDING_MEMBER_NAME)) {
+    const memberKey = _normMemberCode(memberCode);
+    for (let u = 1; u < userRows.length; u++) {
+      if (_normMemberCode(userRows[u][IDX_USER.KEY]) === memberKey) {
+        const freshName = String(userRows[u][IDX_USER.ENG_NAME] || '').trim();
+        if (freshName) {
+          memberName = freshName;
+          logSheet.getRange(targetRow, COL_MASTER.NAME).setValue(freshName);
+        }
+        break;
+      }
+    }
+  }
   const rawVisitDate = rowData[IDX_MASTER.VISIT];
   const peopleStr = String(rowData[IDX_MASTER.PEOPLE] || '1명').replace(/[^0-9]/g, '') || '1';
 
@@ -673,9 +690,11 @@ function resendStoreBookingEmail() {
   const statusWarn = status === '방문전' ? `\n\n⚠️ 이미 확정(방문전)된 건입니다. 재발송해도 상태는 바뀌지 않습니다.` : '';
   const updateNote = isUpdate ? `\n\n※ 일정 변경 안내로 발송됩니다. 이전 메일의 버튼은 무효화되고, 24시간 응답 기한이 지금부터 새로 시작됩니다.` : '';
 
+  const pendingWarn = memberPending ? `\n\n⚠️ 이 회원은 아직 '新規会員'(정보 미갱신)입니다. 먼저 '👥 아임웹 신규 회원 동기화'를 실행하세요.` : '';
+
   const confirm = ui.alert(
     "📧 점주 예약 메일 재발송",
-    `[재발송 대상 정보]\n• 행 번호: ${targetRow}행\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 플랜: ${mealOption || '기본'}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}${updateNote}${statusWarn}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
+    `[재발송 대상 정보]\n• 행 번호: ${targetRow}행\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 플랜: ${mealOption || '기본'}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}${updateNote}${statusWarn}${pendingWarn}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;
@@ -684,7 +703,7 @@ function resendStoreBookingEmail() {
     sendStoreBookingRequestMail({
       to: storeEmail, storeNameJp: storeNameJp, memberName: memberName, dateStr: dateStr, timeStr: timeStr,
       peopleCount: peopleStr, benefit: storeBenefit,
-      creatorProfileUrl: findCreatorProfileUrl(userSheet.getDataRange().getValues(), memberCode),
+      creatorProfileUrl: findCreatorProfileUrl(userRows, memberCode),
       row: targetRow, orderNo: orderNo,
       isUpdate: isUpdate, token: _visitTokenFromRow_(rowData, timeZone)
     });

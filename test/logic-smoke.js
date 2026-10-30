@@ -375,4 +375,28 @@ const lst = [{ id: 'S', nameKo: '가나다 본점', nameJp: '', pairId: '' }, { 
 assert.deepStrictEqual(Array.from(run(`resolveImwebStores_('가나다 본점', ${JSON.stringify(lst)})`), s => s.id), ['S'], '긴 이름 안의 짧은 이름은 중복 매칭하지 않음');
 assert.deepStrictEqual(Array.from(run(`resolveImwebStores_('없는 매장', ${JSON.stringify(lst)})`)), [], '매칭 실패는 빈 배열');
 
-console.log('OK: logic-smoke (auth tokens, store access, confirmBookingByLink, daily reminders, stay booking, slot regression, stay mail language, imweb bundle)');
+// ---- 신규회원 예약 → 점주·운영진 메일 보류 ------------------------------------------
+function holdSetup(engName, sns) {
+  setup('예약확인중', null);
+  sheets.User_DB.cells[1][1] = engName; // B: 이름
+  sheets.User_DB.cells[1][5] = sns;     // F: 인스타(SNS)
+  sheets.Restaurant_List.cells[2][10] = 'owner@example.com'; // K: 점주 이메일
+}
+const holdPayload = { storeId: 'S1', memberCode: 'mc1', memberName: 'Alice', orderNo: '1001', dateStr: '2026-12-01', timeStr: '12:00', safePeopleCount: 2, safeRow: 3 };
+
+holdSetup('新規会員', '');
+run(`_sendBookingNotifications(${JSON.stringify(holdPayload)})`);
+assert.strictEqual(sent.length, 0, '신규회원 → 점주·운영진 메일 모두 미발송');
+assert.ok(/보류/.test(sheets.Master_Log.cells[2][24]), 'Y열 보류 마커');
+assert.ok(!/\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(sheets.Master_Log.cells[2][24]), '보류 마커엔 타임스탬프 없음(24h 만료 방지)');
+assert.strictEqual(call().isExpired, false, '보류 건은 링크로도 만료 처리되지 않음');
+assert.strictEqual(statusOf(), '방문전', '보류 마커 상태에서 확정 가능(타임스탬프 없음)');
+
+holdSetup('Alice', 'https://instagram.com/alice');
+run(`_sendBookingNotifications(${JSON.stringify(holdPayload)})`);
+assert.ok(sent.some(m => m.to === 'owner@example.com'), '정보 갱신된 회원 → 점주 메일 발송(회귀)');
+assert.ok(/점주메일 발송완료/.test(sheets.Master_Log.cells[2][24]), '정상 발송 로그');
+assert.strictEqual(run(`isPendingMember_([[],['mc1','新規会員']], 'MC1')`), true, '멤버코드 대소문자 무시');
+assert.strictEqual(run(`isPendingMember_([[],['other','新規会員']], 'mc1')`), false, '회원 행 없음 → 보류 아님');
+
+console.log('OK: logic-smoke (auth tokens, store access, confirmBookingByLink, daily reminders, stay booking, slot regression, stay mail language, imweb bundle, pending-member hold)');

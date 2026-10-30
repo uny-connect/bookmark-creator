@@ -45,6 +45,8 @@ GitHub: `uny-connect/bookmark-creator` (main). 아임웹(주문/회원) → 웹�
 - **예약 불가 시간(Q열) 표기**: 쉼표 구분 `HH:MM` 또는 `HH:MM-HH:MM`(끝 시각 포함). 항목 앞에 요일 접두(`火木日11:00-13:00`)를 붙이면 해당 요일에만 차단, 없으면 매일. 요일은 한자만. 자정 넘는 영업시간(18:00-03:00)의 새벽 슬롯도 같은 표기(`1:30-3:00`)로 차단. 전 슬롯이 막히면 `availableSlots` 없이 `error`("영업시간 설정 미비") 반환
 - **PIN**: 점주 파트너센터 로그인 코드(6자리). **파트너/점주 = 매장 관리자**, **크리에이터 = 방문·리뷰하는 인플루언서**
 - 세트 상품명은 `[더블 체험] A + B` 처럼 A 매장명을 포함해야 하고, 상품명에서 A를 못 찾으면 짝(AJ열)이 있어도 행이 안 생김(상품명 그대로 점포ID 공란 1행). A 단품 상품에도 짝이 항상 붙는 점 주의
+- **신규회원 보류**: 가입 웹훅이 `User_DB` 이름(B열)에 `新規会員`을 넣고, `syncImwebUsers`로 갱신되기 전까지 그대로 남음. 이 회원의 예약은 `_sendBookingNotifications`가 `isPendingMember_`로 판정해 점주·운영진 메일을 모두 보류하고 Y열에 `⏸ 점주메일 보류…` 마커만 기록. 동기화 후 시트 메뉴 `📩 재발송`으로 수동 발송(가입 웹훅 자체는 메일을 보내지 않음)
+- **Y열 보류 마커에는 `yyyy-MM-dd HH:mm`을 넣지 말 것**: 24시간 만료(`confirmBookingByLink`)와 재발송 `isUpdate` 정규식(`점주메일 (재)?발송완료`)이 이 형식을 읽음
 
 ## 코딩 규칙
 - 전역 이름 중복 금지(파일이 달라도 충돌). 새 함수는 `node test/run-checks.js` 로 확인
@@ -62,6 +64,7 @@ GitHub: `uny-connect/bookmark-creator` (main). 아임웹(주문/회원) → 웹�
 - 크리에이터 화면(`View_Creator.html`)의 `buildCard`/`initCalendars` 는 `일정조율필요`면 H열 값과 무관하게 캘린더를 띄움(두 조건을 항상 함께 수정). `예약대기`만 H열이 비어 있어야 함
 - 상태 문자열은 현재 리터럴로 사용 중(`'방문전'` 등) — 오타 주의, 새 상태 추가 시 Admin/Creator HTML의 매핑도 함께 수정
 - 주석·UI 문구는 기존 톤(이모지 섹션 주석, 한국어) 유지. 요청 범위 밖 리팩터링 금지
+- 메일이 언제·왜 나가는지 찾을 땐 `_sendBookingNotifications`(예약 신청) → `resendStoreBookingEmail`(수동) 순으로 추적. `Master_Log` 이름(NAME)은 주문 시점 `User_DB` 이름의 복사본이라 회원 동기화 후에도 자동 갱신되지 않음(`syncImwebUsers`는 빈 값만 보정)
 
 ## 인증
 - 관리자: `verifyAdminPassword` → 토큰(localStorage `adminToken`) → `getAdminData/adminUpdateMission/saveChallengeSettings(token…)`
@@ -86,6 +89,7 @@ node test/run-checks.js   # 구문·전역 중복·열/시트 리터럴·메일/
 - `test/report-smoke.js`는 vm 샌드박스에서 `const` 상수(`IDX_MASTER` 등)가 `sandbox.X`로 안 보임 → `vm.runInContext('this.IDX_MASTER = IDX_MASTER', sandbox)` 로 노출. 샌드박스 밖에서 만든 `Date`는 `instanceof Date`가 거짓이니 문자열로 테스트
 - `run-checks.js` 열 리터럴 검사는 `getRange(r, 1, …)` 같은 숫자 열 인자도 잡음 → `COL_REPORT.MONTH` 등 상수 사용
 - 시간 기반 트리거: `sendDailyStoreReminders`(매일 9시 당일 예약 리마인드)는 `installDailyReminderTrigger`, `runMonthlyReportTrigger`(매월 15일 9시 전월 집계+PDF)는 `installMonthlyReportTrigger`(둘 다 시트 메뉴, 재설치 시 기존 것 교체)로 설치. 노쇼 배치 `checkAndMarkNoShow`는 시트 메뉴 수동 실행(시간 트리거 아님) — 설치된 트리거는 GAS 콘솔에서 확인. 월간 리포트의 업체 이메일 자동 발송은 **미구현(추후 논의)**
+- `test/logic-smoke.js` 에 케이스 추가 시 `setup(status, logAge)` 로 시트 목을 만들고 `sent`(Gmail 목 배열)로 발송 여부 검증. 파일은 CRLF 유지(스크립트로 삽입할 땐 줄바꿈을 CRLF로 변환)
 
 ## 월간 리포트 운영 메모
 - 월간 리포트 템플릿 Docs: 첫 번째 표의 2행(샘플)을 복사해 채우는 구조(열: No./訪問日/提出日/コンテンツ/GoogleMap/一言). `{{업체명}}`·`{{월}}`·`{{제출 건수}}`는 본문·머리글·바닥글 모두 치환. `{{월}}`은 `2026年9月` 형태라 템플릿에 `{{월}}体験分`처럼 月을 또 쓰지 말 것

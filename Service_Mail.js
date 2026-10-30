@@ -46,6 +46,21 @@ function findCreatorProfileUrl(userRows, memberCode) {
   return "";
 }
 
+/** 아임웹 가입 웹훅이 넣은 이름. 회원 동기화로 갱신되기 전까지 User_DB 이름 열에 남아 있다 */
+const _PENDING_MEMBER_NAME = "新規会員";
+
+/** 회원 정보 미갱신(신규회원) 여부: User_DB 행이 있고 이름이 가입 웹훅 기본값 그대로면 true */
+function isPendingMember_(userRows, memberCode) {
+  const key = _normMemberCode(memberCode);
+  if (!key) return false;
+  for (let j = 1; j < userRows.length; j++) {
+    if (_normMemberCode(userRows[j][IDX_USER.KEY]) === key) {
+      return String(userRows[j][IDX_USER.ENG_NAME] || '').trim() === _PENDING_MEMBER_NAME;
+    }
+  }
+  return false;
+}
+
 /** 메일 제목용 예약 요약: "2026-01-02 12:00 / 2名" */
 function _bookingSummary(dateStr, timeStr, peopleCount) {
   return `${dateStr} ${timeStr}`.trim() + ` / ${peopleCount}名`; // STAY 는 timeStr 이 빈 값
@@ -549,6 +564,13 @@ function _sendBookingNotifications(p) {
       storeBenefit = String(data[SHEET.REST][i][IDX_REST.BENEFIT] || '').trim();
       break;
     }
+  }
+
+  // 신규회원(정보 미갱신)은 점주·운영진 메일 모두 보류. Y열에는 타임스탬프 없는 마커만 남겨
+  // 24시간 만료가 돌지 않게 하고, 회원 동기화 후 시트 메뉴 '재발송'으로 수동 발송한다.
+  if (isPendingMember_(data[SHEET.USER], p.memberCode)) {
+    sheet.getRange(p.safeRow, COL_MASTER.SYS_LOG).setValue("⏸ 점주메일 보류(신규회원 정보 미갱신)");
+    return;
   }
 
   const creatorProfileUrl = findCreatorProfileUrl(data[SHEET.USER], p.memberCode);

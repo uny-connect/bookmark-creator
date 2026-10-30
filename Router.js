@@ -43,6 +43,13 @@ function _renderNoticePage(tone, statusText, bodyHtml, pageTitle) {
   `).setTitle('BOOKMARK CREATORS | ' + pageTitle).addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+/** 🔄 일정 변경 후 옛 메일 링크를 눌렀을 때 안내 화면 */
+function _renderStaleNoticePage() {
+  return _renderNoticePage('fail', '🔄 内容が更新されました',
+    'ご予約の内容が更新されたため、<br>このメールのボタンは無効となりました。<br><br>最新のメールをご確認のうえ、<br>そちらからご対応をお願いいたします。🙇‍♂️',
+    '内容更新');
+}
+
 /** 🌐 웹 앱 화면 라우팅 (GET) */
 function doGet(e) {
   const mode = e?.parameter?.mode;
@@ -83,6 +90,7 @@ function doGet(e) {
         '本予約はご回答期限（<b>24時間</b>）を経過したため、<br>自動的にキャンセル処理が行われました。<br><br>クリエイターへの予約確定は行われませんでした。',
         '期限切れ');
     }
+    if (result.isStale) return _renderStaleNoticePage();
     if (result.isAlreadyRequested) {
       return _renderNoticePage('fail', '❌ 確定不可',
         "この件は店舗から<b>'日時変更リクエスト'</b>が送信されているか、<br>すでにキャンセルされたリクエストです。<br><br>新たな日程調整のご連絡をお待ちください。🙇‍♂️",
@@ -95,6 +103,7 @@ function doGet(e) {
 
   // 4️⃣ 점주 일정변경 요청 입력 (24시간 만료 및 취소 건 차단)
   if (mode === 'feedback') {
+    if (isLinkStale_(e.parameter)) return _renderStaleNoticePage();
     if (isFeedbackBlocked(e.parameter)) {
       return _renderNoticePage('fail', '⚠️ 回答期限切れ',
         '本予約はご回答期限（<b>24時間</b>）を経過したため、<br>自動的にキャンセル処理が行われました。<br><br>日時変更リクエストの送信は行えません。',
@@ -103,6 +112,7 @@ function doGet(e) {
     const template = HtmlService.createTemplateFromFile('View_Feedback');
     template.row = e?.parameter?.row || '';
     template.orderNo = e?.parameter?.o || '';
+    template.t = e?.parameter?.t || '';
     return template.evaluate().setTitle('BOOKMARK CREATORS | リクエスト').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
   }

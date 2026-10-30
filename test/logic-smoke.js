@@ -117,6 +117,33 @@ assert.strictEqual(call().isAlreadyRequested, true);
 setup('취소(운영자)', 1);
 assert.strictEqual(call().isAlreadyRequested, true);
 
+// ---- 2-1. 일정 토큰: 일정 변경 후 옛 메일 링크 무효화 ----------------------------
+assert.strictEqual(run(`_visitToken_('2026-12-01 (화) 12:00', 'Asia/Seoul', '')`), '202612011200', '요일 섞인 H값도 숫자열로 정규화');
+setup('예약확인중', 1);
+r = run(`confirmBookingByLink({ row: '3', o: '1001', t: '202612011200' })`);
+assert.strictEqual(r.isStale, undefined, '토큰 일치 → stale 아님');
+assert.strictEqual(statusOf(), '방문전', '토큰 일치 → 정상 확정');
+
+setup('예약확인중', 1);
+sheets.Master_Log.cells[2][7] = '2026-12-02 15:00'; // 운영자가 시트에서 일정 수정
+r = run(`confirmBookingByLink({ row: '3', o: '1001', t: '202612011200' })`);
+assert.strictEqual(r.isStale, true, '옛 토큰 → stale');
+assert.strictEqual(statusOf(), '예약확인중', 'stale 링크는 상태를 바꾸지 않음');
+assert.strictEqual(sent.length, 0, 'stale 링크는 메일을 보내지 않음');
+assert.strictEqual(run(`isLinkStale_({ row: '3', t: '202612011200' })`), true, 'feedback 링크도 stale');
+assert.strictEqual(run(`isLinkStale_({ row: '3', t: '202612021500' })`), false, '새 토큰은 유효');
+assert.strictEqual(run(`isLinkStale_({ row: '3' })`), false, '토큰 없는 구 링크는 검사 생략');
+r = run(`submitStoreFeedback('3', '1001', '16:00なら可能です', '202612011200')`);
+assert.strictEqual(r.success, false, 'stale 토큰의 일정변경 요청은 거부');
+assert.strictEqual(statusOf(), '예약확인중', '거부 시 상태 불변');
+r = run(`confirmBookingByLink({ row: '3', o: '1001', t: '202612021500' })`);
+assert.strictEqual(statusOf(), '방문전', '새 메일(새 토큰) 링크로는 정상 확정');
+
+setup('예약확인중', 1);
+sheets.Master_Log.cells[2][7] = '2026-12-02 15:00';
+call(); // t 없는 구 링크
+assert.strictEqual(statusOf(), '방문전', '토큰 없는 구 링크는 기존 동작 유지(하위 호환)');
+
 // ---- 3. sendDailyStoreReminders -------------------------------------------
 const todayDate = fmt(new Date()).substring(0, 10);
 function remindSetup(rows) { // rows: [storeId, status, visit, people, name, log]

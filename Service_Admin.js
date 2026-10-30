@@ -666,9 +666,16 @@ function resendStoreBookingEmail() {
     return ui.alert(`❌ 매장 이메일 주소를 찾을 수 없습니다.\nRestaurant_List 시트의 [${storeId}] 매장 K열을 확인해 주세요.`);
   }
 
+  // 이미 점주에게 한 번 나간 예약확인중 건의 재발송 = 일정 변경 안내(이전 메일 링크는 토큰 불일치로 무효화)
+  const status = String(rowData[IDX_MASTER.STATUS] || '').trim();
+  const sysLogPrev = String(rowData[IDX_MASTER.SYS_LOG] || '');
+  const isUpdate = status === '예약확인중' && /점주메일 (재)?발송완료/.test(sysLogPrev);
+  const statusWarn = status === '방문전' ? `\n\n⚠️ 이미 확정(방문전)된 건입니다. 재발송해도 상태는 바뀌지 않습니다.` : '';
+  const updateNote = isUpdate ? `\n\n※ 일정 변경 안내로 발송됩니다. 이전 메일의 버튼은 무효화되고, 24시간 응답 기한이 지금부터 새로 시작됩니다.` : '';
+
   const confirm = ui.alert(
     "📧 점주 예약 메일 재발송",
-    `[재발송 대상 정보]\n• 행 번호: ${targetRow}행\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 플랜: ${mealOption || '기본'}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
+    `[재발송 대상 정보]\n• 행 번호: ${targetRow}행\n• 주문번호: #${orderNo}\n• 크리에이터: ${memberName}\n• 플랜: ${mealOption || '기본'}\n• 매장: ${storeNameJp} (${storeId})\n• 예약일시: ${dateStr} ${timeStr} (${peopleStr}명)\n• 수신처: ${storeEmail}${updateNote}${statusWarn}\n\n지금 점주에게 예약 안내 메일을 재발송하시겠습니까?`,
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;
@@ -678,9 +685,11 @@ function resendStoreBookingEmail() {
       to: storeEmail, storeNameJp: storeNameJp, memberName: memberName, dateStr: dateStr, timeStr: timeStr,
       peopleCount: peopleStr, benefit: storeBenefit,
       creatorProfileUrl: findCreatorProfileUrl(userSheet.getDataRange().getValues(), memberCode),
-      row: targetRow, orderNo: orderNo
+      row: targetRow, orderNo: orderNo,
+      isUpdate: isUpdate, token: _visitTokenFromRow_(rowData, timeZone)
     });
 
+    // 덮어쓰기(append 금지): 24시간 만료 판정이 로그의 첫 타임스탬프를 읽으므로, 덮어써야 기한이 재발송 시점부터 새로 시작됨
     const nowTimeStr = Utilities.formatDate(new Date(), timeZone, "yyyy-MM-dd HH:mm");
     logSheet.getRange(targetRow, COL_MASTER.SYS_LOG).setValue(`[${nowTimeStr}] 점주메일 재발송완료`);
     

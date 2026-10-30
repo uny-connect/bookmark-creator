@@ -665,6 +665,13 @@ function _stayRangeText_(checkInStr, checkOutStr, nights, lang) {
   return `${checkInStr} ~ ${checkOutStr} (${span})`;
 }
 
+/** Master_Log 한 행 배열(IDX_MASTER 기준) → 메일 링크용 일정 토큰. H가 비면 V·W 는 stale 이므로 무시 */
+function _visitTokenFromRow_(rowArr, timeZone) {
+  const nights = parseInt(rowArr[IDX_MASTER.NIGHTS], 10) || 0;
+  const checkout = nights > 0 ? _cellToYmd_(rowArr[IDX_MASTER.CHECKOUT]) : '';
+  return _visitToken_(rowArr[IDX_MASTER.VISIT], timeZone, checkout);
+}
+
 /** 메일용 일정 표기: 숙박 행(V·W열 값 있음)이면 "체크인 ~ 체크아웃 (N박 N+1일)", 아니면 방문일시 그대로. lang 은 _stayRangeText_ 참고 */
 function _visitDisplayForRow_(sheet, safeRow, visitDateStr, lang) {
   const nights = parseInt(sheet.getRange(safeRow, COL_MASTER.NIGHTS).getValue(), 10) || 0;

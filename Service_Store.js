@@ -1,18 +1,29 @@
 /*****************************************************************************************
  * 점주(파트너) 도메인: 예약 승인/일정변경 요청, PIN 로그인, 대시보드, 매장 설정, 간편 등록
  ****************************************************************************************/
-/** 📩 메일 직통 링크 예약 승인 엔진 (doGet mode=store_confirm 에서 위임) → { isExpired, isAlreadyRequested } */
+/** 🔄 메일 링크가 옛 일정 기준인지 검사: 링크의 t(발송 당시 일정 토큰)가 있고 시트의 현재 일정과 다르면 true. t 가 없는 구 링크는 검사하지 않음(하위 호환) */
+function _isStaleLink_(sheet, safeRow, t) {
+  const token = String(t || '').trim();
+  if (!token || !safeRow || !sheet) return false;
+  const rowArr = sheet.getRange(safeRow, COL_MASTER.ORDER, 1, COL_MASTER.SYS_LOG).getValues()[0];
+  return _visitTokenFromRow_(rowArr, Session.getScriptTimeZone()) !== token;
+}
+
+/** 📩 메일 직통 링크 예약 승인 엔진 (doGet mode=store_confirm 에서 위임) → { isExpired, isAlreadyRequested, isStale } */
 function confirmBookingByLink(params) {
-    let isAlreadyRequested = false; 
+    let isAlreadyRequested = false;
     let isExpired = false; // 24시간 만료 플래그
-    
+
     try {
       const safeRow = parseInt(params.row, 10);
       const orderNo = params.o;
       const ss = SpreadsheetApp.getActiveSpreadsheet();
       const sheet = ss.getSheetByName(SHEET.MASTER);
       const restSheet = ss.getSheetByName(SHEET.REST);
-      
+
+      // 🔄 일정이 바뀐 뒤 옛 메일 링크 → 상태·메일·만료 처리 없이 "내용 갱신됨" 안내만
+      if (_isStaleLink_(sheet, safeRow, params.t)) return { isExpired: false, isAlreadyRequested: false, isStale: true };
+
       const sheetOrderNo = String(sheet.getRange(safeRow, COL_MASTER.ORDER).getValue()).trim().replace(/'/g, '');
       const currentStatus = String(sheet.getRange(safeRow, COL_MASTER.STATUS).getValue()).trim();
       const storeId = String(sheet.getRange(safeRow, COL_MASTER.STORE_ID).getValue() || '').trim().toUpperCase();
@@ -122,6 +133,12 @@ function confirmBookingByLink(params) {
   return { isExpired: isExpired, isAlreadyRequested: isAlreadyRequested };
 }
 
+/** 🔄 feedback 링크가 옛 일정 기준인지 (Router 용) */
+function isLinkStale_(params) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);
+  return _isStaleLink_(sheet, parseInt(params?.row, 10), params?.t);
+}
+
 /** 🔒 일정변경 요청 화면 진입 가능 여부 (24시간 만료 및 취소/노쇼/조율 중 건 차단) → true면 차단 */
 function isFeedbackBlocked(params) {
   const safeRow = parseInt(params?.row, 10);
@@ -148,12 +165,15 @@ function isFeedbackBlocked(params) {
 /*****************************************************************************************
  * ⚡ [엔진 완전 통합] 점주 일정 변경 리퀘스트 처리 및 크리에이터+운영진 동시 노티 엔진
  ****************************************************************************************/
-function submitStoreFeedback(row, orderNo, msg) {
+function submitStoreFeedback(row, orderNo, msg, t) {
   try {
     const safeRow = parseInt(row, 10);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET.MASTER);
-    
+
+    // 🔄 폼을 연 뒤 일정이 바뀐 경우(옛 메일 기준 요청) 차단
+    if (_isStaleLink_(sheet, safeRow, t)) return { success: false, stale: true, error: "予約内容が更新されました。最新のメールをご確認ください。" };
+
     // 데이터(A~N열까지 총 14칸) 캐싱
     const rowData = sheet.getRange(safeRow, COL_MASTER.ORDER, 1, COL_MASTER.VISITED).getValues()[0];
     
@@ -344,13 +364,15 @@ function getStoreData(storeId, token) {
         submitDate: formatDate(mRow[IDX_MASTER.SUBMIT_DATE], 'yyyy-MM-dd'), 
         reviewUrl: String(mRow[IDX_MASTER.REVIEW_URL] || ''), 
         googleMapUrl: String(mRow[IDX_MASTER.GOOGLE_URL] || ''), 
-        shortReview: String(mRow[IDX_MASTER.SHORT_REVIEW_JP] || mRow[IDX_MASTER.SHORT_REVIEW] || '')
+        shortReview: String(mRow[IDX_MASTER.SHORT_REVIEW_JP] || mRow[IDX_MASTER.SHORT_REVIEW] || ''),
+        linkToken: _visitTokenFromRow_(mRow, timeZone)
       });
     }
 
     storeMissions.forEach(m => {
-      m.confirmUrl = `${webAppUrl}?mode=store_confirm&row=${m.row}&o=${encodeURIComponent(m.orderNo)}`;
-      m.feedbackUrl = `${webAppUrl}?mode=feedback&row=${m.row}&o=${encodeURIComponent(m.orderNo)}`;
+      const tokenQs = m.linkToken ? `&t=${encodeURIComponent(m.linkToken)}` : '';
+      m.confirmUrl = `${webAppUrl}?mode=store_confirm&row=${m.row}&o=${encodeURIComponent(m.orderNo)}${tokenQs}`;
+      m.feedbackUrl = `${webAppUrl}?mode=feedback&row=${m.row}&o=${encodeURIComponent(m.orderNo)}${tokenQs}`;
     });
 
     return { storeName: finalStoreName, stats: stats, missions: storeMissions };
@@ -472,8 +494,8 @@ function storeDirectConfirm_(row, orderNo) {
 }
 
 /** [6] 점주가 대시보드에서 일정 변경 팝업창을 통해 리퀘스트를 보낼 때 처리 함수 */
-function storeDirectFeedback(row, orderNo, msg) {
-  return submitStoreFeedback(row, orderNo, msg);
+function storeDirectFeedback(row, orderNo, msg, t) {
+  return submitStoreFeedback(row, orderNo, msg, t);
 }
 
 /** [7] [간편 등록 툴] 점포 ID로 매장 기본 정보 조회 */

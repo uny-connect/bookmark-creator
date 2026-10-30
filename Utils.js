@@ -93,3 +93,10 @@ function _splitVisit_(v, timeZone) {
   const d = s.match(/\d{4}-\d{2}-\d{2}/), t = s.match(/(\d{1,2}):(\d{2})/);
   return { dateStr: d ? d[0] : s.substring(0, 10), timeStr: t ? ('0' + t[1]).slice(-2) + ':' + t[2] : '' };
 }
+
+/** 메일 링크용 일정 토큰: 방문일시(+STAY 체크아웃일)를 숫자열로 정규화 ("2026-11-02 12:00" → "202611021200"). 일정이 바뀌면 값이 달라져 옛 링크를 가려낸다. 일정이 비면 '' */
+function _visitToken_(rawVisit, timeZone, checkoutYmd) {
+  const sp = _splitVisit_(rawVisit, timeZone);
+  if (!sp.dateStr) return '';
+  return (sp.dateStr + sp.timeStr).replace(/\D/g, '') + (checkoutYmd ? '-' + String(checkoutYmd).replace(/\D/g, '') : '');
+}

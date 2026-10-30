@@ -40,4 +40,15 @@ expectSubject('sendStoreBookingRequestMail', base, /2026-01-02 12:00 \/ 2名/);
 expectSubject('sendAdminBookingRequestMail', base, /2026-01-02 12:00 \/ 2名/);
 expectSubject('sendStoreDailyReminderMail', base, /2件: 12:00 2名 \/ 18:30 4名/);
 expectSubject('sendStoreDailyReminderMail', Object.assign({}, base, { reservations: [base.reservations[0]] }), /\(12:00 \/ 2名\)/);
+// 일정 토큰/변경 안내: 링크에 t 포함, isUpdate 일 때만 제목 접두·안내 배너
+const bodyOf = (fn, p) => { let h = ''; sandbox.GmailApp.sendEmail = (to, subject, body, opts) => { h = opts.htmlBody; }; sandbox[fn](p); return h; };
+const expectTrue = (name, cond) => { if (!cond) { failed++; console.error(`FAIL ${name}`); } else console.log(`ok   ${name}`); };
+const updBase = Object.assign({}, base, { token: '202601021200', isUpdate: true });
+expectSubject('sendStoreBookingRequestMail', updBase, /^【日時変更のお知らせ】ご来店予約のご確認 \(2026-01-02 12:00 \/ 2名\)$/);
+expectTrue('갱신 메일: 확정/변경요청 링크에 t 포함', (bodyOf('sendStoreBookingRequestMail', updBase).match(/&t=202601021200/g) || []).length === 2);
+expectTrue('갱신 메일: 안내 배너 포함', bodyOf('sendStoreBookingRequestMail', updBase).includes('先にお送りしたメールの内容が更新されました'));
+const firstBase = Object.assign({}, base, { token: '202601021200' });
+expectTrue('최초 메일: 제목에 변경 접두 없음', !/【日時変更/.test(subjectOf('sendStoreBookingRequestMail', firstBase)));
+expectTrue('최초 메일: 배너 없음, t 포함', !bodyOf('sendStoreBookingRequestMail', firstBase).includes('更新されました') && bodyOf('sendStoreBookingRequestMail', firstBase).includes('&t=202601021200'));
+expectTrue('토큰 없는 호출은 t 파라미터 생략', !bodyOf('sendStoreBookingRequestMail', base).includes('&t='));
 process.exit(failed ? 1 : 0);

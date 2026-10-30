@@ -197,10 +197,19 @@ function sendStoreBookingRequestMail(p) {
   const profileHtmlClean = links.profileHtmlClean;
   const benefitDisplay = p.benefit || _DEFAULT_BENEFIT_JP;
   const scriptUrl = getActiveWebAppUrl();
-  const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${p.row}&o=${encodeURIComponent(p.orderNo)}`;
-  const feedbackUrl = `${scriptUrl}?mode=feedback&row=${p.row}&o=${encodeURIComponent(p.orderNo)}`;
+  // t = 발송 시점 일정 토큰: 일정이 바뀐 뒤에는 이 메일의 버튼이 "내용 갱신됨" 화면으로 막힌다
+  const tokenQs = p.token ? `&t=${encodeURIComponent(p.token)}` : '';
+  const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${p.row}&o=${encodeURIComponent(p.orderNo)}${tokenQs}`;
+  const feedbackUrl = `${scriptUrl}?mode=feedback&row=${p.row}&o=${encodeURIComponent(p.orderNo)}${tokenQs}`;
+  const updateNoticeHtml = p.isUpdate ? `
+              <!-- 일정 변경 재발송 안내 -->
+              <div style="background-color: #fff5f5; border: 1px solid #ffc9c9; border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; text-align: left;">
+                <p style="margin: 0; font-size: 13px; color: #c92a2a; line-height: 1.55; font-weight: 700;">
+                  ※ 先にお送りしたメールの内容が更新されました。以前のメールのボタンは無効となりますので、本メールの内容をご確認ください。
+                </p>
+              </div>` : '';
 
-  const subject = `${p.isStay ? 'ご宿泊予約のご確認' : 'ご来店予約のご確認'} (${_bookingSummary(dateStr, timeStr, peopleCount)})`;
+  const subject = `${p.isUpdate ? '【日時変更のお知らせ】' : ''}${p.isStay ? 'ご宿泊予約のご確認' : 'ご来店予約のご確認'} (${_bookingSummary(dateStr, timeStr, peopleCount)})`;
   const htmlBody = `
       <meta charset="UTF-8">
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7; -webkit-font-smoothing: antialiased;">
@@ -223,6 +232,7 @@ function sendStoreBookingRequestMail(p) {
                 <p style="color: #6c757d; font-size: 14px; margin: 0 0 6px 0;">店舗管理者様</p>
               </div>
 
+              ${updateNoticeHtml}
               <!-- 안내 문구 -->
               <div style="margin: 6px 0 16px 0; color: #333333; font-size: 14px; line-height: 1.55;">
                 <p style="margin: 0 0 3px 0;">BOOKMARK CREATORSより来店予約の申請が届きました。</p>
@@ -549,7 +559,8 @@ function _sendBookingNotifications(p) {
       sendStoreBookingRequestMail({
         to: storeEmail, storeNameJp: storeNameJp, memberName: p.memberName, dateStr: p.dateStr, timeStr: p.timeStr,
         peopleCount: p.safePeopleCount, benefit: storeBenefit, creatorProfileUrl: creatorProfileUrl, row: p.safeRow, orderNo: p.orderNo,
-        isStay: p.isStay
+        isStay: p.isStay,
+        token: _visitTokenFromRow_(sheet.getRange(p.safeRow, COL_MASTER.ORDER, 1, COL_MASTER.SYS_LOG).getValues()[0], Session.getScriptTimeZone())
       });
       const sentTimeStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
       sheet.getRange(p.safeRow, COL_MASTER.SYS_LOG).setValue(`[${sentTimeStr}] 점주메일 발송완료`);

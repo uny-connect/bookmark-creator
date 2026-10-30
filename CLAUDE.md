@@ -24,6 +24,7 @@ GitHub: `uny-connect/bookmark-creator` (main). 아임웹(주문/회원) → 웹�
 ## 시트 (스키마 = `Config.js`)
 - `Master_Log`: 1~2행 헤더, 3행~ 데이터. 한 주문 항목 = 한 행. 핵심 열: A 주문번호, B 멤버코드, E 점포ID, G 구매옵션, H 방문일시, L 상태, M 피드백, Q/R 리뷰·구글 링크, U 환불, Y 시스템 로그(`[yyyy-MM-dd HH:mm]` 타임스탬프 포함)
 - `Restaurant_List`: 1~2행 헤더, 3행~ (`REST_DATA_START_INDEX = 2`). 이메일 K, PIN I, 슬롯/휴무/영업시간 L~Q, 옵션별 영업시간 AA~AD, 무응답 카운트 Z
+- 세트(1+1) 구매: `Restaurant_List` AJ=짝 점포ID. 아임웹 상품명에 등장한 매장 + 각 매장의 짝 매장마다 `Master_Log` 1행씩 생성(단방향, 보증금 = 결제액 ÷ 총 행 수). 옵션 키에 `추가 매장`이 있거나 값이 매장명이면 G열 구매옵션에서 제외. 로직: `resolveImwebStores_`/`imwebMealOption_`(`Service_Imweb.js`). 예약·방문·리뷰는 행별 독립
 - STAY(숙박) 확장: `Master_Log` V 체크아웃일·W 박수 / `Restaurant_List` H=`STAY`, AE 객실수·AF/AG 체크인·아웃 시간·AH 최대 박수·AI 무인(Y)
 - `User_DB`: 1행 헤더. A 고유키, N 이메일, E~I SNS 채널, J 등급(YELLOW/RED/BLACK)
 - `Settings`: A 키, B 값 — `ADMIN_PASSWORD`, `ADMIN_NOTIFICATION_EMAILS`, `WEB_APP_URL`, `START_DATE`/`END_DATE`/`TARGET_COUNT`(챌린지)

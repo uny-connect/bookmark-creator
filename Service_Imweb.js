@@ -125,7 +125,7 @@ function handleImwebWebhook(e) {
       const rNameKo = String(restData[k][IDX_REST.NAME_KO] || '').trim();
       const rNameJp = String(restData[k][IDX_REST.NAME_JP] || '').trim();
       if (rId && (rNameKo || rNameJp)) {
-        restIdList.push({ id: rId, nameKo: rNameKo, nameJp: rNameJp });
+        restIdList.push({ id: rId, nameKo: rNameKo, nameJp: rNameJp, pairId: String(restData[k][IDX_REST.PAIR_ID] || '').trim().toUpperCase() });
       }
     }
     restIdList.sort((a, b) => b.nameKo.length - a.nameKo.length);
@@ -152,63 +152,36 @@ function handleImwebWebhook(e) {
       }
     }
 
-    const itemDeposit = (items.length > 0 && totalPrice > 0) ? Math.floor(totalPrice / items.length) : 10000;
-
-    items.forEach(function(item) {
+    // 🎁 항목별 (상품명 → 매장 목록 + 구매옵션) 계획: 세트(1+1)면 한 항목이 여러 매장 행으로 확장된다
+    const itemPlans = items.map(function(item) {
       const rawProdName = (item.productInfo && item.productInfo.prodName) || item.product_name || item.name || "식당명 없음";
-      
-      // 🎯 [수정 후] 아임웹 optionInfo 객체 파싱 및 원본 옵션명 보존
-      let rawOption = "";
-      if (item.productInfo && item.productInfo.optionInfo) {
-        rawOption = Object.values(item.productInfo.optionInfo).join(' ');
-      } else if (item.optionInfo) {
-        rawOption = Object.values(item.optionInfo).join(' ');
-      } else if (item.selectedOption && item.selectedOption.name) {
-        rawOption = item.selectedOption.name;
-      } else if (item.options && Array.isArray(item.options)) {
-        rawOption = item.options.map(o => o.value || o.name || '').join(' ');
-      }
-
-      // 원본 옵션명 우선 보존 (비어있을 때만 상품명에서 런치/디너 추출)
-      let mealOption = rawOption.trim();
+      let mealOption = imwebMealOption_(item, restIdList).trim();
       if (!mealOption) {
         const lowerProd = rawProdName.toLowerCase();
         if (lowerProd.includes("런치") || lowerProd.includes("lunch")) mealOption = "런치";
         else if (lowerProd.includes("디너") || lowerProd.includes("dinner")) mealOption = "디너";
       }
+      const stores = resolveImwebStores_(rawProdName, restIdList);
+      // 매칭 실패 시 기존처럼 상품명 그대로 1행 (점포ID 공란)
+      const targets = stores.length > 0 ? stores : [{ id: "", nameKo: rawProdName }];
+      return { mealOption: mealOption, targets: targets };
+    });
 
-      const cleanProd = rawProdName.replace(/\[.*?\]/g, '').replace(/\s+/g, '').toLowerCase();
+    // 보증금은 확장된 총 행 수 기준 (세트 20,000원 = 2행 × 10,000원)
+    const totalRows = itemPlans.reduce(function(sum, p) { return sum + p.targets.length; }, 0);
+    const itemDeposit = (totalRows > 0 && totalPrice > 0) ? Math.floor(totalPrice / totalRows) : 10000;
 
-      let targetStoreId = "";
-      let matchedStoreName = rawProdName;
-
-      for (let m = 0; m < restIdList.length; m++) {
-        const cleanKo = restIdList[m].nameKo.replace(/\s+/g, '').toLowerCase();
-        const cleanJp = restIdList[m].nameJp.replace(/\s+/g, '').toLowerCase();
-
-        if (cleanKo === cleanProd || (cleanJp && cleanJp === cleanProd)) {
-          targetStoreId = restIdList[m].id;
-          matchedStoreName = restIdList[m].nameKo;
-          break;
-        }
-      }
-
-      if (!targetStoreId) {
-        for (let m = 0; m < restIdList.length; m++) {
-          const cleanKo = restIdList[m].nameKo.replace(/\s+/g, '').toLowerCase();
-          if (cleanProd.includes(cleanKo) || cleanKo.includes(cleanProd)) {
-            targetStoreId = restIdList[m].id;
-            matchedStoreName = restIdList[m].nameKo;
-            break;
-          }
-        }
-      }
+    itemPlans.forEach(function(plan) {
+      const mealOption = plan.mealOption;
+      plan.targets.forEach(function(target) {
+      const targetStoreId = target.id;
+      const matchedStoreName = target.nameKo;
 
       // 🔒 [중복 검사] 주문번호 + 매장 + 구매옵션까지 일치해야 동일 건으로 인식
       let matchedExisting = null;
       for (let ex of existingOrderRows) {
         if (!ex.used) {
-          const isStoreMatch = (targetStoreId && ex.storeId === targetStoreId) || 
+          const isStoreMatch = (targetStoreId && ex.storeId === targetStoreId) ||
                                (matchedStoreName && ex.storeName === matchedStoreName);
           const isOptionMatch = (!mealOption && !ex.option) || (mealOption === ex.option);
 
@@ -240,7 +213,7 @@ function handleImwebWebhook(e) {
         }
       } else {
         // 신규 주문 행 추가
-        const newRow = new Array(COL_MASTER.SYS_LOG).fill(""); 
+        const newRow = new Array(COL_MASTER.SYS_LOG).fill("");
         newRow[IDX_MASTER.ORDER] = "'" + cleanOrderNo;      // A: 주문번호
         newRow[IDX_MASTER.MEMBER] = finalMemberKey;          // B: 멤버코드
         newRow[IDX_MASTER.NAME] = englishName;             // C: 성함
@@ -264,7 +237,7 @@ function handleImwebWebhook(e) {
         newRow[IDX_MASTER.REFUND] = "";                     // U: 환불 처리
 
         logSheet.appendRow(newRow);
-        
+
         existingOrderRows.push({
           rowNum: logSheet.getLastRow(),
           storeId: targetStoreId,
@@ -274,6 +247,7 @@ function handleImwebWebhook(e) {
           used: true
         });
       }
+      });
     });
 
     SpreadsheetApp.flush();
@@ -511,4 +485,86 @@ function testCancelWebhook() {
   // doPost 직접 호출 실행
   const response = doPost(mockEvent);
   Logger.log("실행 결과: " + response.getContent());
+}
+
+/*****************************************************************************************
+ * 🎁 세트(1+1) 구매: 아임웹 상품 1개 → 매장 여러 행
+ * - restList: [{ id, nameKo, nameJp, pairId }] (Restaurant_List 대문자 ID, 이름 긴 순 정렬)
+ ****************************************************************************************/
+function _imwebNormName_(s) {
+  return String(s || '').replace(/\[.*?\]/g, '').replace(/\s+/g, '').toLowerCase();
+}
+
+/** 상품명 → 구매 대상 매장 목록 [{id, nameKo}] (상품명 등장 순 + 짝 점포). 매칭 0건이면 [] */
+function resolveImwebStores_(rawProdName, restList) {
+  const cleanProd = _imwebNormName_(rawProdName);
+  const norm = function(s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); };
+  let hits = [];
+
+  // 정확 일치 우선
+  for (let m = 0; m < restList.length; m++) {
+    const cleanKo = norm(restList[m].nameKo);
+    const cleanJp = norm(restList[m].nameJp);
+    if (cleanKo === cleanProd || (cleanJp && cleanJp === cleanProd)) { hits = [{ r: restList[m], pos: 0 }]; break; }
+  }
+
+  // 상품명에 등장하는 모든 매장 (긴 이름 우선, 이미 잡힌 이름 안에 포함된 짧은 이름은 제외)
+  if (hits.length === 0) {
+    const spans = [];
+    for (let m = 0; m < restList.length; m++) {
+      const cleanKo = norm(restList[m].nameKo);
+      if (!cleanKo) continue;
+      const pos = cleanProd.indexOf(cleanKo);
+      if (pos < 0) continue;
+      const end = pos + cleanKo.length;
+      if (spans.some(function(s) { return pos < s.end && end > s.pos; })) continue;
+      spans.push({ pos: pos, end: end });
+      hits.push({ r: restList[m], pos: pos });
+    }
+    hits.sort(function(a, b) { return a.pos - b.pos; });
+  }
+
+  // 기존 동작 유지: 상품명이 매장명보다 짧은 경우(역방향 포함) 첫 매칭 1건
+  if (hits.length === 0) {
+    for (let m = 0; m < restList.length; m++) {
+      const cleanKo = norm(restList[m].nameKo);
+      if (cleanKo && cleanProd && cleanKo.includes(cleanProd)) { hits = [{ r: restList[m], pos: 0 }]; break; }
+    }
+  }
+
+  const result = [];
+  const seen = {};
+  const add = function(r) {
+    if (seen[r.id]) return;
+    seen[r.id] = true;
+    result.push({ id: r.id, nameKo: r.nameKo });
+  };
+  hits.forEach(function(h) { add(h.r); });
+  // 짝 점포(1+1): 상품명에 없어도 함께 생성
+  hits.forEach(function(h) {
+    const pairId = String(h.r.pairId || '').trim().toUpperCase();
+    if (!pairId) return;
+    const pair = restList.filter(function(r) { return r.id === pairId; })[0];
+    if (pair) add(pair);
+    else Logger.log('세트 짝 점포ID 없음: ' + h.r.id + ' → ' + pairId);
+  });
+  return result;
+}
+
+/** 아임웹 옵션 → 구매옵션(G열) 문자열. 매장 선택용 옵션(키에 '추가 매장' 또는 값이 매장명)은 제외 */
+function imwebMealOption_(item, restList) {
+  const isStoreValue = function(v) {
+    const c = _imwebNormName_(v);
+    return !!c && restList.some(function(r) { return _imwebNormName_(r.nameKo) === c || _imwebNormName_(r.nameJp) === c; });
+  };
+  const fromInfo = function(info) {
+    return Object.keys(info)
+      .filter(function(k) { return k.indexOf('추가 매장') < 0 && !isStoreValue(info[k]); })
+      .map(function(k) { return info[k]; }).join(' ');
+  };
+  if (item.productInfo && item.productInfo.optionInfo) return fromInfo(item.productInfo.optionInfo);
+  if (item.optionInfo) return fromInfo(item.optionInfo);
+  if (item.selectedOption && item.selectedOption.name) return item.selectedOption.name;
+  if (item.options && Array.isArray(item.options)) return item.options.map(function(o) { return o.value || o.name || ''; }).join(' ');
+  return '';
 }

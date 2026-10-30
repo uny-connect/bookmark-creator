@@ -14,6 +14,7 @@ function fakeSheet(rows) { // rows: 1-based sheet rows as arrays (index 0 = colu
     cells,
     getDataRange: () => ({ getValues: () => cells.map(r => r.slice()) }),
     getLastRow: () => cells.length,
+    appendRow: row => { cells.push(row.slice()); },
     getRange: (r, c, nr = 1, nc = 1) => ({
       getValue: () => get(r, c),
       setValue: v => set(r, c, v),
@@ -44,10 +45,12 @@ const sandbox = {
   Session: { getScriptTimeZone: () => 'Asia/Seoul' },
   SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => sheets[n] || null }), flush: () => {} },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
+  ContentService: { MimeType: { JSON: 'json' }, createTextOutput: s => ({ text: s, setMimeType() { return this; } }) },
+  Logger: { log: () => {} },
   ScriptApp: { getService: () => ({ getUrl: () => 'https://example.test/exec' }) },
 };
 vm.createContext(sandbox);
-['Config.js', 'Utils.js', 'Service_Auth.js', 'Service_Mail.js', 'Service_Store.js', 'Service_Admin.js', 'Service_Creator.js'].forEach(f =>
+['Config.js', 'Utils.js', 'Service_Auth.js', 'Service_Mail.js', 'Service_Store.js', 'Service_Admin.js', 'Service_Creator.js', 'Service_Imweb.js'].forEach(f =>
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), sandbox, { filename: f }));
 const run = code => vm.runInContext(code, sandbox);
 
@@ -290,4 +293,51 @@ assert.strictEqual(stay(ymd(sun), ymd(sun + 6)).isAvailable, false, '토요일 �
 assert.strictEqual(stay(ymd(sun - 2), ymd(sun)).isAvailable, false, '금요일 체크인은 불가');
 assert.strictEqual(stay(ymd(sun - 1), ymd(sun + 1)).isAvailable, false, '토요일 밤 포함 불가');
 
-console.log('OK: logic-smoke (auth tokens, store access, confirmBookingByLink, daily reminders, stay booking, slot regression, stay mail language)');
+// ---- 7. 아임웹 세트(1+1) 주문 → 매장별 행 확장 ----------------------------
+function imwebRest(id, ko, jp, pair) { const r = new Array(35).fill(''); r[0] = id; r[1] = ko; r[2] = jp; r[35] = pair; return r; }
+const MAGU = '마구로토 고항 쿠로다한 후쿠오카 본점', TORI = '토리카와 중화소바 카와노소바';
+function imwebSetup() {
+  sheets = {
+    Master_Log: fakeSheet([[], []]),
+    Restaurant_List: fakeSheet([[], [], imwebRest('BOOKMARK-0001', MAGU, 'まぐろ', 'BOOKMARK-0003'), imwebRest('BOOKMARK-0003', TORI, '鶏川', ''), imwebRest('BOOKMARK-0004', '단품 식당', '', '')]),
+    User_DB: fakeSheet([[]]), Settings: null, Log: null,
+  };
+}
+function imwebPayload(type, prodName, optionInfo, total) {
+  return { postData: { contents: JSON.stringify({ eventType: type, data: { orderNo: 202610303865991, memberUid: 'm@example.com', ordererName: '황상훈', ordererCall: '01012345678', totalPaymentPrice: total,
+    sections: [{ sectionItems: [{ productInfo: { prodName, optionInfo } }] }] } }) } };
+}
+const doubleName = '[더블 체험] ' + MAGU + ' + ' + TORI;
+const doubleOpt = { '[필수] 추가 매장 선택': TORI };
+const logRows = () => sheets.Master_Log.cells.slice(2);
+
+imwebSetup();
+run(`handleImwebWebhook(${JSON.stringify(imwebPayload('ORDER_CREATE', doubleName, doubleOpt, 20000))})`);
+let rows = logRows();
+assert.strictEqual(rows.length, 2, '세트 주문은 2행');
+assert.deepStrictEqual(rows.map(r => r[4]), ['BOOKMARK-0001', 'BOOKMARK-0003'], 'A 다음 B');
+assert.deepStrictEqual(rows.map(r => r[10]), [10000, 10000], '보증금은 행 수로 나눔');
+assert.deepStrictEqual(rows.map(r => r[6]), ['', ''], '매장 선택 옵션은 구매옵션에서 제외');
+assert.deepStrictEqual(rows.map(r => r[11]), ['예약대기', '예약대기']);
+
+run(`handleImwebWebhook(${JSON.stringify(imwebPayload('ORDER_PAY_COMPLETE', doubleName, doubleOpt, 20000))})`);
+assert.strictEqual(logRows().length, 2, '같은 주문 재전송은 행이 늘지 않음');
+
+run(`handleImwebWebhook(${JSON.stringify(imwebPayload('ORDER_CANCEL', doubleName, doubleOpt, 20000))})`);
+assert.deepStrictEqual(logRows().map(r => r[11]), ['취소(아임웹)', '취소(아임웹)'], '취소는 두 행 모두');
+
+imwebSetup(); // A 단품명이어도 짝 열로 B 생성, 런치/디너 옵션은 보존
+run(`handleImwebWebhook(${JSON.stringify(imwebPayload('ORDER_CREATE', MAGU, { 코스: '런치' }, 20000))})`);
+rows = logRows();
+assert.deepStrictEqual(rows.map(r => r[4]), ['BOOKMARK-0001', 'BOOKMARK-0003'], '짝 열로 B 보충');
+assert.deepStrictEqual(rows.map(r => r[6]), ['런치', '런치']);
+
+imwebSetup(); // 짝 없는 매장은 1행 / B 상품은 A 를 끌고 오지 않음 / 매칭 실패는 상품명 그대로
+run(`handleImwebWebhook(${JSON.stringify(imwebPayload('ORDER_CREATE', '단품 식당', {}, 10000))})`);
+run(`handleImwebWebhook(${JSON.stringify(imwebPayload('ORDER_CREATE', TORI, {}, 10000))})`);
+assert.deepStrictEqual(logRows().map(r => r[4]), ['BOOKMARK-0004', 'BOOKMARK-0003']);
+const lst = [{ id: 'S', nameKo: '가나다 본점', nameJp: '', pairId: '' }, { id: 'T', nameKo: '가나다', nameJp: '', pairId: '' }];
+assert.deepStrictEqual(Array.from(run(`resolveImwebStores_('가나다 본점', ${JSON.stringify(lst)})`), s => s.id), ['S'], '긴 이름 안의 짧은 이름은 중복 매칭하지 않음');
+assert.deepStrictEqual(Array.from(run(`resolveImwebStores_('없는 매장', ${JSON.stringify(lst)})`)), [], '매칭 실패는 빈 배열');
+
+console.log('OK: logic-smoke (auth tokens, store access, confirmBookingByLink, daily reminders, stay booking, slot regression, stay mail language, imweb bundle)');

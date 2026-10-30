@@ -81,6 +81,7 @@ const COL_REST = {
   CHECKOUT_TIME: 33,   // AG 체크아웃 기본시간(STAY, 예: 11:00)
   MAX_NIGHTS: 34,      // AH 최대 숙박 박수(STAY)
   AUTO_CHECKIN: 35,    // AI 무인 체크인 여부(Y면 현장 확인 생략)
+  PAIR_ID: 36,         // AJ 짝 점포ID(이 매장 구매 시 함께 생성되는 매장, 1+1 세트)
 };
 // User_DB
 const COL_USER = {

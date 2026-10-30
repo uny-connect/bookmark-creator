@@ -46,6 +46,11 @@ function findCreatorProfileUrl(userRows, memberCode) {
   return "";
 }
 
+/** 메일 제목용 예약 요약: "2026-01-02 12:00 / 2名" */
+function _bookingSummary(dateStr, timeStr, peopleCount) {
+  return `${dateStr} ${timeStr}`.trim() + ` / ${peopleCount}名`; // STAY 는 timeStr 이 빈 값
+}
+
 /** 프로필 URL → 점주 메일용 링크 HTML / 운영진 메일용 SNS 행 HTML */
 function _creatorProfileLinks(creatorProfileUrl) {
   let profileHtmlClean = `<span style="color: #8b95a1; font-weight: 500;">当日確認</span>`;
@@ -195,7 +200,7 @@ function sendStoreBookingRequestMail(p) {
   const confirmUrl = `${scriptUrl}?mode=store_confirm&row=${p.row}&o=${encodeURIComponent(p.orderNo)}`;
   const feedbackUrl = `${scriptUrl}?mode=feedback&row=${p.row}&o=${encodeURIComponent(p.orderNo)}`;
 
-  const subject = `【BOOKMARK CREATORS】 ご来店予約のご確認 (${dateStr})`;
+  const subject = `${p.isStay ? 'ご宿泊予約のご確認' : 'ご来店予約のご確認'} (${_bookingSummary(dateStr, timeStr, peopleCount)})`;
   const htmlBody = `
       <meta charset="UTF-8">
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7; -webkit-font-smoothing: antialiased;">
@@ -240,7 +245,7 @@ function sendStoreBookingRequestMail(p) {
                 </tr>
                 <tr>
                   <td style="padding: 6px 0; color: #333333;">
-                    <strong>■ 訪問日時:</strong> <span style="color: #d63384; font-weight: 800;">${dateStr} ${timeStr}</span>
+                    <strong>■ ${p.isStay ? '宿泊日程' : '訪問日時'}:</strong> <span style="color: #d63384; font-weight: 800;">${dateStr} ${timeStr}</span>
                   </td>
                 </tr>
                 <tr>
@@ -330,6 +335,40 @@ function sendStoreCancellationMail(p) {
   _sendMail(p.to, subject, htmlBody, { bcc: getAdminAlertEmails() });
 }
 
+/** ✉️ 점주에게 당일 방문 예약 리마인드 (p.dateStr, p.reservations: [{timeStr, peopleCount, memberName, benefit, creatorProfileUrl}], 시간순, 운영진 BCC) */
+function sendStoreDailyReminderMail(p) {
+  const storeNameJp = p.storeNameJp, list = p.reservations;
+  const summaries = list.map(r => `${r.timeStr} ${r.peopleCount}名`);
+  const subjectDetail = list.length === 1 ? `${list[0].timeStr} / ${list[0].peopleCount}名` : `${list.length}件: ${summaries.join(' / ')}`;
+  const subject = `本日のご来店予約 (${subjectDetail.length > 60 ? subjectDetail.substring(0, 60) + '…' : subjectDetail})`;
+  // 예약 신청 메일과 동일한 항목(■ 형식) — 여러 건이면 건별 박스로 나열
+  const rowsHtml = list.map(r => `
+          <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #ffffff; border: 1.5px solid #edf0f2; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; font-size: 13.5px;">
+            <tr><td style="padding: 6px 0; color: #333333;"><strong>■ クリエイター名:</strong> ${_escapeHtml(r.memberName)}</td></tr>
+            <tr><td style="padding: 6px 0; color: #333333;"><strong>■ 訪問日時:</strong> <span style="color: #d63384; font-weight: 800;">${_escapeHtml(p.dateStr)} ${_escapeHtml(r.timeStr)}</span></td></tr>
+            <tr><td style="padding: 6px 0; color: #333333;"><strong>■ 訪問人数:</strong> ${_escapeHtml(r.peopleCount)}名</td></tr>
+            <tr><td style="padding: 6px 0; color: #333333;"><strong>■ 提供内容:</strong> <span style="color: #2D6A4F; font-weight: 700;">${_escapeHtml(r.benefit || _DEFAULT_BENEFIT_JP)}</span></td></tr>
+            <tr><td style="padding: 6px 0; color: #333333;"><strong>■ SNS:</strong> ${_creatorProfileLinks(r.creatorProfileUrl).profileHtmlClean}</td></tr>
+          </table>`).join('');
+  const htmlBody = `
+      <meta charset="UTF-8">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; padding: 20px 10px; background-color: #f4f5f7;">
+        <div style="max-width: 500px; margin: 0 auto; background: #ffffff; border-radius: 16px; border: 1px solid #edf0f2; padding: 32px 24px;">
+          <div style="text-align: center; margin-bottom: 20px;">
+            <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #ffffff; background-color: #1A2B49; padding: 4px 10px; border-radius: 6px; display: inline-block;">TODAY'S RESERVATION</span>
+            <h1 style="color: #1A2B49; margin: 10px 0 0 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;">BOOKMARK CREATORS</h1>
+            <div style="width: 36px; height: 3px; background-color: #C5A358; margin: 10px auto 0;"></div>
+          </div>
+          <p style="color: #1A2B49; font-size: 15px; font-weight: bold; margin: 0 0 2px 0;">${storeNameJp}</p>
+          <p style="color: #6c757d; font-size: 14px; margin: 0 0 14px 0;">店舗管理者様</p>
+          <p style="color: #333333; font-size: 14px; line-height: 1.55; margin: 0 0 16px 0;">本日、下記のクリエイター様のご来店予約が入っております。ご準備をお願い申し上げます。</p>
+          ${rowsHtml}
+          <p style="color: #8b95a1; font-size: 12px; line-height: 1.6; margin: 14px 0 0 0;">※ 本メールは毎朝9時に自動送信されています。ご返信は不要です。</p>
+        </div>
+      </div>`;
+  _sendMail(p.to, subject, htmlBody, { bcc: getAdminAlertEmails() });
+}
+
 /** ✉️ 점주 메일 수신 테스트 (addressLabel: 본문의 주소 항목명) */
 function sendStoreConnectionTestMail(p) {
   const storeNameJp = p.storeNameJp, storeId = p.storeId || '-', email = p.to, addressLabel = p.addressLabel;
@@ -377,7 +416,7 @@ function sendAdminBookingRequestMail(p) {
   const storeName = p.storeName, storeEmail = p.storeEmail;
   const benefitDisplay = p.benefit || _DEFAULT_BENEFIT_JP;
   const adminSnsHtml = _creatorProfileLinks(p.creatorProfileUrl).adminSnsHtml;
-  const adminSubject = `【予約受付】${p.memberName}様 ➔ ${storeName} (${dateStr} ${timeStr})`;
+  const adminSubject = `【予約受付】${p.memberName}様 ➔ ${storeName} (${_bookingSummary(dateStr, timeStr, peopleCount)})`;
   const adminHtml = `
         <meta charset="UTF-8">
         <div style="font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif; padding: 24px; background: #f8f9fa; border-radius: 14px; border: 1px solid #e9ecef; max-width: 520px; margin: 0 auto; color: #333; line-height: 1.6;">
@@ -394,7 +433,7 @@ function sendAdminBookingRequestMail(p) {
             <p style="margin: 6px 0;"><b>・クリエイター:</b> ${memberName} <span style="color:#8b95a1; font-size: 12px;">(${memberCode})</span></p>
             <p style="margin: 6px 0;"><b>・訪問店舗:</b> ${storeName} <span style="color:#8b95a1; font-size: 12px;">(${storeId})</span></p>
             <p style="margin: 6px 0;"><b>・提供内容:</b> <span style="color: #2D6A4F; font-weight: bold;">${benefitDisplay}</span></p>
-            <p style="margin: 6px 0;"><b>・予約日時:</b> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
+            <p style="margin: 6px 0;"><b>・${p.isStay ? '宿泊日程' : '予約日時'}:</b> <span style="color: #d63384; font-weight: bold;">${dateStr} ${timeStr}</span></p>
             <p style="margin: 6px 0;"><b>・訪問人数:</b> <span style="font-weight: bold;">${peopleCount}人</span></p>
             ${adminSnsHtml}
             <p style="margin: 6px 0;"><b>・店舗受信メール:</b> <span style="color: #1a73e8;">${storeEmail || '未登録'}</span></p>
@@ -509,7 +548,8 @@ function _sendBookingNotifications(p) {
     try {
       sendStoreBookingRequestMail({
         to: storeEmail, storeNameJp: storeNameJp, memberName: p.memberName, dateStr: p.dateStr, timeStr: p.timeStr,
-        peopleCount: p.safePeopleCount, benefit: storeBenefit, creatorProfileUrl: creatorProfileUrl, row: p.safeRow, orderNo: p.orderNo
+        peopleCount: p.safePeopleCount, benefit: storeBenefit, creatorProfileUrl: creatorProfileUrl, row: p.safeRow, orderNo: p.orderNo,
+        isStay: p.isStay
       });
       const sentTimeStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
       sheet.getRange(p.safeRow, COL_MASTER.SYS_LOG).setValue(`[${sentTimeStr}] 점주메일 발송완료`);
@@ -526,7 +566,8 @@ function _sendBookingNotifications(p) {
     sendAdminBookingRequestMail({
       orderNo: p.orderNo, memberName: p.memberName, memberCode: p.memberCode, storeId: p.storeId,
       storeName: storeNameJp || storeNameKo, storeEmail: storeEmail, benefit: storeBenefit,
-      dateStr: p.dateStr, timeStr: p.timeStr, peopleCount: p.safePeopleCount, creatorProfileUrl: creatorProfileUrl
+      dateStr: p.dateStr, timeStr: p.timeStr, peopleCount: p.safePeopleCount, creatorProfileUrl: creatorProfileUrl,
+      isStay: p.isStay
     });
   } catch (adminErr) {
     console.error("운영진 알림 발송 실패: " + adminErr.toString());

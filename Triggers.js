@@ -12,6 +12,10 @@ function onOpen() {
     .addItem('🚨 자동 노쇼 일괄 처리 (과거 날짜)', 'checkAndMarkNoShow')
     .addItem('👥 아임웹 신규 회원 동기화', 'syncImwebUsers')
     .addItem('📧 매장 메일 수신 테스트 발송', 'sendTestEmailToStore')
+    .addItem('⏰ 당일 예약 리마인드 트리거 설치 (매일 9시)', 'installDailyReminderTrigger')
+    .addItem('📊 월간 리포트 ▶ 월 선택 데이터 재생성', 'runMonthlyReportMenu')
+    .addItem('📄 월간 리포트 ▶ 업체별 PDF 생성', 'runMonthlyReportPdfMenu')
+    .addItem('⏰ 월간 리포트 트리거 설치 (매월 15일 9시)', 'installMonthlyReportTrigger')
     .addToUi();
 }
 

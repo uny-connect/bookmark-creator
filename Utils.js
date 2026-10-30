@@ -85,3 +85,11 @@ function _escapeHtml(v) {
   return String(v === undefined || v === null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
+
+/** H열 방문일시(Date 또는 문자열) → { dateStr:'yyyy-MM-dd', timeStr:'HH:mm' }. "2026-10-27 (화) 12:00" 처럼 요일이 섞인 문자열도 정규식으로 분리 */
+function _splitVisit_(v, timeZone) {
+  if (v instanceof Date) return { dateStr: Utilities.formatDate(v, timeZone, 'yyyy-MM-dd'), timeStr: Utilities.formatDate(v, timeZone, 'HH:mm') };
+  const s = String(v || '');
+  const d = s.match(/\d{4}-\d{2}-\d{2}/), t = s.match(/(\d{1,2}):(\d{2})/);
+  return { dateStr: d ? d[0] : s.substring(0, 10), timeStr: t ? ('0' + t[1]).slice(-2) + ':' + t[2] : '' };
+}

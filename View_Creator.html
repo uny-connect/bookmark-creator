@@ -211,6 +211,21 @@
     </div>
   </div>
 
+  <!-- 공통 확인 모달 (취소/확인) -->
+  <div class="modal fade" id="customConfirm" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog mt-5">
+      <div class="modal-content border-0" style="border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); max-width: 320px; margin: auto;">
+        <div class="modal-body text-center" style="padding: 24px;">
+          <p class="fw-bold" id="confirmMessage" style="font-size: 15px; color: var(--brand-navy); word-break: keep-all; line-height: 1.6; margin: 0 0 20px 0;"></p>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn w-50" data-bs-dismiss="modal" style="border-radius: 14px; padding: 12px; font-weight: 700; background-color: #f1f5f9; color: #64748b; margin: 0;">취소</button>
+            <button type="button" id="confirmOkBtn" class="btn w-50" style="border-radius: 14px; padding: 12px; font-weight: 700; background-color: var(--brand-navy); color: #fff; margin: 0;">확인</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 매장 확인 모달 -->
   <div class="modal fade" id="staffModal" tabindex="-1">
     <div class="modal-dialog">
@@ -235,7 +250,7 @@
             <p class="m-0 fw-bold" style="font-size: 13.5px; color: #4B5563; letter-spacing: -0.3px;">
               運営会社：株式会社lib.
             </p>
-            <p class="m-0 mt-1.5 fw-bold" style="font-size: 13.5px; color: #111827; letter-spacing: -0.3px; word-break: keep-all;">
+            <p id="staffModalIntro" class="m-0 mt-1.5 fw-bold" style="font-size: 13.5px; color: #111827; letter-spacing: -0.3px; word-break: keep-all;">
               ブックマーククリエイターとして<br>
               <span style="color: var(--brand-navy); text-decoration: underline; text-decoration-color: #CBD5E1; text-underline-offset: 4px;">取材・撮影</span>のため来店しました。
             </p>
@@ -255,7 +270,7 @@
             <p class="m-0 fw-bold" style="font-size: 15px; color: #111827; letter-spacing: -0.3px;">
               店舗スタッフの方へ
             </p>
-            <p class="m-0 mt-1" style="font-size: 14px; color: #374151; font-weight: 600; letter-spacing: -0.3px;">
+            <p id="staffModalGuide" class="m-0 mt-1" style="font-size: 14px; color: #374151; font-weight: 600; letter-spacing: -0.3px;">
               ご来店を確認後、下の「来店確認完了」ボタンを押してください。<br>
               <span style="font-size: 12.5px; color: #4B5563;">ボタンを押すとチェックインが完了します。</span>
             </p>
@@ -285,7 +300,8 @@
   <script>
     var el = function(id) { return document.getElementById(id); };
     var staffModal = null; var alertModal = null; var alertCallback = null; 
-    window.selectedBooking = {}; 
+    window.selectedBooking = {};
+    window.stayCalendars = {};
     window.currentSelectedChannel = {};
     window.isLoggingIn = false; // 🎯 전역 로그인 진행 플래그
 
@@ -299,6 +315,26 @@
         alertModal.show();
       } catch(e) {
         alert(String(msg).replace(/<br>/g, '\n')); if(callback) callback();
+      }
+    }
+
+    // 취소/확인 2버튼 모달. 확인 시 onOk 실행 (showAlert 와 같은 디자인)
+    var confirmModal = null; var confirmCallback = null;
+    function showConfirm(msg, onOk) {
+      try {
+        el('confirmMessage').innerHTML = msg;
+        confirmCallback = onOk || null;
+        if (!confirmModal) {
+          confirmModal = new bootstrap.Modal(el('customConfirm'));
+          el('confirmOkBtn').addEventListener('click', function() {
+            var cb = confirmCallback; confirmCallback = null;
+            confirmModal.hide();
+            if (cb) cb();
+          });
+        }
+        confirmModal.show();
+      } catch(e) {
+        if (confirm(String(msg).replace(/<[^>]*>/g, ' ')) && onOk) onOk();
       }
     }
 
@@ -469,7 +505,7 @@
 
       var action = '';
       
-      if ((status === '예약대기' || status === '일정조율필요' || st === '예약대기') && !hasVisitDate) {
+      if (status === '일정조율필요' || ((status === '예약대기' || st === '예약대기') && !hasVisitDate)) {
         var externalBookingBtn = '';
         if (m.info && m.info.bookingUrl && m.info.bookingUrl.length > 5) {
           externalBookingBtn = '<div class="mb-4">' +
@@ -480,7 +516,8 @@
             '</a></div>';
         }
 
-        var isRestaurant = (m.info && m.info.storeType !== 'RETAIL'); 
+        var isStay = (m.info && m.info.storeType === 'STAY');
+        var isRestaurant = (m.info && m.info.storeType !== 'RETAIL');
         var peopleSelectorHtml = '';
         if (isRestaurant) {
           var maxAllowed = (m.info && m.info.maxPeople) ? parseInt(m.info.maxPeople, 10) : 4;
@@ -489,10 +526,10 @@
             optionsHtml += '<option value="' + i + '">' + i + ' 명</option>'; 
           }
           peopleSelectorHtml = '<div class="d-flex justify-content-center align-items-center gap-2 mb-2">' +
-            '<span style="font-size: 13px; font-weight: 600; color: #64748b;">방문 인원</span>' +
+            '<span style="font-size: 13px; font-weight: 600; color: #64748b;">' + (isStay ? '투숙 인원' : '방문 인원') + '</span>' +
             '<select id="peopleCount_' + m.row + '" class="form-select form-select-sm" style="width: 86px; text-align: center; border-radius: 8px; font-weight: 700; padding: 6px 8px; border: 1.5px solid #e2e8f0; background-color: #fff;">' + optionsHtml + '</select>' +
             '</div>' +
-            '<p style="font-size: 11.5px; color: #e11d48; font-weight: 600; margin-top: 6px; margin-bottom: 12px; letter-spacing: -0.3px;">※ 동반 방문 희망 시 각자 예약 후 문의 필수</p>';
+            (isStay ? '' : '<p style="font-size: 11.5px; color: #e11d48; font-weight: 600; margin-top: 6px; margin-bottom: 12px; letter-spacing: -0.3px;">※ 동반 방문 희망 시 각자 예약 후 문의 필수</p>');
         } else { peopleSelectorHtml = '<input type="hidden" id="peopleCount_' + m.row + '" value="1">'; }
 
         var adjustNotice = (status === '일정조율필요') 
@@ -511,14 +548,16 @@
           '<div class="pt-1 text-center">' +
             adjustNotice +
             leadNotice +
-            '<p style="font-size: 16px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px; margin: 0 0 16px 0;">방문 날짜 및 시간 선택</p>' +
+            '<p style="font-size: 16px; font-weight: 800; color: #0f172a; letter-spacing: -0.4px; margin: 0 0 ' + (isStay ? '6' : '16') + 'px 0;">' + (isStay ? '체크인 · 체크아웃 날짜 선택' : '방문 날짜 및 시간 선택') + '</p>' +
+            (isStay ? '<p style="font-size: 12.5px; color: #64748b; font-weight: 600; margin: 0 0 14px 0;">체크인 ' + m.info.checkinTime + ' / 체크아웃 ' + m.info.checkoutTime + ' (최대 ' + m.info.maxNights + '박)</p>' : '') +
             '<div class="d-flex justify-content-center"><input type="text" id="cal_' + m.row + '" class="form-control d-none"></div>' +
+            (isStay ? '<a href="#" onclick="window.resetStayCalendar(' + m.row + '); return false;" style="display: inline-block; margin-top: 8px; font-size: 12.5px; font-weight: 700; color: #64748b; text-decoration: underline;">선택 다시 하기</a>' : '') +
             '<div id="timeSlots_' + m.row + '" class="mt-3 d-flex flex-wrap gap-2 justify-content-center"></div>' +
             '<div id="bookConfirm_' + m.row + '" class="mt-4 text-center d-none" style="background: #f8fafc; border: 1px solid #edf2f7; border-radius: 18px; padding: 22px 18px 18px;">' +
               '<p style="font-size: 11.5px; font-weight: 700; color: #8b95a1; margin-bottom: 6px; letter-spacing: -0.2px;">선택한 일정</p>' +
               '<p id="selectedDateTimeText_' + m.row + '" class="fw-bold mb-3" style="font-size: 17px; color: #1A2B49; letter-spacing: -0.4px;"></p>' +
               peopleSelectorHtml +
-              '<button class="btn btn-brand btn-custom mt-2" style="font-size: 13.5px; border-radius: 11px; padding: 11px; font-weight: 700;" onclick="window.submitBooking(' + m.row + ', \'' + m.restId + '\')">이 시간으로 방문 확정</button>' +
+              '<button class="btn btn-brand btn-custom mt-2" style="font-size: 13.5px; border-radius: 11px; padding: 11px; font-weight: 700;" onclick="window.submitBooking(' + m.row + ', \'' + m.restId + '\')">' + (isStay ? '이 일정으로 숙박 예약 신청' : '이 시간으로 방문 확정') + '</button>' +
             '</div>' +
           '</div>';
       } 
@@ -532,7 +571,14 @@
           '</div>';
       }
       else if (status === '방문전' && hasVisitDate) {
-        action = '<div class="text-center p-3 mt-2" style="background:#f8f9fa; border:1px solid #e9ecef; border-radius:12px; margin-bottom:12px;"><p style="font-size:12px; color:#8b95a1; margin-bottom:4px;">확정된 방문 일정</p><p class="fw-bold m-0" style="color:var(--brand-navy); font-size:15px;">📅 ' + m.visitDate + '</p></div><button class="btn btn-visit btn-custom" onclick="window.openStaffModal(' + m.row + ')">직원에게 확인받기 (방문인증)</button>';
+        var stayVisit = (m.info && m.info.storeType === 'STAY' && m.checkoutDate);
+        var visitText = stayVisit
+          ? '체크인 ' + m.visitDate + '<br>체크아웃 ' + m.checkoutDate + ' ' + m.info.checkoutTime + ' (' + m.nights + '박 ' + (m.nights + 1) + '일)'
+          : m.visitDate;
+        var visitBtnText = stayVisit
+          ? (m.info.autoCheckin ? '체크인 완료 처리' : '프론트에 확인받기 (체크인 인증)')
+          : '직원에게 확인받기 (방문인증)';
+        action = '<div class="text-center p-3 mt-2" style="background:#f8f9fa; border:1px solid #e9ecef; border-radius:12px; margin-bottom:12px;"><p style="font-size:12px; color:#8b95a1; margin-bottom:4px;">' + (stayVisit ? '확정된 숙박 일정' : '확정된 방문 일정') + '</p><p class="fw-bold m-0" style="color:var(--brand-navy); font-size:15px;">📅 ' + visitText + '</p></div><button class="btn btn-visit btn-custom" onclick="window.openStaffModal(' + m.row + ')">' + visitBtnText + '</button>';
       } 
       else if (status === '방문완료') {
         var savedUrl = localStorage.getItem('tyche_draft_url_' + m.row) || ''; 
@@ -677,7 +723,7 @@
       missions.forEach(function(m) {
         var hasVisitDate = m.visitDate && m.visitDate.length > 5;
         
-        if ((m.status === '예약대기' || m.status === '일정조율필요' || !m.status) && !hasVisitDate) {
+        if (m.status === '일정조율필요' || ((m.status === '예약대기' || !m.status) && !hasVisitDate)) {
           var rawBlackouts = (m.info && m.info.blackouts) ? m.info.blackouts : [];
           var staticDates = rawBlackouts.filter(function(item) { return /^\d{4}-\d{2}-\d{2}$/.test(item); });
           var dayMap = { 0: '日', 1: '月', 2: '火', 3: '水', 4: '木', 5: '金', 6: '土' };
@@ -707,6 +753,46 @@
               return false;
             }
           ].concat(staticDates);
+
+          if (m.info && m.info.storeType === 'STAY') {
+            // 숙박: 체크인~체크아웃 범위 선택. 휴무는 '숙박하는 밤' 기준이라 선택 단계마다 비활성 날짜가 다름
+            //  - 체크인 선택: 그날 밤이 휴무면 선택 불가
+            //  - 체크아웃 선택: 체크인~전날 밤 중 휴무가 있거나 최대 박수를 넘으면 선택 불가
+            // (최종 판정은 서버 checkStayAvailability)
+            var stayFp = null;
+            var maxNights = parseInt(m.info.maxNights, 10) || 7;
+            var dayNum = function(d) { return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000; };
+            var ymdOf = function(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); };
+            var isBlockedNight = function(d) { return disableRules[0](d) || staticDates.indexOf(ymdOf(d)) !== -1; };
+            var stayDisable = function(date) {
+              var sel = stayFp ? stayFp.selectedDates : [];
+              if (sel.length === 1) {
+                var start = sel[0], gap = dayNum(date) - dayNum(start);
+                if (gap <= 0 || gap > maxNights) return true;
+                for (var k = 0; k < gap; k++) {
+                  if (isBlockedNight(new Date(start.getFullYear(), start.getMonth(), start.getDate() + k))) return true;
+                }
+                return false;
+              }
+              if (sel.length === 2 && (dayNum(date) === dayNum(sel[0]) || dayNum(date) === dayNum(sel[1]))) return false; // 선택된 양 끝은 표시 유지
+              return isBlockedNight(date);
+            };
+            stayFp = flatpickr("#cal_" + m.row, {
+              inline: true,
+              mode: "range",
+              minDate: minSelectDate,
+              maxDate: maxSelectDate,
+              locale: "ko",
+              disable: [stayDisable],
+              onChange: function(selectedDates, dateStr, instance) {
+                instance.redraw();
+                if (selectedDates.length < 2) { resetStaySelection(m.row); return; }
+                fetchStayAvailability(m.row, m.restId, instance.formatDate(selectedDates[0], 'Y-m-d'), instance.formatDate(selectedDates[1], 'Y-m-d'));
+              }
+            });
+            window.stayCalendars[m.row] = stayFp;
+            return;
+          }
 
           flatpickr("#cal_" + m.row, {
             inline: true,
@@ -740,6 +826,45 @@
         .checkAvailability(storeId, dateStr, mealOption);
     }
 
+    function resetStayCalendar(row) {
+      var fp = window.stayCalendars[row];
+      if (fp) fp.clear();
+      resetStaySelection(row);
+    }
+
+    function resetStaySelection(row) {
+      window.selectedBooking[row] = null;
+      el('bookConfirm_' + row).classList.add('d-none');
+      el('timeSlots_' + row).innerHTML = '';
+    }
+
+    function fetchStayAvailability(row, storeId, checkIn, checkOut) {
+      var container = el('timeSlots_' + row);
+      el('bookConfirm_' + row).classList.add('d-none');
+      window.selectedBooking[row] = null;
+      container.innerHTML = '<span class="spinner-border spinner-border-sm text-primary"></span><span style="font-size:13px; font-weight:600; margin-left:8px; color:#8b95a1;">객실을 확인하고 있습니다...</span>';
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res.error) { container.innerHTML = '<p class="text-danger fw-bold" style="font-size:13px;">' + res.error + '</p>'; return; }
+          if (!res.isAvailable) { container.innerHTML = '<p class="text-muted fw-bold" style="font-size:13.5px; margin:20px 0;">' + res.reason + '</p>'; return; }
+
+          container.innerHTML = '';
+          window.selectedBooking[row] = { date: checkIn, checkout: checkOut, nights: res.nights };
+          el('selectedDateTimeText_' + row).innerHTML = formatStayDay(checkIn) + ' 체크인<br>' + formatStayDay(checkOut) + ' 체크아웃<br>' +
+            '<span style="font-size:14px; color:#64748b;">(' + res.nights + '박 ' + (res.nights + 1) + '일)</span>';
+          el('bookConfirm_' + row).classList.remove('d-none');
+        })
+        .withFailureHandler(function() { container.innerHTML = '<p class="text-danger fw-bold" style="font-size:13px;">조회 실패. 다시 시도해주세요.</p>'; })
+        .checkStayAvailability(storeId, checkIn, checkOut);
+    }
+
+    function formatStayDay(ymd) {
+      var p = ymd.split('-');
+      var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+      return p[0] + '.' + p[1] + '.' + p[2] + '(' + ['일', '월', '화', '수', '목', '금', '토'][d.getDay()] + ')';
+    }
+
     function selectTime(row, dateStr, timeStr) {
        window.selectedBooking[row] = { date: dateStr, time: timeStr };
        var container = el('timeSlots_' + row); 
@@ -766,8 +891,9 @@
       var booking = window.selectedBooking[row]; 
       if(!booking) return;
       
-      var peopleCount = document.getElementById('peopleCount_' + row).value; 
+      var peopleCount = document.getElementById('peopleCount_' + row).value;
       var btn = document.querySelector('#bookConfirm_' + row + ' button');
+      var btnLabel = booking.checkout ? '이 일정으로 숙박 예약 신청' : '이 시간으로 방문 확정';
       
       btn.disabled = true; 
       btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 처리중...';
@@ -780,7 +906,7 @@
         if(loadingText) loadingText.innerText = "가예약 전송 중입니다...";
       }
 
-      google.script.run
+      var runner = google.script.run
         .withSuccessHandler(function(res){
           if(res.success) {
             if (actionLoader) actionLoader.style.display = 'none';
@@ -811,18 +937,20 @@
             });
           } else {
             if (actionLoader) actionLoader.style.display = 'none'; 
-            showAlert('예약 실패: ' + res.error); 
-            btn.disabled = false; 
-            btn.innerText = '이 시간으로 방문 확정';
+            showAlert('예약 실패: ' + res.error);
+            btn.disabled = false;
+            btn.innerText = btnLabel;
           }
         })
         .withFailureHandler(function(err){
-          if (actionLoader) actionLoader.style.display = 'none'; 
+          if (actionLoader) actionLoader.style.display = 'none';
           showAlert('서버 통신 에러가 발생했습니다.');
-          btn.disabled = false; 
-          btn.innerText = '이 시간으로 방문 확정';
-        })
-        .bookTimeSlot(row, booking.date, booking.time, peopleCount); 
+          btn.disabled = false;
+          btn.innerText = btnLabel;
+        });
+
+      if (booking.checkout) runner.bookStay(row, booking.date, booking.checkout, peopleCount);
+      else runner.bookTimeSlot(row, booking.date, booking.time, peopleCount);
     }
 
     function toggleEdit(row, showEdit) {
@@ -830,10 +958,37 @@
       else { el('viewMode_' + row).style.display = 'block'; el('editMode_' + row).style.display = 'none'; }
     }
 
+    // 현장 확인 모달 문구: 방문(来店) / 숙박(チェックイン)
+    var STAFF_TEXT = {
+      visit: {
+        intro: 'ブックマーククリエイターとして<br><span style="color: var(--brand-navy); text-decoration: underline; text-decoration-color: #CBD5E1; text-underline-offset: 4px;">取材・撮影</span>のため来店しました。',
+        guide: 'ご来店を確認後、下の「来店確認完了」ボタンを押してください。<br><span style="font-size: 12.5px; color: #4B5563;">ボタンを押すとチェックインが完了します。</span>',
+        btn: '来店確認完了'
+      },
+      stay: {
+        intro: 'ブックマーククリエイターとして<br><span style="color: var(--brand-navy); text-decoration: underline; text-decoration-color: #CBD5E1; text-underline-offset: 4px;">取材・撮影</span>に伴う宿泊（チェックイン）のため来館しました。',
+        guide: 'ご宿泊を確認後、下の「チェックイン確認完了」ボタンを押してください。<br><span style="font-size: 12.5px; color: #4B5563;">ボタンを押すとチェックインが完了します。</span>',
+        btn: 'チェックイン確認完了'
+      }
+    };
+
     function openStaffModal(row) {
       el('targetRow').value = row;
-      
+
       var mission = window.globalMissionsData ? window.globalMissionsData.find(function(item) { return item.row === row; }) : null;
+      var isStay = !!(mission && mission.info && mission.info.storeType === 'STAY');
+      var txt = isStay ? STAFF_TEXT.stay : STAFF_TEXT.visit;
+      window.staffBtnLabel = txt.btn;
+      el('staffModalIntro').innerHTML = txt.intro;
+      el('staffModalGuide').innerHTML = txt.guide;
+      el('confirmBtn').innerText = txt.btn;
+
+      // 무인 숙소: 현장 직원 확인 없이 본인이 체크인 완료 처리
+      if (isStay && mission.info.autoCheckin) {
+        showConfirm('체크인을 완료 처리할까요?<br><span style="font-size: 12.5px; font-weight: 600; color: #64748b;">무인 숙소는 별도 확인 없이 완료 처리됩니다.</span>', processVisit);
+        return;
+      }
+
       var benefitText = (mission && mission.info && mission.info.benefit) ? mission.info.benefit : "店舗指定の提供メニュー (매장 지정 제공 메뉴)";
       
       var benefitEl = el('staffModalBenefit');
@@ -849,10 +1004,10 @@
       btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
       google.script.run
         .withSuccessHandler(function(res) {
-          btn.disabled = false; btn.innerText = '来店確認完了';
+          btn.disabled = false; btn.innerText = window.staffBtnLabel || '来店確認完了';
           if (res.success) { staffModal.hide(); executeLogin(); } else { showAlert('오류가 발생했습니다.'); }
         })
-        .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = '来店確認完了'; showAlert('서버 오류: ' + err.message); })
+        .withFailureHandler(function(err) { btn.disabled = false; btn.innerText = window.staffBtnLabel || '来店確認完了'; showAlert('서버 오류: ' + err.message); })
         .confirmVisit(row);
     }
 
@@ -941,7 +1096,8 @@
     window.submitEdit = submitEdit; 
     window.toggleEdit = toggleEdit;
     window.selectTime = selectTime; 
-    window.submitBooking = submitBooking; 
+    window.submitBooking = submitBooking;
+    window.resetStayCalendar = resetStayCalendar;
     window.saveDraft = saveDraft;
     window.switchChannel = switchChannel;
   </script>

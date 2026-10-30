@@ -419,6 +419,81 @@ function checkAndMarkNoShow() {
   }
 }
 
+/** ⏰ [당일 예약 리마인드] 매일 아침 트리거로 실행 — 오늘 방문(방문전) 건이 있는 점포에 점포당 1통 발송 */
+function sendDailyStoreReminders() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.MASTER);
+  if (!sheet) return;
+
+  const data = _getSheetsData([SHEET.MASTER, SHEET.REST, SHEET.USER]);
+  const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
+  const now = new Date();
+  const todayStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd");
+  const nowStr = Utilities.formatDate(now, timeZone, "yyyy-MM-dd HH:mm");
+  const sentMarker = new RegExp('\\[' + todayStr + ' \\d{2}:\\d{2}\\] 당일 리마인드');
+
+  // 1. 오늘 방문 + 방문전 + 오늘 미발송 건을 점포별로 수집
+  const byStore = {};
+  for (let i = MASTER_LOG_START_ROW - 1; i < data[SHEET.MASTER].length; i++) {
+    const row = data[SHEET.MASTER][i];
+    if (String(row[IDX_MASTER.STATUS] || '').trim() !== '방문전') continue;
+    if (sentMarker.test(String(row[IDX_MASTER.SYS_LOG] || ''))) continue;
+
+    const rawVisit = row[IDX_MASTER.VISIT];
+    const { dateStr, timeStr } = _splitVisit_(rawVisit, timeZone);
+    if (dateStr !== todayStr) continue;
+
+    const storeId = String(row[IDX_MASTER.STORE_ID] || '').trim().toUpperCase();
+    if (!storeId) continue;
+    (byStore[storeId] = byStore[storeId] || []).push({
+      rowNum: i + 1, timeStr: timeStr, memberName: String(row[IDX_MASTER.NAME] || '').trim(),
+      creatorProfileUrl: findCreatorProfileUrl(data[SHEET.USER], row[IDX_MASTER.MEMBER]),
+      peopleCount: String(row[IDX_MASTER.PEOPLE] || '1').replace(/[^0-9]/g, '') || '1'
+    });
+  }
+
+  // 2. 점포별 1통 발송 (한 점포 실패가 다른 점포를 막지 않음)
+  Object.keys(byStore).forEach(storeId => {
+    const reservations = byStore[storeId].sort((a, b) => a.timeStr.localeCompare(b.timeStr));
+    let storeEmail = "", storeNameJp = "", storeBenefit = "";
+    for (let k = REST_DATA_START_INDEX; k < data[SHEET.REST].length; k++) {
+      if (String(data[SHEET.REST][k][IDX_REST.ID] || '').trim().toUpperCase() === storeId) {
+        storeNameJp = String(data[SHEET.REST][k][IDX_REST.NAME_JP] || '').trim() || String(data[SHEET.REST][k][IDX_REST.NAME_KO] || '').trim();
+        storeEmail = String(data[SHEET.REST][k][IDX_REST.EMAIL] || '').trim();
+        storeBenefit = String(data[SHEET.REST][k][IDX_REST.BENEFIT] || '').trim();
+        break;
+      }
+    }
+
+    let logText;
+    if (!storeEmail || !storeEmail.includes("@")) {
+      logText = `[${nowStr}] ❌ 당일 리마인드 실패: 점주 이메일 주소 없음`;
+    } else {
+      try {
+        reservations.forEach(r => { r.benefit = storeBenefit; });
+        sendStoreDailyReminderMail({ to: storeEmail, storeNameJp: storeNameJp || storeId, dateStr: todayStr, reservations: reservations });
+        logText = `[${nowStr}] 당일 리마인드 발송`;
+      } catch (err) {
+        console.error(`당일 리마인드 발송 실패 (${storeId}): ` + err.toString());
+        logText = `[${nowStr}] ❌ 당일 리마인드 실패: ${err.toString()}`;
+      }
+    }
+    reservations.forEach(r => {
+      const logCell = sheet.getRange(r.rowNum, COL_MASTER.SYS_LOG);
+      const prev = String(logCell.getValue() || '').trim();
+      logCell.setValue(prev ? `${prev} | ${logText}` : logText);
+    });
+  });
+}
+
+/** ⏰ 당일 리마인드 트리거 설치 (매일 오전 9시, 1회 실행 / 재실행해도 중복 생성 안 됨) */
+function installDailyReminderTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'sendDailyStoreReminders')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('sendDailyStoreReminders').timeBased().everyDays(1).atHour(9).inTimezone('Asia/Tokyo').create();
+  try { SpreadsheetApp.getUi().alert('✅ 매일 오전 9시(일본 시간) 당일 예약 리마인드 트리거가 설치되었습니다.'); } catch (uiErr) {}
+}
+
 /** 🎯 [통합 완결본] Master_Log 누락 데이터 일괄 복구 및 자동 완성 */
 function fillMissingData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -573,8 +648,7 @@ function resendStoreBookingEmail() {
   }
 
   const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
-  const dateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, "yyyy-MM-dd") : String(rawVisitDate).substring(0, 10);
-  const timeStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, "HH:mm") : String(rawVisitDate).substring(11, 16);
+  const { dateStr, timeStr } = _splitVisit_(rawVisitDate, timeZone);
 
   let storeEmail = "", storeNameJp = "", storeBenefit = "";
   const restData = restSheet.getDataRange().getValues();
@@ -638,13 +712,8 @@ function adminCancelAndNotifyStore_(row) {
     if (!orderNo) return { success: false, error: "주문번호가 없습니다." };
 
     const timeZone = Session.getScriptTimeZone() || "Asia/Seoul";
-    const dateStr = (rawVisitDate instanceof Date) 
-      ? Utilities.formatDate(rawVisitDate, timeZone, "yyyy-MM-dd") 
-      : String(rawVisitDate || '').substring(0, 10);
-    const timeStr = (rawVisitDate instanceof Date) 
-      ? Utilities.formatDate(rawVisitDate, timeZone, "HH:mm") 
-      : String(rawVisitDate || '').substring(11, 16);
-    const visitDisplay = (dateStr && timeStr) ? `${dateStr} ${timeStr}` : (dateStr || "未定 (미정)");
+    const { dateStr, timeStr } = _splitVisit_(rawVisitDate, timeZone);
+    const visitDisplay = _visitDisplayForRow_(logSheet, safeRow, (dateStr && timeStr) ? `${dateStr} ${timeStr}` : (dateStr || "未定 (미정)"));
 
     let storeEmail = "", storeNameJp = "";
     const restData = restSheet.getDataRange().getValues();

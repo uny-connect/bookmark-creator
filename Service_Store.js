@@ -93,13 +93,15 @@ function confirmBookingByLink(params) {
               const rawVisitDate = sheet.getRange(safeRow, COL_MASTER.VISIT).getValue();
               const rawPeopleStr = String(sheet.getRange(safeRow, COL_MASTER.PEOPLE).getValue() || '1');
               const pCount = rawPeopleStr.replace(/[^0-9]/g, '') || '1';
-              const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
+              const rawVisitStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
+              const visitDateStr = _visitDisplayForRow_(sheet, safeRow, rawVisitStr);           // 운영진(일본어)
+              const creatorVisitStr = _visitDisplayForRow_(sheet, safeRow, rawVisitStr, 'ko');   // 크리에이터(한국어)
 
               if (currentMemberCode) {
                 // ✉️ 크리에이터 확정 안내 메일
                 const creatorEmail = getCreatorEmail(currentMemberCode);
                 if (creatorEmail.includes("@")) {
-                  sendCreatorConfirmedMail({ to: creatorEmail, storeName: currentRestaurantName, visitDateStr: visitDateStr, peopleCount: pCount });
+                  sendCreatorConfirmedMail({ to: creatorEmail, storeName: currentRestaurantName, visitDateStr: creatorVisitStr, peopleCount: pCount });
                 }
 
                 // ✉️ 관리자 알림 발송
@@ -219,7 +221,7 @@ function submitStoreFeedback(row, orderNo, msg) {
         const timeZone = Session.getScriptTimeZone();
         const rawVisitDate = rowData[IDX_MASTER.VISIT]; 
         const pCount = rowData[IDX_MASTER.PEOPLE] ? String(rowData[IDX_MASTER.PEOPLE]).replace(/[^0-9]/g, '') : '1'; 
-        const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
+        const visitDateStr = _visitDisplayForRow_(sheet, safeRow, (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-'), 'ko');
 
         try {
           sendCreatorRescheduleRequestMail({ to: creatorEmail, storeNameKo: storeNameKo, visitDateStr: visitDateStr, peopleCount: pCount });
@@ -379,7 +381,8 @@ function getStoreConfig(storeId, token) {
           blackouts: String(data[i][IDX_REST.BLACKOUTS] || '').trim(),   
           bizHours: String(data[i][IDX_REST.BIZ_HOURS] || '').trim(),    
           intervalMin: data[i][IDX_REST.INTERVAL_MIN] ? String(data[i][IDX_REST.INTERVAL_MIN]).trim() : "30", 
-          blockedTimes: String(data[i][IDX_REST.BLOCKED_TIMES] || '').trim() 
+          blockedTimes: String(data[i][IDX_REST.BLOCKED_TIMES] || '').trim(),
+          ...(String(data[i][IDX_REST.STORE_TYPE] || '').trim().toUpperCase() === STORE_TYPE_STAY ? _getStayConfig_(data[i]) : {})
         };
       }
     }
@@ -390,7 +393,7 @@ function getStoreConfig(storeId, token) {
 }
 
 /** [4] 매장 예약 환경설정 파일 수정 저장하기 */
-function updateStoreConfig(token, row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes) {
+function updateStoreConfig(token, row, email, storeType, maxPerSlot, dailyCap, blackouts, bizHours, intervalMin, blockedTimes, rooms, checkinTime, checkoutTime, maxNights) {
   try {
     const safeRow = parseInt(row, 10);
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET.REST);
@@ -404,7 +407,16 @@ function updateStoreConfig(token, row, email, storeType, maxPerSlot, dailyCap, b
     sheet.getRange(safeRow, COL_REST.BLACKOUTS).setValue(blackouts);     
     sheet.getRange(safeRow, COL_REST.BIZ_HOURS).setValue(bizHours);      
     sheet.getRange(safeRow, COL_REST.INTERVAL_MIN).setValue(parseInt(intervalMin, 10) || 30); 
-    sheet.getRange(safeRow, COL_REST.BLOCKED_TIMES).setValue(blockedTimes);  
+    sheet.getRange(safeRow, COL_REST.BLOCKED_TIMES).setValue(blockedTimes);
+
+    // 숙박 전용 항목 (객실수/체크인·아웃 시간/최대 박수). 시간은 HH:mm 형식일 때만 저장
+    if (String(storeType || '').trim().toUpperCase() === STORE_TYPE_STAY) {
+      const isHm = t => /^\d{1,2}:\d{2}$/.test(String(t || '').trim());
+      sheet.getRange(safeRow, COL_REST.ROOMS).setValue(parseInt(rooms, 10) || 1);
+      if (isHm(checkinTime)) sheet.getRange(safeRow, COL_REST.CHECKIN_TIME).setValue("'" + String(checkinTime).trim());
+      if (isHm(checkoutTime)) sheet.getRange(safeRow, COL_REST.CHECKOUT_TIME).setValue("'" + String(checkoutTime).trim());
+      sheet.getRange(safeRow, COL_REST.MAX_NIGHTS).setValue(parseInt(maxNights, 10) || 7);
+    }
 
     return { success: true };
   } catch (e) {
@@ -439,7 +451,7 @@ function storeDirectConfirm_(row, orderNo) {
       const timeZone = Session.getScriptTimeZone();
       const rawVisitDate = sheet.getRange(safeRow, COL_MASTER.VISIT).getValue();
       const pCount = sheet.getRange(safeRow, COL_MASTER.PEOPLE).getValue() ? String(sheet.getRange(safeRow, COL_MASTER.PEOPLE).getValue()).replace(/[^0-9]/g, '') : '1'; 
-      const visitDateStr = (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-');
+      const visitDateStr = _visitDisplayForRow_(sheet, safeRow, (rawVisitDate instanceof Date) ? Utilities.formatDate(rawVisitDate, timeZone, 'yyyy-MM-dd HH:mm') : String(rawVisitDate || '-'), 'ko');
 
       if (currentMemberCode) {
         const creatorEmail = getCreatorEmail(currentMemberCode);

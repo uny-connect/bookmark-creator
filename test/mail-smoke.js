@@ -19,8 +19,8 @@ vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), sandbox, { filename: f });
 });
 
-const base = { to: 'x@example.com', storeName: '테스트매장', storeNameJp: 'テスト店', storeNameKo: '테스트매장', visitDateStr: '2026-01-02 12:00', peopleCount: '2', orderNo: '1001', memberName: 'Alice', memberCode: 'mc1', storeId: 'S1', dateStr: '2026-01-02', timeStr: '12:00', creatorProfileUrl: 'instagram.com/a', benefit: 'ランチ', row: 5, creatorName: 'Alice', visitDisplay: '2026-01-02 12:00', msg: '16:00なら可能です', addressLabel: '登録アドレス', storeEmail: 's@example.com' };
-const fns = ['sendCreatorConfirmedMail', 'sendCreatorRescheduleNoticeMail', 'sendCreatorRescheduleRequestMail', 'sendStoreBookingRequestMail', 'sendStoreCancellationMail', 'sendStoreConnectionTestMail', 'sendAdminBookingRequestMail', 'sendAdminBookingConfirmedMail', 'sendAdminRescheduleRequestMail'];
+const base = { to: 'x@example.com', storeName: '테스트매장', storeNameJp: 'テスト店', storeNameKo: '테스트매장', visitDateStr: '2026-01-02 12:00', peopleCount: '2', orderNo: '1001', memberName: 'Alice', memberCode: 'mc1', storeId: 'S1', dateStr: '2026-01-02', timeStr: '12:00', creatorProfileUrl: 'instagram.com/a', benefit: 'ランチ', row: 5, creatorName: 'Alice', visitDisplay: '2026-01-02 12:00', msg: '16:00なら可能です', addressLabel: '登録アドレス', storeEmail: 's@example.com', reservations: [{ timeStr: '12:00', peopleCount: '2', memberName: 'Alice', benefit: 'ランチ', creatorProfileUrl: 'instagram.com/a' }, { timeStr: '18:30', peopleCount: '4', memberName: 'Bob<b>', benefit: '' }] };
+const fns = ['sendStoreDailyReminderMail','sendCreatorConfirmedMail', 'sendCreatorRescheduleNoticeMail', 'sendCreatorRescheduleRequestMail', 'sendStoreBookingRequestMail', 'sendStoreCancellationMail', 'sendStoreConnectionTestMail', 'sendAdminBookingRequestMail', 'sendAdminBookingConfirmedMail', 'sendAdminRescheduleRequestMail'];
 let failed = 0;
 for (const fn of fns) {
   // capture htmlBody by wrapping sendEmail
@@ -32,4 +32,12 @@ for (const fn of fns) {
     else console.log(`ok   ${fn}`);
   } catch (e) { failed++; console.error(`FAIL ${fn}: ${e.message}`); }
 }
+
+// 제목만 봐도 일시/인원을 알 수 있어야 한다
+const subjectOf = (fn, p) => { let s = ''; sandbox.GmailApp.sendEmail = (to, subject) => { s = subject; }; sandbox[fn](p); return s; };
+const expectSubject = (fn, p, re) => { const s = subjectOf(fn, p); if (!re.test(s)) { failed++; console.error(`FAIL ${fn} 제목: ${s}`); } else console.log(`ok   ${fn} 제목: ${s}`); };
+expectSubject('sendStoreBookingRequestMail', base, /2026-01-02 12:00 \/ 2名/);
+expectSubject('sendAdminBookingRequestMail', base, /2026-01-02 12:00 \/ 2名/);
+expectSubject('sendStoreDailyReminderMail', base, /2件: 12:00 2名 \/ 18:30 4名/);
+expectSubject('sendStoreDailyReminderMail', Object.assign({}, base, { reservations: [base.reservations[0]] }), /\(12:00 \/ 2名\)/);
 process.exit(failed ? 1 : 0);

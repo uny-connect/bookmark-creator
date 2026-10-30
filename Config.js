@@ -15,10 +15,15 @@ const SHEET = {
   SETTINGS: 'Settings',
   IMWEB_RAW: 'Imweb_Raw',
   DEBUG_LOG: 'Log',
+  REPORT_DATA: 'Report_Data',
+  REPORT: 'Report',
 };
 
+/** 매장 타입 값(Restaurant_List H열) */
+const STORE_TYPE_STAY = 'STAY';
+
 /** 열 번호 맵 (1-based, sheet.getRange(row, COL_X.Y) 용). 시트 열이 이동하면 이곳만 수정. */
-// Master_Log (A=1 …). V~X(22~24)는 미사용
+// Master_Log (A=1 …). X(24)는 미사용
 const COL_MASTER = {
   ORDER: 1,            // A 주문번호
   MEMBER: 2,           // B 멤버코드(아임웹 고유키)
@@ -41,6 +46,8 @@ const COL_MASTER = {
   SHORT_REVIEW: 19,    // S 한 줄 후기
   SHORT_REVIEW_JP: 20, // T 한 줄 후기(JP)
   REFUND: 21,          // U 환불 처리
+  CHECKOUT: 22,        // V 체크아웃일(STAY 전용, yyyy-MM-dd)
+  NIGHTS: 23,          // W 숙박 박수(STAY 전용)
   SYS_LOG: 25,         // Y 시스템 로그
 };
 // Restaurant_List
@@ -48,7 +55,7 @@ const COL_REST = {
   ID: 1,               // A 점포 ID
   NAME_KO: 2,          // B 매장명(KO)
   NAME_JP: 3,          // C 매장명(JP)
-  STORE_TYPE: 8,       // H RESTAURANT / RETAIL
+  STORE_TYPE: 8,       // H RESTAURANT / RETAIL / STAY
   PIN: 9,              // I 파트너 PIN
   EMAIL: 11,           // K 점주 수신 이메일
   MAX_PER_SLOT: 12,    // L 슬롯당 최대 예약
@@ -69,6 +76,11 @@ const COL_REST = {
   OPT1_HOURS: 28,      // AB 옵션1 운영시간
   OPT2_KEYWORDS: 29,   // AC 옵션2 매칭 키워드
   OPT2_HOURS: 30,      // AD 옵션2 운영시간
+  ROOMS: 31,           // AE 일일 객실수(STAY)
+  CHECKIN_TIME: 32,    // AF 체크인 기본시간(STAY, 예: 15:00)
+  CHECKOUT_TIME: 33,   // AG 체크아웃 기본시간(STAY, 예: 11:00)
+  MAX_NIGHTS: 34,      // AH 최대 숙박 박수(STAY)
+  AUTO_CHECKIN: 35,    // AI 무인 체크인 여부(Y면 현장 확인 생략)
 };
 // User_DB
 const COL_USER = {
@@ -91,6 +103,20 @@ const COL_USER = {
 };
 // Settings (A=키, B=값)
 const COL_SETTINGS = { KEY: 1, VALUE: 2 };
+// Report_Data (월간 업체 보고 누적. 1행 헤더, 2행부터 데이터)
+const COL_REPORT = {
+  MONTH: 1,            // A 월(yyyy-MM)
+  STORE_ID: 2,         // B 점포 ID
+  STORE_NAME_JP: 3,    // C 업체명(JP)
+  COUNT: 4,            // D 제출 건수
+  SUBMIT_DATE: 5,      // E 제출일
+  REVIEW_URL: 6,       // F 콘텐츠 링크
+  GOOGLE_URL: 7,       // G 구글맵 리뷰 링크
+  REVIEW_JP: 8,        // H JP 후기
+  STATE: 9,            // I 상태(제출완료 / 제출 대기)
+  VISIT_DATE: 10,      // J 방문일(yyyy-MM-dd)
+};
+const REPORT_STATE = { DONE: '제출완료', PENDING: '제출 대기' };
 
 /** 배열(getValues) 접근용 0-based 인덱스: row[IDX_MASTER.STATUS] */
 const _toIdx = cols => Object.fromEntries(Object.entries(cols).map(([k, v]) => [k, v - 1]));
@@ -98,6 +124,7 @@ const IDX_MASTER = _toIdx(COL_MASTER);
 const IDX_REST = _toIdx(COL_REST);
 const IDX_USER = _toIdx(COL_USER);
 const IDX_SETTINGS = _toIdx(COL_SETTINGS);
+const IDX_REPORT = _toIdx(COL_REPORT);
 
 /** 한 번에 비우는 열 범위 폭 */
 const MASTER_SLOT_COLS = COL_MASTER.DEADLINE - COL_MASTER.VISIT + 1;     // H~J 방문일시/인원/마감일

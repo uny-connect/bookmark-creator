@@ -96,7 +96,7 @@ console.log(`OK: ${jsFiles.length} js, ${htmlFiles.length} html, ${serverFns.siz
 
 // 7. 동작 스모크 테스트 (목 환경)
 const { spawnSync } = require('child_process');
-for (const t of ['mail-smoke.js', 'logic-smoke.js']) {
+for (const t of ['mail-smoke.js', 'logic-smoke.js', 'report-smoke.js']) {
   const r = spawnSync(process.execPath, [path.join(__dirname, t)], { encoding: 'utf8' });
   process.stdout.write(r.stdout);
   if (r.status !== 0) { process.stderr.write(r.stderr); console.error(`FAILED: ${t}`); process.exit(1); }

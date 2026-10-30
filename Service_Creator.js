@@ -356,7 +356,9 @@ function checkAvailability(storeId, targetDateStr, mealOption) {
 
           // 🎯 curr < endMin (< 미만 적용: 마감 정각 슬롯 생성 제외)
           for (let curr = startMin; curr < endMin; curr += config.intervalMin) {
-            const hit = blocks.some(b => b.type === 'exact' ? curr === b.time : (curr >= b.start && curr <= b.end));
+            // 🌙 자정 넘는 영업시간(18:00-03:00)은 curr 가 1440 이상이므로 24h 를 뺀 시각(01:30 등)으로도 차단 대조
+            const inBlock = (b, t) => b.type === 'exact' ? t === b.time : (t >= b.start && t <= b.end);
+            const hit = blocks.some(b => inBlock(b, curr) || (curr >= 1440 && inBlock(b, curr - 1440)));
             if (!hit) {
               const h = Math.floor(curr / 60) % 24;
               const m = curr % 60;

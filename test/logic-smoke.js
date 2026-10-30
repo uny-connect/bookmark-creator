@@ -248,6 +248,14 @@ assert.deepStrictEqual(slots(slotDate).availableSlots, ['13:00'], '여러 요일
 slotSetup(''); sheets.Restaurant_List.cells[2][16] = '13:00';
 assert.deepStrictEqual(slots(slotDate).availableSlots, ['12:00'], '접두 없는 기존 표기 유지');
 
+// 자정 넘는 영업시간(18:00-03:00)에서 새벽 시간대 차단 (1:30 처럼 0 없는 표기 포함)
+slotSetup(''); Object.assign(sheets.Restaurant_List.cells[2], { 14: '18:00-03:00', 15: 30, 16: '1:30-3:00' });
+const night = slots(slotDate).availableSlots;
+assert.ok(night.includes('18:00') && night.includes('01:00'), '차단 전 시간대는 유지');
+assert.ok(!['01:30', '02:00', '02:30'].some(s => night.includes(s)), '자정 이후 차단 범위 적용: ' + night);
+slotSetup(''); Object.assign(sheets.Restaurant_List.cells[2], { 14: '18:00-03:00', 15: 30, 16: '2:00' });
+assert.ok(!slots(slotDate).availableSlots.includes('02:00') && slots(slotDate).availableSlots.includes('01:30'), '자정 이후 단일 시각 차단');
+
 slotSetup('');
 let sb = JSON.parse(JSON.stringify(run(`bookTimeSlot(3, '${slotDate}', '12:00', 3)`)));
 assert.strictEqual(sb.success, false, '최대 인원(2명) 초과 거절');
